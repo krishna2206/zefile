@@ -2,12 +2,33 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/krishna2206/zefile/internal/acl"
+	"github.com/krishna2206/zefile/internal/api"
+	"github.com/krishna2206/zefile/internal/auth"
+	"github.com/krishna2206/zefile/internal/config"
+	"github.com/krishna2206/zefile/internal/db"
+	"github.com/krishna2206/zefile/internal/storage"
 )
 
 // version is overridden at build time with -ldflags.
 var version = "dev"
+
+// shutdownGrace is how long in-flight requests have to finish.
+//
+// Generous on purpose: a download is a request, and cutting one at five
+// seconds would make every restart look like a broken transfer.
+const shutdownGrace = 30 * time.Second
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -18,5 +39,129 @@ func main() {
 		return
 	}
 
-	fmt.Printf("zefile %s — nothing to serve yet, see docs/roadmap.html\n", version)
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
+	if err := run(); err != nil {
+		slog.Error("zefile failed to start", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	// The database is opened with the storage root so it can refuse to start
+	// when the configuration directory sits inside the browsable tree.
+	database, err := db.Open(context.Background(), db.Config{
+		Dir:         cfg.ConfigDir,
+		StorageRoot: cfg.DataDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = database.Close() }()
+
+	engine := acl.New(database)
+	fs, err := storage.Open(storage.Config{
+		Root:     cfg.DataDir,
+		Guard:    engine,
+		Reserve:  cfg.Reserve,
+		ReadOnly: cfg.ReadOnly,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = fs.Close() }()
+
+	authService := auth.New(database)
+	if err := announceSetup(context.Background(), authService, cfg); err != nil {
+		return err
+	}
+	warnAboutSingleOrigin(cfg)
+
+	server := &http.Server{
+		Addr: cfg.Listen,
+		Handler: api.New(api.Options{
+			FS:            fs,
+			Auth:          authService,
+			ACL:           engine,
+			SecureCookies: cfg.SecureCookies(),
+		}).Handler(),
+		ReadHeaderTimeout: 15 * time.Second,
+		// No write timeout: a download of tens of gigabytes is a single
+		// response, and a deadline here would sever it mid-transfer.
+		IdleTimeout: 2 * time.Minute,
+	}
+
+	return serve(server, cfg)
+}
+
+// announceSetup prints the first-run link when no account exists yet.
+//
+// It goes to the log rather than to a default account: shipping known
+// credentials means every instance is compromised until someone remembers to
+// change them.
+func announceSetup(ctx context.Context, service *auth.Service, cfg config.Config) error {
+	needed, err := service.NeedsSetup(ctx)
+	if err != nil {
+		return err
+	}
+	if !needed {
+		return nil
+	}
+
+	token, err := service.IssueSetupToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	slog.Warn("this instance has no account yet — open the link below to create the administrator",
+		"url", fmt.Sprintf("%s/setup?token=%s", cfg.AppURL, token),
+		"expires_in", auth.DefaultSetupTTL.String(),
+		"note", "this link is replaced every time zefile starts")
+	return nil
+}
+
+func warnAboutSingleOrigin(cfg config.Config) {
+	if !cfg.SingleOrigin() {
+		return
+	}
+	slog.Warn("running with a single origin: user content is served from the application origin",
+		"consequence", "inline preview is restricted and every file is sent as an attachment",
+		"fix", "set "+config.EnvContentURL+" to a second hostname")
+}
+
+func serve(server *http.Server, cfg config.Config) error {
+	// Signals are caught before the listener opens, so an interrupt arriving
+	// during startup is not lost.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	failed := make(chan error, 1)
+	go func() {
+		slog.Info("zefile is listening",
+			"address", cfg.Listen, "app_url", cfg.AppURL.String(),
+			"data_dir", cfg.DataDir, "version", version)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			failed <- err
+		}
+	}()
+
+	select {
+	case err := <-failed:
+		return err
+	case <-ctx.Done():
+	}
+
+	slog.Info("shutting down", "grace", shutdownGrace.String())
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutdown: %w", err)
+	}
+	return nil
 }
