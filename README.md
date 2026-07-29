@@ -61,6 +61,34 @@ The design is written down before the code, and kept current.
 Go 1.25+ · SQLite (`modernc.org/sqlite`, pure Go) · React + Vite ·
 [Material 3 Expressive](https://m3e.language-lit.com/) · Tailwind CSS 4
 
+## Deploying
+
+> [!NOTE]
+> There is no release yet. These steps describe how it will work; the image
+> referenced below is not published until the first tag.
+
+```sh
+docker compose -f deploy/docker-compose.yml up -d
+docker compose logs zefile
+```
+
+The log prints a one-time setup link. Open it to create the administrator.
+
+**There is no default account.** Shipping known credentials means every
+instance is compromised between deployment and the moment someone remembers to
+change them, and scanners know the default of every self-hosted project. The
+setup link is single-use, expires in 24 hours, and is replaced every time
+Zefile starts — so one printed into a log you have since rotated away stops
+being useful.
+
+Three things decide whether a deployment works:
+
+| | |
+| --- | --- |
+| `PUID` / `PGID` | Must match the owner of the host directory you mount. A mismatch surfaces as a permission error on the first upload. |
+| `ZEFILE_CONFIG_DIR` | Must not sit inside `ZEFILE_DATA_DIR`. Zefile refuses to start otherwise: a database users can list is one they can download, password hashes included. |
+| `ZEFILE_CONTENT_URL` | A second hostname. Without it, user content is served from the application origin and Zefile hardens itself — every file becomes an attachment and nothing renders in place. |
+
 ## Building
 
 ```sh
