@@ -1,3 +1,16 @@
+/* Layer order is declared before anything is imported, and it is the whole
+   reason the interface lays out at all.
+   
+   Material 3 ships its styles inside m3e.* cascade layers. Layers rank by the
+   order they are first seen, so importing the library after Tailwind put every
+   one of its rules above Tailwind's utilities — and a layered rule wins on
+   layer order regardless of specificity. The symptom was that no utility
+   applied: a card asked to be narrow and centred filled the window instead.
+   
+   Naming the order up front puts the component library below the utilities
+   that are meant to position it. */
+@layer m3e, m3e.tokens, m3e.base, m3e.components, theme, base, components, utilities;
+
 @import "tailwindcss";
 @import "@language-lit/material3-expressive/styles.css";
 
