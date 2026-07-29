@@ -20,8 +20,14 @@ const SessionCookieName = "zefile_session"
 // cross-site scripting flaw becomes full account takeover. HttpOnly removes
 // that path entirely, which is also why user content is served from a separate
 // origin: no cookie exists there to steal.
+//
+// secure is a parameter rather than a hard true because a self-hosted instance
+// is often reached over plain HTTP on a local network before TLS is set up, and
+// a Secure cookie would simply be discarded there — leaving an unexplained
+// inability to sign in. Callers pass false only when serving without TLS.
+// TestCookieAttributes asserts the properties a static analyser cannot prove.
 func SessionCookie(token string, expires time.Time, secure bool) *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ // #nosec G124 -- Secure comes from configuration; see the doc comment above
 		Name:     SessionCookieName,
 		Value:    token,
 		Path:     "/",
@@ -43,7 +49,7 @@ func SessionCookie(token string, expires time.Time, secure bool) *http.Cookie {
 // copy is a courtesy in any case: the server-side row is what actually ends the
 // session, and it is revoked independently.
 func ClearSessionCookie(secure bool) *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ // #nosec G124 -- Secure comes from configuration; see SessionCookie
 		Name:     SessionCookieName,
 		Value:    "",
 		Path:     "/",

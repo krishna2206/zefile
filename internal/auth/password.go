@@ -36,6 +36,24 @@ var DefaultParams = Params{
 	KeyLength:   32,
 }
 
+// Bounds accepted when reading a stored hash.
+//
+// The parameters live inside the hash string, so verification is driven by
+// data rather than by code. A row holding m=4000000 would have Argon2 try to
+// allocate four gigabytes on the next sign-in — a stored value turning into a
+// denial of service. Refusing implausible values keeps that from being
+// reachable, and makes the widening conversions below provably safe.
+const (
+	minSaltBytes = 8
+	maxSaltBytes = 64
+	minKeyBytes  = 16
+	maxKeyBytes  = 64
+
+	maxMemoryKiB   = 1 << 20 // 1 GiB
+	maxIterations  = 16
+	maxParallelism = 16
+)
+
 // Errors returned when handling password hashes.
 var (
 	// ErrInvalidHash means the stored string is not a hash this package wrote.
@@ -113,6 +131,11 @@ func decodeHash(encoded string) (p Params, salt, key []byte, err error) {
 	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &p.Memory, &p.Iterations, &p.Parallelism); err != nil {
 		return p, nil, nil, ErrInvalidHash
 	}
+	if p.Memory == 0 || p.Memory > maxMemoryKiB ||
+		p.Iterations == 0 || p.Iterations > maxIterations ||
+		p.Parallelism == 0 || p.Parallelism > maxParallelism {
+		return p, nil, nil, ErrInvalidHash
+	}
 
 	if salt, err = base64.RawStdEncoding.Strict().DecodeString(parts[4]); err != nil {
 		return p, nil, nil, ErrInvalidHash
@@ -121,10 +144,14 @@ func decodeHash(encoded string) (p Params, salt, key []byte, err error) {
 		return p, nil, nil, ErrInvalidHash
 	}
 
-	if len(salt) == 0 || len(key) == 0 {
+	if len(salt) < minSaltBytes || len(salt) > maxSaltBytes {
+		return p, nil, nil, ErrInvalidHash
+	}
+	if len(key) < minKeyBytes || len(key) > maxKeyBytes {
 		return p, nil, nil, ErrInvalidHash
 	}
 
+	// Safe to widen: both lengths were just bounded well below uint32.
 	p.SaltLength = uint32(len(salt))
 	p.KeyLength = uint32(len(key))
 	return p, salt, key, nil

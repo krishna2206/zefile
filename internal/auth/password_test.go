@@ -112,6 +112,38 @@ func TestVerifyRejectsFutureVersion(t *testing.T) {
 	}
 }
 
+// TestVerifyRejectsAbsurdParameters covers a stored hash turning into a denial
+// of service: the cost parameters are read from the hash itself, so a row
+// claiming a gigantic memory cost would have Argon2 try to allocate it on the
+// next sign-in.
+func TestVerifyRejectsAbsurdParameters(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		hash string
+	}{
+		{"four terabytes of memory", "$argon2id$v=19$m=4294967295,t=1,p=1$c2FsdHNhbHRzYWx0$aGFzaGhhc2hoYXNoaGFzaA"},
+		{"zero memory", "$argon2id$v=19$m=0,t=1,p=1$c2FsdHNhbHRzYWx0$aGFzaGhhc2hoYXNoaGFzaA"},
+		{"zero iterations", "$argon2id$v=19$m=8,t=0,p=1$c2FsdHNhbHRzYWx0$aGFzaGhhc2hoYXNoaGFzaA"},
+		{"huge iteration count", "$argon2id$v=19$m=8,t=1000000,p=1$c2FsdHNhbHRzYWx0$aGFzaGhhc2hoYXNoaGFzaA"},
+		{"salt below the floor", "$argon2id$v=19$m=8,t=1,p=1$c2FsdA$aGFzaGhhc2hoYXNoaGFzaA"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ok, err := VerifyPassword("anything", tc.hash)
+			if ok {
+				t.Fatal("an implausible hash reported a match")
+			}
+			if !errors.Is(err, ErrInvalidHash) {
+				t.Fatalf("error = %v, want ErrInvalidHash", err)
+			}
+		})
+	}
+}
+
 func TestNeedsRehash(t *testing.T) {
 	t.Parallel()
 
