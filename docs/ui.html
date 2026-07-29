@@ -1,0 +1,399 @@
+<title>Zefile — Conception de l'interface</title>
+
+<style>
+  :root {
+    --ground:#F4F5F2; --surface:#FFFFFF; --surface-2:#EAEDE8;
+    --ink:#191D1B; --ink-2:#4C5652; --ink-3:#79837E;
+    --line:#DBDFD9; --accent:#2F5D50; --accent-ink:#234840; --accent-soft:#E2ECE7;
+    --brass:#8E6528; --brass-soft:#F3EBDC; --alert:#9E3826; --alert-soft:#F8E7E3;
+    --font-display:"Charter","Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --font-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --radius:3px; --measure:70ch;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#121614; --surface:#1A201D; --surface-2:#232A27;
+      --ink:#E6EAE7; --ink-2:#A9B3AE; --ink-3:#7C8782;
+      --line:#2B3330; --accent:#74C3A6; --accent-ink:#9AD6BF; --accent-soft:#1C2A26;
+      --brass:#C99A5B; --brass-soft:#29231A; --alert:#E08874; --alert-soft:#2E1E1A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#121614; --surface:#1A201D; --surface-2:#232A27;
+    --ink:#E6EAE7; --ink-2:#A9B3AE; --ink-3:#7C8782;
+    --line:#2B3330; --accent:#74C3A6; --accent-ink:#9AD6BF; --accent-soft:#1C2A26;
+    --brass:#C99A5B; --brass-soft:#29231A; --alert:#E08874; --alert-soft:#2E1E1A;
+  }
+  :root[data-theme="light"] {
+    --ground:#F4F5F2; --surface:#FFFFFF; --surface-2:#EAEDE8;
+    --ink:#191D1B; --ink-2:#4C5652; --ink-3:#79837E;
+    --line:#DBDFD9; --accent:#2F5D50; --accent-ink:#234840; --accent-soft:#E2ECE7;
+    --brass:#8E6528; --brass-soft:#F3EBDC; --alert:#9E3826; --alert-soft:#F8E7E3;
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+  .shell { max-width:1100px; margin:0 auto; padding:0 clamp(20px,4vw,48px) 96px; }
+
+  .masthead {
+    padding:clamp(48px,8vw,88px) 0 36px; border-bottom:1px solid var(--line);
+    display:flex; flex-direction:column; gap:16px;
+  }
+  .eyebrow {
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent);
+  }
+  h1 {
+    font-family:var(--font-display); font-weight:600; margin:0;
+    font-size:clamp(2rem,5vw,2.9rem); line-height:1.1; letter-spacing:-.015em;
+  }
+  .standfirst {
+    font-family:var(--font-display); font-size:1.15rem; color:var(--ink-2);
+    max-width:58ch; margin:0; line-height:1.55;
+  }
+
+  .layout { display:grid; grid-template-columns:1fr; gap:48px; padding-top:44px; align-items:start; }
+  @media (min-width:1000px) {
+    .layout { grid-template-columns:200px minmax(0,1fr); gap:60px; }
+    .toc { position:sticky; top:32px; }
+  }
+  .toc h2 {
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 14px; font-weight:500;
+  }
+  .toc ol { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; counter-reset:t; font-size:14px; }
+  .toc a { display:grid; grid-template-columns:2.1em 1fr; color:var(--ink-2); text-decoration:none; padding:4px 0; line-height:1.35; }
+  .toc a::before { counter-increment:t; content:counter(t); font-family:var(--font-mono); font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+  .toc a:hover { color:var(--accent); }
+  .toc a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+
+  .doc { min-width:0; display:flex; flex-direction:column; gap:58px; }
+  section { display:flex; flex-direction:column; gap:16px; scroll-margin-top:24px; }
+  section > h2 {
+    font-family:var(--font-display); font-size:1.68rem; font-weight:600;
+    letter-spacing:-.01em; line-height:1.2; margin:0; padding-bottom:13px;
+    border-bottom:2px solid var(--ink); display:grid; grid-template-columns:1.9em 1fr;
+    align-items:baseline;
+  }
+  section > h2 .num { font-family:var(--font-mono); font-size:.72em; font-weight:400; color:var(--accent); font-variant-numeric:tabular-nums; }
+  h3 { font-family:var(--font-body); font-size:.95rem; font-weight:650; letter-spacing:.02em; margin:12px 0 0; }
+  h3 .sub { font-family:var(--font-mono); font-weight:400; color:var(--ink-3); font-size:.85em; margin-right:.7em; }
+  p { margin:0; max-width:var(--measure); }
+  .doc ul { margin:0; padding-left:1.15em; max-width:var(--measure); display:flex; flex-direction:column; gap:7px; }
+  li::marker { color:var(--ink-3); }
+  code { font-family:var(--font-mono); font-size:.855em; background:var(--surface-2); padding:.12em .38em; border-radius:var(--radius); color:var(--accent-ink); }
+  a.ext { color:var(--accent); text-underline-offset:2px; }
+
+  .block { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow-x:auto; }
+  .block pre { margin:0; padding:18px 20px; font-family:var(--font-mono); font-size:12.5px; line-height:1.72; color:var(--ink-2); }
+  .block pre b { color:var(--ink); font-weight:600; }
+  .block pre i { color:var(--ink-3); font-style:normal; }
+  .block pre u { color:var(--accent); text-decoration:none; }
+  .caption { font-size:13px; color:var(--ink-3); max-width:var(--measure); margin:-6px 0 0; }
+
+  .note { border-left:3px solid var(--accent); background:var(--accent-soft); padding:14px 18px;
+    border-radius:0 var(--radius) var(--radius) 0; max-width:var(--measure); display:flex; flex-direction:column; gap:6px; }
+  .note.warn { border-left-color:var(--brass); background:var(--brass-soft); }
+  .note.stop { border-left-color:var(--alert); background:var(--alert-soft); }
+  .note .label { font-family:var(--font-mono); font-size:11px; letter-spacing:.11em; text-transform:uppercase; color:var(--accent-ink); }
+  .note.warn .label { color:var(--brass); }
+  .note.stop .label { color:var(--alert); }
+  .note p { max-width:none; font-size:15.5px; }
+
+  .rows { display:grid; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+  .row { background:var(--surface); padding:16px 18px; display:grid; gap:4px 20px; grid-template-columns:1fr; }
+  @media (min-width:620px) { .row { grid-template-columns:13rem 1fr; } }
+  .row .name { font-weight:625; font-size:15.5px; display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .row .desc { color:var(--ink-2); font-size:15px; max-width:62ch; }
+  .rowhead { background:var(--surface-2); padding:9px 18px; font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-2); }
+
+  .swatches { display:flex; flex-wrap:wrap; gap:14px; }
+  .sw { display:flex; flex-direction:column; gap:6px; width:130px; }
+  .sw .chip { height:52px; border-radius:var(--radius); border:1px solid var(--line); }
+  .sw .n { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); }
+  .sw .h { font-family:var(--font-mono); font-size:11px; color:var(--ink-3); }
+
+  .colophon { margin-top:76px; padding-top:22px; border-top:1px solid var(--line);
+    font-family:var(--font-mono); font-size:12px; color:var(--ink-3); display:flex; flex-wrap:wrap; gap:6px 24px; }
+  @media (prefers-reduced-motion: reduce) { * { animation:none!important; transition:none!important; } }
+</style>
+
+<div class="shell">
+
+  <header class="masthead">
+    <div class="eyebrow">Zefile · conception de l’interface · v1</div>
+    <h1>Conception de l’interface</h1>
+    <p class="standfirst">Material 3 Expressive comme socle de composants, ensemencé par le vert du projet. Ce document traite de ce que la bibliothèque ne fournit pas&nbsp;: les composants propres au produit, la densité, les états, et les limites à ne pas franchir.</p>
+  </header>
+
+  <div class="layout">
+
+    <nav class="toc" aria-label="Sommaire">
+      <h2>Sommaire</h2>
+      <ol>
+        <li><a href="#direction">Direction</a></li>
+        <li><a href="#couleur">Couleur</a></li>
+        <li><a href="#type">Typographie &amp; densité</a></li>
+        <li><a href="#frontieres">Frontières des outils</a></li>
+        <li><a href="#ecrans">Écrans</a></li>
+        <li><a href="#composants">Composants produit</a></li>
+        <li><a href="#etats">États</a></li>
+        <li><a href="#perf">Contraintes de performance</a></li>
+        <li><a href="#a11y">Accessibilité</a></li>
+        <li><a href="#limites">Ce qu’on ne fait pas</a></li>
+      </ol>
+    </nav>
+
+    <main class="doc">
+
+      <section id="direction">
+        <h2><span class="num">01</span><span>Direction</span></h2>
+        <p>L’interface est bâtie sur <strong>Material 3 Expressive pour React</strong> (<code>@language-lit/material3-expressive</code>, MIT, 41 composants, sans dépendance d’exécution hors React). La bibliothèque possède les composants, la couleur, la typographie et le mouvement. <strong>On ne se bat pas contre elle.</strong></p>
+        <div class="note">
+          <span class="label">Principe directeur</span>
+          <p>Adopter un système de design, c’est en accepter le vocabulaire entier. Chaque surcharge de jeton est une dette qui se paie à la mise à jour suivante&nbsp;— et un système à moitié respecté produit un résultat moins bon que l’un ou l’autre pleinement assumé.</p>
+        </div>
+        <p>Conséquence assumée&nbsp;: l’application n’aura pas le caractère éditorial de ce document. Elle sera arrondie, élevée, animée, en Roboto. C’est le prix d’un socle accessible, testé et rapide à construire&nbsp;— et un gestionnaire de fichiers en Material est un territoire familier pour l’utilisateur, ce qui n’est pas un défaut.</p>
+        <p class="caption">Cette documentation conserve en revanche son identité propre. Les documents sont des documents&nbsp;; l’application est l’application.</p>
+
+        <div class="note warn">
+          <span class="label">Coût à surveiller</span>
+          <p>82&nbsp;Ko de JavaScript compressé plus 50&nbsp;Ko de CSS. C’est la plus grosse décision de poids du projet&nbsp;— acceptable sur une application auto-hébergée et mise en cache dès la première visite, mais elle interdit de revendiquer l’ultra-légèreté face à un concurrent. Le principe «&nbsp;la légèreté est le produit&nbsp;» du §02 de la conception se reporte donc entièrement sur <em>les dépendances qu’on ajoutera ensuite</em>&nbsp;: à partir d’ici, chaque nouvelle bibliothèque doit se justifier.</p>
+        </div>
+      </section>
+
+      <section id="couleur">
+        <h2><span class="num">02</span><span>Couleur</span></h2>
+        <p>Material 3 dérive l’intégralité de ses palettes tonales d’une couleur source, avec vérification de contraste intégrée. On fournit les graines, le système produit les rampes et les rôles pour les thèmes clair et sombre.</p>
+
+        <div class="swatches">
+          <div class="sw"><div class="chip" style="background:#2F5D50"></div><span class="n">Primaire</span><span class="h">#2F5D50</span></div>
+          <div class="sw"><div class="chip" style="background:#8E6528"></div><span class="n">Tertiaire</span><span class="h">#8E6528</span></div>
+          <div class="sw"><div class="chip" style="background:#9E3826"></div><span class="n">Erreur</span><span class="h">#9E3826</span></div>
+        </div>
+        <p class="caption">Le vert de sapin et le laiton sont ceux de cette documentation&nbsp;: la palette d’origine survit comme graine, même si la forme change.</p>
+
+        <div class="rows">
+          <div class="row">
+            <div class="name">Graine primaire</div>
+            <div class="desc"><code>#2F5D50</code> — vert de sapin. Détermine l’accent, les états actifs, la sélection.</div>
+          </div>
+          <div class="row">
+            <div class="name">Graine tertiaire</div>
+            <div class="desc"><code>#8E6528</code> — laiton. Réservé aux accents ponctuels&nbsp;: badges, mises en avant, éléments à signaler sans alarmer.</div>
+          </div>
+          <div class="row">
+            <div class="name">Rôles sémantiques</div>
+            <div class="desc">L’erreur est fournie par M3. <strong>Avertissement et succès ne le sont pas</strong> et doivent être définis explicitement&nbsp;— on en a besoin pour le disque presque plein, le mode lecture seule et la fin d’un transfert. À définir comme rôles à part entière, jamais en couleurs codées en dur.</div>
+          </div>
+          <div class="row">
+            <div class="name">Thème clair et sombre</div>
+            <div class="desc">Les deux sont générés à partir des mêmes graines et validés en contraste. Le sombre n’est pas une inversion&nbsp;: c’est une seconde dérivation.</div>
+          </div>
+          <div class="row">
+            <div class="name">Une seule source de vérité</div>
+            <div class="desc">La configuration Tailwind lit les propriétés CSS de M3E. Aucune valeur de couleur n’est écrite deux fois, aucune n’est écrite en dur dans un composant.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="type">
+        <h2><span class="num">03</span><span>Typographie &amp; densité</span></h2>
+        <p>L’échelle typographique de Material est reprise telle quelle. En revanche, <strong>sa densité par défaut est trop aérée pour un gestionnaire de fichiers</strong>&nbsp;: elle est calibrée pour le mobile et pour des listes courtes, pas pour un dossier de dix mille entrées où le nombre de lignes visibles décide de l’utilisabilité.</p>
+        <div class="note">
+          <span class="label">Décision</span>
+          <p>Densité compacte sur tout ce qui est répété&nbsp;— lignes de fichiers, tableaux, listes de partages, journal d’audit&nbsp;— et densité par défaut sur tout le reste, formulaires et boîtes de dialogue compris. Deux niveaux, pas trois, et le choix ne se discute pas composant par composant&nbsp;: il découle de la répétition.</p>
+        </div>
+        <p>Les noms de fichiers, chemins, empreintes et jetons s’affichent en <strong>police à chasse fixe</strong>, avec chiffres tabulaires partout où des tailles s’alignent en colonne. Ce n’est pas décoratif&nbsp;: une colonne de tailles en chiffres proportionnels est illisible.</p>
+        <p>La troncature des noms longs se fait <strong>au milieu</strong>, jamais à la fin&nbsp;: la fin d’un nom de fichier porte l’extension et souvent le numéro de version, c’est-à-dire l’information qui distingue deux entrées voisines.</p>
+      </section>
+
+      <section id="frontieres">
+        <h2><span class="num">04</span><span>Frontières des outils</span></h2>
+        <p>Deux systèmes de style coexistent&nbsp;; sans règle explicite, ils se recouvrent et l’on ne sait plus où un style est défini. La frontière est la suivante, et elle n’admet pas d’exception&nbsp;:</p>
+
+        <div class="block"><pre><b>Material 3 Expressive</b>   composants, couleur, typographie,
+                        élévation, formes, mouvement
+
+<b>Tailwind</b>                grilles, flex, espacements, positionnement,
+                        cas ponctuels sans composant dédié
+
+<b>CSS ordinaire</b>           les composants produit du §06, quand la
+                        chaîne d'utilitaires devient illisible</pre></div>
+
+        <div class="note stop">
+          <span class="label">Interdits</span>
+          <p>Aucune couleur codée en dur, jamais&nbsp;— ni en Tailwind, ni en CSS. Aucune surcharge des jetons de forme ou d’élévation de M3E. Aucun composant Tailwind qui réimplémente un composant existant de la bibliothèque. En cas de doute&nbsp;: si M3E le fournit, on l’utilise tel quel.</p>
+        </div>
+      </section>
+
+      <section id="ecrans">
+        <h2><span class="num">05</span><span>Écrans</span></h2>
+        <p>Navigation par rail latéral sur écran large, barre de navigation basse sur mobile&nbsp;— les deux fournis par M3E.</p>
+
+        <div class="rows">
+          <div class="rowhead">Utilisateur</div>
+          <div class="row">
+            <div class="name">Navigateur de fichiers</div>
+            <div class="desc">L’écran principal, celui où se passe 90&nbsp;% du temps d’usage. Vue liste et vue grille, fil d’Ariane, recherche, sélection multiple. Tout le reste de l’application est secondaire.</div>
+          </div>
+          <div class="row">
+            <div class="name">Aperçu</div>
+            <div class="desc">Superposition plein écran, navigation entre fichiers du même dossier, fermeture au clavier. Le PDF s’affiche dans une iframe cloisonnée servie par l’origine de contenu.</div>
+          </div>
+          <div class="row">
+            <div class="name">Corbeille</div>
+            <div class="desc">Chemin d’origine, date de suppression, auteur. Restauration et purge.</div>
+          </div>
+          <div class="row">
+            <div class="name">Partages</div>
+            <div class="desc">Liste des liens actifs, date de dernier accès, compteur, révocation. Écran de création décrit au §06.</div>
+          </div>
+          <div class="row">
+            <div class="name">Tâches</div>
+            <div class="desc">Téléchargements depuis URL, extractions, calculs d’empreinte. Progression en direct par SSE, annulation, historique.</div>
+          </div>
+          <div class="row">
+            <div class="name">Compte</div>
+            <div class="desc">Mot de passe, double facteur, sessions actives avec révocation, jetons d’API.</div>
+          </div>
+          <div class="rowhead">Administration</div>
+          <div class="row">
+            <div class="name">Utilisateurs &amp; groupes</div>
+            <div class="desc">Comptes, invitations, appartenances, désactivation.</div>
+          </div>
+          <div class="row">
+            <div class="name">Permissions</div>
+            <div class="desc">Le composant le plus difficile du produit. Traité au §06.</div>
+          </div>
+          <div class="row">
+            <div class="name">Journal d’audit</div>
+            <div class="desc">Filtrable par acteur, action et période.</div>
+          </div>
+          <div class="rowhead">Hors session</div>
+          <div class="row">
+            <div class="name">Connexion, installation, invitation</div>
+            <div class="desc">Trois écrans minimalistes. L’installation initiale est atteinte par le lien à usage unique affiché dans les journaux au premier démarrage.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="composants">
+        <h2><span class="num">06</span><span>Composants produit</span></h2>
+        <p>M3E fournit des boutons et des dialogues&nbsp;; il ne fournit rien de ce qui suit. <strong>C’est ici que se joue la qualité perçue du produit</strong>, et c’est donc ici que l’effort de conception doit aller.</p>
+
+        <div class="rows">
+          <div class="row">
+            <div class="name">Ligne de fichier</div>
+            <div class="desc">La brique la plus répétée de l’application, donc celle qui mérite le plus de soin. Sept états à traiter&nbsp;: repos, survol, sélection, focus clavier, cible de dépôt, transfert en cours, erreur. Contient vignette ou icône, nom tronqué au milieu, taille, date, menu contextuel. <strong>Doit rester lisible à densité compacte et se rendre en moins d’une milliseconde</strong>&nbsp;— dix mille instances potentielles.</div>
+          </div>
+          <div class="row">
+            <div class="name">Fil d’Ariane</div>
+            <div class="desc">Repliement des segments intermédiaires quand le chemin est profond, copie du chemin complet en un geste, et chaque segment est une cible de dépôt&nbsp;— déplacer vers un dossier parent doit être direct.</div>
+          </div>
+          <div class="row">
+            <div class="name">File de transferts</div>
+            <div class="desc">Panneau persistant, réductible, qui survit à la navigation. Par fichier&nbsp;: progression, débit, temps restant, reprise après coupure. Global&nbsp;: total et temps restant agrégé. <strong>Ne doit jamais bloquer l’interface</strong>&nbsp;— on continue de naviguer pendant un envoi de 40&nbsp;Go.</div>
+          </div>
+          <div class="row">
+            <div class="name">Zone de dépôt</div>
+            <div class="desc">Superposition à l’entrée du glisser, distinguant le dépôt dans le dossier courant du dépôt sur un dossier ciblé. Accepte les dossiers entiers.</div>
+          </div>
+          <div class="row">
+            <div class="name">Éditeur de permissions</div>
+            <div class="desc">Le plus difficile. La difficulté n’est pas de saisir une règle mais <strong>d’expliquer une permission effective</strong>&nbsp;: pourquoi cette personne a-t-elle accès, quelle règle l’a produit, à quel niveau de l’arborescence, et qu’est-ce qui l’emporterait. Un simple tableau de cases à cocher échoue dès que l’héritage entre en jeu. Prévoir un mode «&nbsp;expliquer&nbsp;» qui remonte la chaîne de décision pour un utilisateur et un chemin donnés.</div>
+          </div>
+          <div class="row">
+            <div class="name">Création de lien</div>
+            <div class="desc">Doit rendre évident le choix entre lien direct et lien protégé, en expliquant la conséquence plutôt que la mécanique&nbsp;: «&nbsp;utilisable par un gestionnaire de téléchargement&nbsp;» contre «&nbsp;protégé par mot de passe, à ouvrir dans un navigateur&nbsp;». Copie en un geste, aperçu de l’URL finale.</div>
+          </div>
+          <div class="row">
+            <div class="name">Bandeau d’état système</div>
+            <div class="desc">Disque presque plein, mode lecture seule, tâche de fond en échec. Persistant tant que la condition dure, jamais une simple notification éphémère&nbsp;— ce sont des états, pas des événements.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="etats">
+        <h2><span class="num">07</span><span>États</span></h2>
+        <p>Ce sont les états négligés qui font qu’une application paraît bâclée. Chacun de ceux-ci est un cas à concevoir, pas un cas à gérer&nbsp;:</p>
+        <ul>
+          <li><strong>Dossier vide</strong> — distinguer «&nbsp;vide&nbsp;» de «&nbsp;vous n’avez pas le droit de voir ce qu’il contient&nbsp;». Ce sont deux messages différents.</li>
+          <li><strong>Recherche sans résultat</strong> — signaler si l’indexation est en cours, sinon l’utilisateur conclut à tort que le fichier n’existe pas.</li>
+          <li><strong>Chargement</strong> — squelettes aux dimensions des lignes réelles, pas d’indicateur centré qui fait sauter la mise en page.</li>
+          <li><strong>Permission refusée</strong> — dire ce qui manque, pas seulement que c’est refusé.</li>
+          <li><strong>Disque plein</strong> — l’envoi est bloqué en amont, avec explication&nbsp;; la lecture et la suppression restent offertes.</li>
+          <li><strong>Lecture seule</strong> — toutes les actions d’écriture désactivées avec une raison au survol, pas silencieusement absentes.</li>
+          <li><strong>Hors ligne ou serveur injoignable</strong> — état explicite, avec reprise automatique des transferts au retour.</li>
+          <li><strong>Conflit de nom</strong> — remplacer, conserver les deux, annuler. Décision par fichier et applicable à toute la sélection.</li>
+        </ul>
+        <div class="note">
+          <span class="label">Règle de rédaction</span>
+          <p>Un message d’erreur dit ce qui s’est passé et comment le corriger. Pas d’excuse, pas de vague, pas de code technique sans traduction. Un bouton annonce exactement ce qu’il fait, et la confirmation le confirme au passé.</p>
+        </div>
+      </section>
+
+      <section id="perf">
+        <h2><span class="num">08</span><span>Contraintes de performance</span></h2>
+        <div class="rows">
+          <div class="row">
+            <div class="name">Virtualisation obligatoire</div>
+            <div class="desc">Toute liste pouvant dépasser quelques centaines d’entrées est virtualisée dès sa première écriture. La rétrofitter oblige à revoir sélection, défilement et raccourcis clavier.</div>
+          </div>
+          <div class="row">
+            <div class="name">Pas d’élévation sur les lignes</div>
+            <div class="desc">Ombres et élévations coûtent cher à repeindre&nbsp;; sur dix mille lignes, le défilement décroche. Les surfaces répétées restent plates, l’élévation est réservée aux superpositions&nbsp;— dialogues, menus, panneaux. <em>La performance ramène ici vers la sobriété&nbsp;: c’est une contrainte heureuse.</em></div>
+          </div>
+          <div class="row">
+            <div class="name">Aucune transition sur les lignes</div>
+            <div class="desc">Le mouvement expressif de M3 s’applique aux navigations et aux superpositions, pas aux éléments de liste. Une transition multipliée par le nombre de lignes visibles devient un coût, pas un raffinement.</div>
+          </div>
+          <div class="row">
+            <div class="name">Vignettes différées</div>
+            <div class="desc">Chargées à l’approche de la zone visible, jamais pour tout le dossier. Repli immédiat sur une icône de type, sans espace réservé qui saute.</div>
+          </div>
+          <div class="row">
+            <div class="name">Progression sans re-rendu global</div>
+            <div class="desc">Les événements SSE d’un transfert ne doivent re-rendre que la ligne concernée. Un état global qui se propage à chaque octet fige l’interface pendant les gros envois.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="a11y">
+        <h2><span class="num">09</span><span>Accessibilité</span></h2>
+        <p>M3E apporte la sémantique native, la navigation clavier, la direction du texte, le respect du mouvement réduit et les couleurs forcées. Ce qui reste à notre charge concerne les composants du §06&nbsp;:</p>
+        <ul>
+          <li><strong>Toute opération courante réalisable sans souris</strong> — c’est le critère d’achèvement du lot 5.3 de la roadmap.</li>
+          <li>Sélection au clavier avec les conventions attendues&nbsp;: étendue par majuscule, discontinue par touche de commande.</li>
+          <li>Glisser-déposer doublé d’une alternative accessible&nbsp;: couper et coller, ou déplacer vers.</li>
+          <li>Annonces vocales sur les événements asynchrones&nbsp;— fin de transfert, échec de tâche&nbsp;— via des régions dynamiques.</li>
+          <li>Focus visible en permanence, jamais supprimé, y compris sur les lignes virtualisées où il doit survivre au recyclage des nœuds.</li>
+        </ul>
+      </section>
+
+      <section id="limites">
+        <h2><span class="num">10</span><span>Ce qu’on ne fait pas</span></h2>
+        <ul>
+          <li><strong>Aucun thème personnalisable par l’utilisateur final</strong> au-delà du choix clair/sombre. L’administrateur peut changer la couleur source de l’instance&nbsp;; c’est tout.</li>
+          <li><strong>Aucune disposition configurable</strong>&nbsp;: pas de panneaux déplaçables, pas de colonnes réordonnables. Une bonne disposition par défaut vaut mieux qu’une préférence à maintenir.</li>
+          <li><strong>Aucune icône personnalisée</strong> quand M3 en fournit une. Le jeu d’icônes de la bibliothèque fait autorité.</li>
+          <li><strong>Aucune animation décorative.</strong> Le mouvement sert à situer une transition ou à signaler un changement d’état, jamais à impressionner.</li>
+          <li><strong>Aucune bibliothèque d’interface supplémentaire.</strong> Après M3E, le budget de dépendances est consommé&nbsp;; toute addition doit se justifier contre le principe de légèreté.</li>
+        </ul>
+      </section>
+
+      <div class="colophon">
+        <span>Zefile — conception de l’interface</span>
+        <span>Version 1</span>
+        <span>29 juillet 2026</span>
+        <span>Adossée à la conception rév. 1.1</span>
+      </div>
+
+    </main>
+  </div>
+</div>

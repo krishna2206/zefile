@@ -1,0 +1,1320 @@
+<title>Zefile — Document de conception</title>
+
+<style>
+  :root {
+    --ground:      #F4F5F2;
+    --surface:     #FFFFFF;
+    --surface-2:   #EAEDE8;
+    --ink:         #191D1B;
+    --ink-2:       #4C5652;
+    --ink-3:       #79837E;
+    --line:        #DBDFD9;
+    --line-strong: #C3C9C1;
+    --accent:      #2F5D50;
+    --accent-ink:  #234840;
+    --accent-soft: #E2ECE7;
+    --brass:       #8E6528;
+    --brass-soft:  #F3EBDC;
+    --alert:       #9E3826;
+    --alert-soft:  #F8E7E3;
+
+    --font-display: "Charter", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    --measure: 70ch;
+    --radius: 3px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:      #121614;
+      --surface:     #1A201D;
+      --surface-2:   #232A27;
+      --ink:         #E6EAE7;
+      --ink-2:       #A9B3AE;
+      --ink-3:       #7C8782;
+      --line:        #2B3330;
+      --line-strong: #3C4642;
+      --accent:      #74C3A6;
+      --accent-ink:  #9AD6BF;
+      --accent-soft: #1C2A26;
+      --brass:       #C99A5B;
+      --brass-soft:  #29231A;
+      --alert:       #E08874;
+      --alert-soft:  #2E1E1A;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #121614;
+    --surface:     #1A201D;
+    --surface-2:   #232A27;
+    --ink:         #E6EAE7;
+    --ink-2:       #A9B3AE;
+    --ink-3:       #7C8782;
+    --line:        #2B3330;
+    --line-strong: #3C4642;
+    --accent:      #74C3A6;
+    --accent-ink:  #9AD6BF;
+    --accent-soft: #1C2A26;
+    --brass:       #C99A5B;
+    --brass-soft:  #29231A;
+    --alert:       #E08874;
+    --alert-soft:  #2E1E1A;
+  }
+
+  :root[data-theme="light"] {
+    --ground:      #F4F5F2;
+    --surface:     #FFFFFF;
+    --surface-2:   #EAEDE8;
+    --ink:         #191D1B;
+    --ink-2:       #4C5652;
+    --ink-3:       #79837E;
+    --line:        #DBDFD9;
+    --line-strong: #C3C9C1;
+    --accent:      #2F5D50;
+    --accent-ink:  #234840;
+    --accent-soft: #E2ECE7;
+    --brass:       #8E6528;
+    --brass-soft:  #F3EBDC;
+    --alert:       #9E3826;
+    --alert-soft:  #F8E7E3;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 clamp(20px, 4vw, 48px) 96px;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    padding: clamp(48px, 8vw, 96px) 0 40px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .masthead h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(2.1rem, 5.2vw, 3.2rem);
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+    margin: 0;
+    max-width: 18ch;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    line-height: 1.55;
+    color: var(--ink-2);
+    max-width: 58ch;
+    margin: 0;
+  }
+
+  .tagline {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.02rem;
+    color: var(--accent);
+    margin: 0;
+    padding-left: 16px;
+    border-left: 2px solid var(--accent);
+    max-width: 52ch;
+  }
+
+  .tagline em { font-style: normal; font-weight: 600; }
+
+  .docmeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-3);
+    padding-top: 8px;
+  }
+
+  .docmeta b {
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+
+  /* ---------- layout ---------- */
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 48px;
+    padding-top: 48px;
+    align-items: start;
+  }
+
+  @media (min-width: 1000px) {
+    .layout { grid-template-columns: 216px minmax(0, 1fr); gap: 64px; }
+    .toc { position: sticky; top: 32px; }
+  }
+
+  .toc { font-size: 14px; }
+
+  .toc h2 {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 14px;
+    font-weight: 500;
+  }
+
+  .toc ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    counter-reset: toc;
+  }
+
+  .toc a {
+    display: grid;
+    grid-template-columns: 2.1em 1fr;
+    color: var(--ink-2);
+    text-decoration: none;
+    padding: 4px 0;
+    border-bottom: 1px solid transparent;
+    line-height: 1.35;
+  }
+
+  .toc a::before {
+    counter-increment: toc;
+    content: counter(toc);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .toc a:hover { color: var(--accent); }
+  .toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  /* ---------- sections ---------- */
+
+  .doc { min-width: 0; display: flex; flex-direction: column; gap: 60px; }
+
+  section { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 24px; }
+
+  section > h2 {
+    font-family: var(--font-display);
+    font-size: 1.72rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    margin: 0;
+    padding-bottom: 14px;
+    border-bottom: 2px solid var(--ink);
+    display: grid;
+    grid-template-columns: 1.9em 1fr;
+    align-items: baseline;
+    text-wrap: balance;
+  }
+
+  section > h2 .num {
+    font-family: var(--font-mono);
+    font-size: 0.72em;
+    font-weight: 400;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  h3 {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    margin: 14px 0 0;
+    color: var(--ink);
+  }
+
+  h3 .sub {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    color: var(--ink-3);
+    font-size: 0.85em;
+    margin-right: 0.7em;
+  }
+
+  p { margin: 0; max-width: var(--measure); }
+
+  .doc ul, .doc ol.list {
+    margin: 0;
+    padding-left: 1.15em;
+    max-width: var(--measure);
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  li::marker { color: var(--ink-3); }
+
+  strong { font-weight: 650; }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.855em;
+    background: var(--surface-2);
+    padding: 0.12em 0.38em;
+    border-radius: var(--radius);
+    color: var(--accent-ink);
+  }
+
+  a.ext { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+  /* ---------- blocks ---------- */
+
+  .block {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow-x: auto;
+  }
+
+  .block pre {
+    margin: 0;
+    padding: 18px 20px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.72;
+    color: var(--ink-2);
+  }
+
+  .block pre b { color: var(--ink); font-weight: 600; }
+  .block pre i { color: var(--ink-3); font-style: normal; }
+  .block pre u { color: var(--accent); text-decoration: none; }
+
+  .caption {
+    font-size: 13px;
+    color: var(--ink-3);
+    max-width: var(--measure);
+    margin: -6px 0 0;
+  }
+
+  /* ---------- callouts ---------- */
+
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    max-width: var(--measure);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .note.warn { border-left-color: var(--brass); background: var(--brass-soft); }
+  .note.open { border-left-color: var(--alert); background: var(--alert-soft); }
+
+  .note .label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+  }
+
+  .note.warn .label { color: var(--brass); }
+  .note.open .label { color: var(--alert); }
+  .note p { max-width: none; font-size: 15.5px; }
+
+  /* ---------- chips ---------- */
+
+  .chip {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 2px;
+    vertical-align: 0.18em;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+
+  .chip.locked { background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--accent); }
+  .chip.prop   { background: var(--brass-soft); color: var(--brass); border: 1px solid var(--brass); }
+  .chip.todo   { background: var(--alert-soft); color: var(--alert); border: 1px solid var(--alert); }
+
+  /* ---------- scope table ---------- */
+
+  .scope {
+    display: grid;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .scope-row {
+    background: var(--surface);
+    padding: 16px 18px;
+    display: grid;
+    gap: 4px 20px;
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 620px) {
+    .scope-row { grid-template-columns: 13.5rem 1fr; }
+  }
+
+  .scope-row .name {
+    font-weight: 620;
+    font-size: 15.5px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .scope-row .desc { color: var(--ink-2); font-size: 15px; max-width: 62ch; }
+
+  .scope-head {
+    background: var(--surface-2);
+    padding: 9px 18px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+
+  /* ---------- phases ---------- */
+
+  .phases {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .phase {
+    background: var(--surface);
+    padding: 18px;
+    display: grid;
+    grid-template-columns: 2.4rem 1fr;
+    gap: 4px 16px;
+    align-items: baseline;
+  }
+
+  .phase .idx {
+    font-family: var(--font-mono);
+    font-size: 1.4rem;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    grid-row: span 2;
+    line-height: 1;
+  }
+
+  .phase .title { font-weight: 620; font-size: 16px; }
+  .phase .body { color: var(--ink-2); font-size: 15px; max-width: 60ch; }
+
+  .phase.later { background: var(--surface-2); }
+  .phase.later .idx { color: var(--ink-3); font-size: 1rem; }
+
+  /* ---------- footer ---------- */
+
+  .colophon {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-3);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 24px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="shell">
+
+  <header class="masthead">
+    <div class="eyebrow">Document de conception · v1.2 · conception close</div>
+    <h1>Zefile</h1>
+    <p class="standfirst">Un binaire unique pour stocker, organiser et partager de gros fichiers sur un VPS. Conçu comme le successeur spirituel de File Browser&nbsp;: la même promesse d’installation, avec un modèle de sécurité et une API pensés dès le départ.</p>
+    <p class="tagline">«&nbsp;Because it’s not just another file browser&nbsp;— it’s <em>Ze</em> file browser.&nbsp;»</p>
+    <div class="docmeta">
+      <span><b>Backend</b> Go</span>
+      <span><b>Licence</b> Apache-2.0</span>
+      <span><b>Statut</b> prêt pour l’implémentation</span>
+      <span><b>Dernière révision</b> 29 juillet 2026</span>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <nav class="toc" aria-label="Sommaire">
+      <h2>Sommaire</h2>
+      <ol>
+        <li><a href="#contexte">Contexte</a></li>
+        <li><a href="#principes">Principes directeurs</a></li>
+        <li><a href="#perimetre">Périmètre fonctionnel</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#donnees">Modèle de données</a></li>
+        <li><a href="#auth">Authentification</a></li>
+        <li><a href="#permissions">Permissions</a></li>
+        <li><a href="#partage">Partage par lien</a></li>
+        <li><a href="#stockage">Stockage &amp; chemins</a></li>
+        <li><a href="#perf">Performance de transfert</a></li>
+        <li><a href="#api">API</a></li>
+        <li><a href="#technos">Choix technologiques</a></li>
+        <li><a href="#deploiement">Déploiement</a></li>
+        <li><a href="#phases">Découpage</a></li>
+        <li><a href="#ouvert">Questions ouvertes</a></li>
+      </ol>
+    </nav>
+
+    <main class="doc">
+
+      <!-- 1 -->
+      <section id="contexte">
+        <h2><span class="num">01</span><span>Contexte</span></h2>
+        <p>File Browser est archivé le 1<sup>er</sup> septembre 2026. Son auteur explique que le projet ne peut pas être réparé par correctifs&nbsp;: écrit sans modèle de sécurité ni conception d’API, il faudrait le réécrire entièrement. Les failles connues restent publiques et non corrigées.</p>
+        <p>Le besoin, lui, ne disparaît pas&nbsp;: exploiter les 200&nbsp;Go d’un VPS pour héberger des fichiers lourds (images disque de jeux PC, archives) et y accéder à distance, là où l’offre gratuite de Google Drive plafonne à 15&nbsp;Go.</p>
+        <p>Ce document spécifie un remplaçant écrit de zéro. Pas un fork&nbsp;: le code existant est le passif, seules les idées d’ergonomie et la liste documentée de ses vulnérabilités sont réutilisables.</p>
+
+        <h3><span class="sub">1.1</span>Le nom</h3>
+        <p><strong>Zefile</strong>&nbsp;— clin d’œil à l’article défini prononcé à la française. Pas un énième explorateur de fichiers&nbsp;: <em>ze</em> explorateur de fichiers.</p>
+        <div class="note warn">
+          <span class="label">Homonymie connue</span>
+          <p>Il existe déjà <strong>zfile</strong>, un projet de stockage auto-hébergé actif, dont le nom ne diffère que d’une lettre et se prononce presque identiquement pour un lecteur non francophone. Aucun obstacle juridique, mais une confusion à prévoir en recherche et dans les discussions communautaires. Choix assumé.</p>
+        </div>
+      </section>
+
+      <!-- 2 -->
+      <section id="principes">
+        <h2><span class="num">02</span><span>Principes directeurs</span></h2>
+        <p>Cinq règles qui tranchent les arbitrages, par ordre de priorité.</p>
+
+        <div class="scope">
+          <div class="scope-row">
+            <div class="name">Pas un clone de Drive</div>
+            <div class="desc">On construit le File Browser qui aurait dû exister. Les gens qui migrent ne veulent pas de Nextcloud&nbsp;: ils y seraient déjà. Toute fonctionnalité qui nous en rapproche est refusée.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">La légèreté est le produit</div>
+            <div class="desc">Binaire unique, démarrage instantané, empreinte mémoire au repos négligeable. Ce n’est pas une contrainte technique, c’est l’argument de vente.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">L’API est publique, toujours</div>
+            <div class="desc">L’interface web ne dispose d’aucun endpoint privilégié. Deux surfaces à sécuriser, c’est une de trop&nbsp;— et c’est toujours celle qu’on croit interne qui reçoit le moins de contrôles.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Le système de fichiers fait foi</div>
+            <div class="desc">La base de données n’est qu’un cache de métadonnées. Un fichier déposé en SSH apparaît immédiatement. En cas de divergence, le disque gagne.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Aucune télémétrie</div>
+            <div class="desc">Aucune mesure d’usage, aucune vérification de mise à jour, aucune requête sortante non demandée par l’utilisateur. Engagement écrit dans le README et tenu&nbsp;— la communauté auto-hébergée y est particulièrement attentive, et c’est un engagement qu’on ne peut pas reprendre après coup.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Petit et maintenu</div>
+            <div class="desc">C’est la charge de maintenance qui a eu raison de File Browser, pas le code. Un périmètre restreint et tenu vaut mieux qu’un projet populaire abandonné.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3 -->
+      <section id="perimetre">
+        <h2><span class="num">03</span><span>Périmètre fonctionnel</span></h2>
+
+        <h3><span class="sub">3.1</span>Noyau</h3>
+        <div class="scope">
+          <div class="scope-head">Indispensable au remplacement de l’instance actuelle</div>
+          <div class="scope-row">
+            <div class="name">Navigation <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Arborescence, tri, filtre par nom, sélection multiple, raccourcis clavier, vue liste et grille.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Upload reprenable <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Glisser-déposer, dossiers entiers, reprise après coupure réseau. Un envoi de 40&nbsp;Go qui échoue à 90&nbsp;% sans reprise est rédhibitoire.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Téléchargement <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Requêtes <code>Range</code> irréprochables (reprise et multi-connexions), dossier en ZIP diffusé en flux sans fichier temporaire.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Opérations fichiers <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Créer un dossier, renommer, déplacer, copier, supprimer.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Corbeille <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Restauration vers l’emplacement d’origine, purge automatique configurable, purge manuelle. Une corbeille unique, obligatoirement sur le même système de fichiers que les données&nbsp;— sinon la suppression devient une copie complète.</div>
+          </div>
+        </div>
+
+        <h3><span class="sub">3.2</span>Version 1</h3>
+        <div class="scope">
+          <div class="scope-head">Ce qui fait le produit</div>
+          <div class="scope-row">
+            <div class="name">Utilisateurs invités <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Invitation par lien, permissions granulaires par chemin. Un invité ne voit que ce qui lui est explicitement ouvert.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Liens de partage <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Accès direct sans authentification, durée paramétrable, révocables, journal des accès. Compatibles avec les gestionnaires de téléchargement (voir §08).</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Aperçus <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Images, vidéo avec navigation temporelle, audio, texte et code, Markdown, et PDF. Aucun autre format bureautique.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Téléchargement depuis une URL <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">On colle un lien, le serveur télécharge à sa propre bande passante. Pour des images disque de plusieurs dizaines de Go, c’est probablement la fonctionnalité la plus utile du projet. Surface d’attaque à traiter&nbsp;: voir §9.2.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Extraction côté serveur <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Décompresser une archive directement sur le VPS, sans la rapatrier. Surface d’attaque à traiter&nbsp;: voir §9.2.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Empreintes SHA-256 <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Calcul et vérification à la demande. Indispensable dès qu’on manipule des fichiers de cette taille.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Recherche <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Par nom, via un index SQLite FTS5 rafraîchi en arrière-plan.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Jetons d’API <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Portée restreinte, révocables individuellement, dernier usage visible.</div>
+          </div>
+        </div>
+
+        <h3><span class="sub">3.3</span>Différé</h3>
+        <div class="scope">
+          <div class="scope-head">Souhaitable, mais ne doit pas être rendu impossible</div>
+          <div class="scope-row">
+            <div class="name">WebDAV</div>
+            <div class="desc">Permet de monter le stockage comme lecteur réseau via des clients existants (Finder, explorateur Windows, <code>rclone mount</code>, Mountain Duck). Aucun client à écrire. Contrainte aujourd’hui&nbsp;: l’abstraction de stockage doit exposer des opérations assez fines pour l’accueillir sans refonte.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">OIDC / SSO</div>
+            <div class="desc">Demande récurrente en auto-hébergement. La couche d’authentification doit rester enfichable.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Stockage objet S3</div>
+            <div class="desc">Seconde implémentation de l’interface de stockage.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Versions de fichiers, navigation dans les archives, webhooks</div>
+            <div class="desc">Aucune contrainte de conception aujourd’hui.</div>
+          </div>
+        </div>
+
+        <h3><span class="sub">3.4</span>Hors périmètre, définitivement</h3>
+        <p>À inscrire dans le README dès la première publication&nbsp;: cela évite l’essentiel des demandes de fonctionnalités.</p>
+        <ul>
+          <li>Édition collaborative de documents (OnlyOffice, Collabora)</li>
+          <li>Agenda, contacts, notes, messagerie&nbsp;— le piège Nextcloud</li>
+          <li>Magasin de greffons</li>
+          <li>Client de synchronisation bidirectionnelle&nbsp;— c’est un produit à part entière</li>
+          <li>Quotas de stockage <span class="chip locked">Verrouillé</span></li>
+        </ul>
+        <h3><span class="sub">3.5</span>Propriété des fichiers</h3>
+        <p>Les fichiers déposés via l’application ont un propriétaire, qui lui confère des <strong>droits implicites</strong>&nbsp;: lire, modifier, supprimer et partager ce qu’il a déposé, sans entrée ACL explicite. Sans cela, la propriété ne serait qu’une étiquette décorative, puisqu’il n’y a pas de quotas à imputer.</p>
+        <p>À la suppression d’un compte, la propriété de ses fichiers est <strong>transférée à l’administrateur</strong>&nbsp;; ses entrées ACL, ses sessions, ses jetons et ses partages sont supprimés. Aucun fichier orphelin.</p>
+        <div class="note warn">
+          <span class="label">Tension assumée avec le principe «&nbsp;le disque fait foi&nbsp;»</span>
+          <p>La propriété est une donnée propre à l’application, stockée dans notre base et indexée par chemin, mise à jour par nos propres opérations de déplacement et de renommage. <strong>Un fichier déplacé hors de l’application&nbsp;— en SSH par exemple&nbsp;— laisse un enregistrement orphelin</strong>, ramassé périodiquement&nbsp;; le fichier retombe alors sur les seules règles ACL. C’est le prix du principe, et il est accepté.</p>
+        </div>
+      </section>
+
+      <!-- 4 -->
+      <section id="architecture">
+        <h2><span class="num">04</span><span>Architecture</span></h2>
+
+        <h3><span class="sub">4.1</span>Deux origines HTTP, un seul binaire</h3>
+        <p>C’est la décision structurante du projet, et la seule qui soit irréversible si elle est ratée.</p>
+
+        <div class="block"><pre><b>app.domaine.tld</b>     API + interface       <u>cookie de session</u>
+<b>files.domaine.tld</b>   contenu utilisateur   <i>aucun cookie, jamais</i></pre></div>
+
+        <p>Tout fichier déposé par un utilisateur est du contenu potentiellement hostile. Un <code>.html</code> ou un <code>.svg</code> servi depuis l’origine de l’application, c’est une exécution de script avec accès à la session de la victime. En séparant les origines, un fichier malveillant n’a rien à voler&nbsp;: il n’existe aucune session sur <code>files.</code>.</p>
+        <p>Comme les cookies ne franchissent pas les origines, l’accès authentifié au contenu passe par une <strong>URL signée à durée courte</strong> (HMAC, quelques minutes) délivrée par l’API. Les liens de partage portent leur propre jeton et vivent nativement sur cette origine, ce qui tombe juste pour les gestionnaires de téléchargement.</p>
+
+        <h3><span class="sub">4.2</span>Composants</h3>
+        <div class="block"><pre><b>API</b>                REST, origine app, authentification par cookie ou jeton
+<b>Serveur de contenu</b> upload / download / aperçus, origine files, sans session
+<b>Couche stockage</b>    interface unique — implémentation locale, S3 plus tard
+<b>SQLite</b>             métadonnées uniquement, jamais de contenu
+<b>Worker de tâches</b>   téléchargement d'URL, extraction, empreintes, purge
+<b>Interface web</b>      embarquée dans le binaire</pre></div>
+
+        <h3><span class="sub">4.3</span>Source de vérité</h3>
+        <p>Deux modèles étaient possibles. Indexer intégralement en base (approche Nextcloud) donne une recherche rapide et des métadonnées riches, au prix d’une désynchronisation permanente et d’un scanner&nbsp;— la principale source de bugs de ce projet. Lire le disque à chaque requête (approche File Browser) ne désynchronise jamais mais rend la recherche lente.</p>
+        <div class="note">
+          <span class="label">Décision</span>
+          <p>Le système de fichiers fait foi&nbsp;; la base ne stocke que ce que le disque ne peut pas porter — ACL, partages, corbeille, empreintes, index de recherche — indexé par chemin. On conserve ainsi la propriété qui fait la valeur de File Browser&nbsp;: un fichier copié en SSH est visible immédiatement.</p>
+        </div>
+      </section>
+
+      <!-- 5 -->
+      <section id="donnees">
+        <h2><span class="num">05</span><span>Modèle de données</span></h2>
+
+        <div class="block"><pre><b>users</b>              id, username, email, password_hash <i>(argon2id)</i>, is_admin,
+                   totp_secret, disabled, created_at
+
+<b>sessions</b>           id, user_id, token_hash, expires_at, last_seen_at,
+                   user_agent, ip, revoked_at
+
+<b>api_tokens</b>         id, user_id, name, token_hash, prefix, scopes,
+                   last_used_at, expires_at, revoked_at
+
+<b>invitations</b>        id, token_hash, email, inviter_id, expires_at, used_at
+
+<b>groups</b>             id, name
+<b>group_members</b>      group_id, user_id
+
+
+<b>acl</b>                id, subject_type <i>(user|group)</i>, subject_id,
+                   path, perms <i>(masque)</i>, recursive, deny
+
+<b>file_owners</b>        path, owner_id, created_at
+                   <i>table creuse — seuls les fichiers déposés via l'app</i>
+
+<b>shares</b>             id, token_hash, owner_id, path, perms,
+                   expires_at, password_hash, max_downloads,
+                   download_count, revoked_at, created_at
+
+<b>share_access_log</b>   share_id, ip, user_agent, bytes_sent, at
+
+<b>trash</b>              id, trash_name, original_path,
+                   deleted_by, deleted_at
+
+<b>uploads</b>            id, user_id, target_path, size, offset,
+                   checksum, expires_at
+
+<b>audit_log</b>          id, at, actor_id, actor_ip, action, target, details
+                   <i>connexions, échecs, ACL, jetons, suppressions</i>
+
+<b>jobs</b>               id, type, payload, status, progress, error, created_at
+
+<b>fts_index</b>          path, name  <i>(table virtuelle FTS5)</i></pre></div>
+
+        <p>Tous les chemins sont relatifs à la <strong>racine de stockage unique</strong>, configurée au démarrage. C’est le modèle de File Browser, et il ne restreint rien&nbsp;: cantonner un invité à un sous-dossier se fait par une entrée ACL, et un disque supplémentaire se monte en sous-répertoire de la racine côté hôte. Le multi-racine serait une migration et une v2 d’API&nbsp;— coût accepté en échange d’une simplification partout ailleurs.</p>
+
+        <div class="note">
+          <span class="label">Deux invariants</span>
+          <p>Tous les jetons&nbsp;— sessions, API, invitations, partages&nbsp;— sont stockés <strong>hachés</strong>. Une fuite de la base ne donne aucun accès. Et les permissions sont un masque de bits, ce qui rend le calcul d’héritage trivial.</p>
+        </div>
+      </section>
+
+      <!-- 6 -->
+      <section id="auth">
+        <h2><span class="num">06</span><span>Authentification</span></h2>
+
+        <p>Le défaut central de File Browser est le jeton JWT auto-porteur&nbsp;: impossible à révoquer, toujours valide après déconnexion, encore accepté après expiration dans certains cas. C’est le point de départ de cette conception.</p>
+
+        <div class="note">
+          <span class="label">Décision</span>
+          <p>Aucun JWT. Des <strong>jetons opaques vérifiés en base à chaque requête</strong>. La déconnexion supprime la ligne&nbsp;: l’effet est immédiat et total. On obtient gratuitement la liste des sessions actives, la révocation à distance et le «&nbsp;déconnecter partout&nbsp;».</p>
+        </div>
+
+        <h3><span class="sub">6.1</span>Deux mécanismes, un seul modèle d’autorisation</h3>
+        <ul>
+          <li><strong>Navigateur</strong> — cookie de session <code>HttpOnly</code>, <code>SameSite=Lax</code>, <code>Secure</code>. Jamais de jeton dans le <code>localStorage</code>.</li>
+          <li><strong>Client programmatique</strong> — jeton d’API en <code>Authorization: Bearer</code>.</li>
+        </ul>
+        <p>Les deux se résolvent vers le même contexte utilisateur et traversent les mêmes contrôles. Un jeton ne détient jamais plus de droits que l’utilisateur qui l’a créé.</p>
+
+        <h3><span class="sub">6.2</span>Jetons d’API</h3>
+        <p>Portées&nbsp;: <code>files:read</code>, <code>files:write</code>, <code>files:delete</code>, <code>shares:manage</code>, <code>admin</code>. Un client mobile n’a pas besoin de <code>admin</code>&nbsp;; un script de sauvegarde se contente de <code>files:read</code>.</p>
+        <p>Forme <code>zefile_live_&lt;aléatoire&gt;</code>&nbsp;— un préfixe explicite et non ambigu, pour que les outils de détection de secrets puissent le repérer dans un dépôt ou un journal. Seuls le haché et un préfixe court sont conservés&nbsp;; la valeur complète n’est affichée qu’une fois, à la création. Chaque jeton expose sa date de dernier usage, pour repérer et révoquer ce qui traîne.</p>
+
+        <h3><span class="sub">6.3</span>Journal d’audit</h3>
+        <p>Le <code>share_access_log</code> (§08) ne couvre que les partages. Un système multi-utilisateurs doit pouvoir répondre à «&nbsp;que s’est-il passé&nbsp;»&nbsp;: connexions réussies et échouées, modifications de permissions, création et révocation de jetons, suppression de comptes, suppressions définitives de fichiers.</p>
+        <p>Consultable par l’administrateur, avec une durée de conservation configurable&nbsp;— l’adresse IP y figure, ce qui en fait une donnée à ne pas garder indéfiniment par défaut.</p>
+
+        <h3><span class="sub">6.4</span>Divers</h3>
+        <ul>
+          <li>Mots de passe hachés en <strong>Argon2id</strong>.</li>
+          <li><strong>TOTP</strong> à deux facteurs dès la version 1&nbsp;: peu de travail, bénéfice immédiat.</li>
+          <li>Limitation du débit sur la connexion, par identifiant et par IP.</li>
+        </ul>
+      </section>
+
+      <!-- 7 -->
+      <section id="permissions">
+        <h2><span class="num">07</span><span>Permissions</span></h2>
+
+        <div class="note">
+          <span class="label">Portée du modèle</span>
+          <p>Ce système est <strong>entièrement interne à l’application</strong>&nbsp;: il régit les utilisateurs de l’instance, leurs groupes et les liens de partage. Il n’a aucun rapport avec les droits du système hôte&nbsp;— comptes du système, <code>chmod</code>, listes de contrôle POSIX. Le serveur accède au disque sous une identité unique, et toute l’autorisation se joue dans la couche de stockage du projet.</p>
+        </div>
+
+        <p>Masque de bits&nbsp;: <code>READ</code>, <code>WRITE</code>, <code>DELETE</code>, <code>SHARE</code>, <code>MANAGE</code>. Les sujets sont un utilisateur, un groupe, ou un lien de partage&nbsp;— ce dernier étant un sujet de première classe, pas un cas particulier.</p>
+
+        <h3><span class="sub">7.1</span>Résolution</h3>
+        <p>Pour un chemin donné, on remonte de la racine jusqu’au chemin en accumulant les entrées applicables (celles de l’utilisateur et celles de ses groupes). <strong>La plus spécifique l’emporte.</strong> Un refus explicite prime toujours sur une autorisation héritée.</p>
+        <p>La <strong>propriété</strong> s’ajoute en amont de ce calcul&nbsp;: le propriétaire d’un fichier dispose implicitement de <code>READ</code>, <code>WRITE</code>, <code>DELETE</code> et <code>SHARE</code> dessus. Un refus explicite reste prioritaire, ce qui permet à l’administrateur de verrouiller un chemin même contre son déposant.</p>
+
+        <h3><span class="sub">7.2</span>Deux règles non négociables</h3>
+        <div class="note warn">
+          <span class="label">Règle 1 — le point de contrôle</span>
+          <p>La vérification s’effectue <strong>dans la couche de stockage</strong>, jamais dans les gestionnaires HTTP. Placée dans les gestionnaires, il suffit d’oublier un endpoint pour ouvrir une brèche&nbsp;— c’est le mécanisme d’une bonne partie des vulnérabilités de File Browser.</p>
+        </div>
+        <div class="note warn">
+          <span class="label">Règle 2 — pas d’escalade par partage</span>
+          <p>On ne peut pas partager plus de droits qu’on n’en détient. Un utilisateur en lecture seule ne peut pas créer un lien en écriture.</p>
+        </div>
+      </section>
+
+      <!-- 8 -->
+      <section id="partage">
+        <h2><span class="num">08</span><span>Partage par lien</span></h2>
+
+        <p>Contrainte fondatrice&nbsp;: un lien doit être téléchargeable par un gestionnaire de téléchargement type IDM. Ces clients n’exécutent pas de JavaScript, ne gèrent pas de cookies, et ouvrent 8 à 16 connexions parallèles. Cela impose une forme précise.</p>
+
+        <div class="block"><pre>https://files.domaine.tld/s/<u>&lt;jeton&gt;</u>/<b>Nom-Du-Fichier.iso</b>
+                             │              └─ détermine le nom du fichier
+                             └───────────────── capacité, vérifiée en base</pre></div>
+
+        <p>Aucune page intermédiaire, aucune redirection JavaScript&nbsp;: du point de vue HTTP, le lien se comporte comme un fichier statique. Le jeton est porté par l’URL et non par un cookie&nbsp;— c’est un modèle de capacité assumé&nbsp;: qui détient le lien peut lire.</p>
+
+        <h3><span class="sub">8.1</span>Garde-fous</h3>
+        <ul>
+          <li>Jeton vérifié en base à chaque requête, donc <strong>révocable immédiatement</strong>. Jamais auto-porteur.</li>
+          <li>Expiration paramétrable, sans plafond imposé, option «&nbsp;n’expire jamais&nbsp;» assumée.</li>
+          <li>Écran listant tous les partages actifs avec leur date de dernier accès. <em>Le filet de sécurité est la visibilité, pas la contrainte.</em></li>
+          <li>Limitation de débit par IP&nbsp;— sans elle, un lien qui fuite transforme le VPS en CDN public.</li>
+        </ul>
+
+        <h3><span class="sub">8.2</span>Trois pièges à traiter explicitement</h3>
+        <div class="note warn">
+          <span class="label">Piège 1 — le décompte des téléchargements</span>
+          <p>Compter les requêtes HTTP est faux&nbsp;: un client multi-connexions en consomme seize d’un coup et fait sauter la limite instantanément. Il faut compter les téléchargements <strong>distincts</strong>&nbsp;— fenêtre glissante par IP, requêtes <code>Range</code> regroupées en une session logique.</p>
+        </div>
+        <div class="note warn">
+          <span class="label">Piège 2 — mot de passe et gestionnaires de téléchargement</span>
+          <p>Vérifier un mot de passe suppose un aller-retour qu’un client comme IDM ne fera pas. D’où deux natures de liens&nbsp;: le <strong>lien protégé</strong> passe par l’interface web, qui délivre ensuite une URL directe temporaire&nbsp;; le <strong>lien direct</strong> n’a pas de mot de passe et tient sa sécurité de l’imprévisibilité du jeton et de son expiration.</p>
+        </div>
+        <div class="note warn">
+          <span class="label">Piège 3 — la qualité de l’implémentation de <code>Range</code></span>
+          <p>C’est ce qui fait fonctionner le multi-connexions et la reprise. Sur des fichiers de plusieurs dizaines de Go, une implémentation approximative se voit immédiatement. À couvrir par des tests dédiés&nbsp;: plages ouvertes, plages suffixes, plages invalides, requêtes concurrentes sur un même fichier.</p>
+        </div>
+      </section>
+
+      <!-- 9 -->
+      <section id="stockage">
+        <h2><span class="num">09</span><span>Stockage &amp; sécurité des chemins</span></h2>
+
+        <p>Toute la surface de traversée de répertoire&nbsp;— <code>../</code>, liens symboliques, liens durs, séparateurs Windows, encodages Unicode équivalents&nbsp;— est traitée <strong>en un seul endroit</strong>&nbsp;: la couche de stockage.</p>
+
+        <div class="note">
+          <span class="label">Décision</span>
+          <p>Utilisation de <code>os.Root</code> (Go 1.24+), qui contraint toutes les opérations à un sous-arbre au niveau de l’appel système. Conçu exactement pour ce problème, il élimine une classe entière de bugs par construction plutôt que par vigilance.</p>
+        </div>
+
+        <p>L’interface de stockage reste volontairement générique&nbsp;— <code>Stat</code>, <code>List</code>, <code>Open</code>, <code>Create</code>, <code>Move</code>, <code>Remove</code>, <code>MkDir</code>&nbsp;— pour accueillir plus tard WebDAV et S3 sans refonte. Les vérifications ACL sont appliquées à ce niveau, pas au-dessus.</p>
+
+        <h3><span class="sub">9.1</span>Aperçus&nbsp;: une décision radicale</h3>
+        <p>Limiter les aperçus de documents au seul PDF autorise un choix net&nbsp;: <strong>le serveur ne parse jamais un document</strong>. Le rendu est intégralement effectué côté client, dans une iframe cloisonnée sur l’origine de contenu. Aucun analyseur de format dans le backend, donc aucune vulnérabilité de bibliothèque à suivre&nbsp;— précisément la catégorie de problèmes que l’auteur de File Browser a renoncé à corriger.</p>
+        <p>Seul renoncement&nbsp;: pas de vignette de première page en vue grille pour les PDF. On affiche une icône. Les vignettes d’images et de vidéos, elles, sont générées côté serveur par des processus séparés, sans privilèges et avec des limites de ressources.</p>
+
+        <h3><span class="sub">9.2</span>Tâches serveur&nbsp;: deux surfaces d’attaque</h3>
+        <p>Les fonctionnalités de §3.2 font agir le serveur pour le compte de l’utilisateur. Chacune ouvre une brèche classique qu’il faut traiter explicitement.</p>
+
+        <div class="note warn">
+          <span class="label">Téléchargement depuis une URL — falsification de requête serveur</span>
+          <p>Une URL fournie par l’utilisateur permet de faire émettre au serveur des requêtes vers son propre réseau&nbsp;: services internes, autres conteneurs, et surtout l’endpoint de métadonnées des hébergeurs cloud, qui délivre des identifiants. Parades cumulées&nbsp;: schémas limités à <code>http</code> et <code>https</code>, résolution DNS effectuée <strong>avant</strong> la connexion puis vérification que l’adresse obtenue n’appartient à aucune plage privée, locale ou de lien-local, et <strong>revalidation à chaque redirection</strong>&nbsp;— sans quoi une redirection ramène tranquillement vers une adresse interne. S’y ajoutent une taille maximale et un délai d’expiration.</p>
+        </div>
+
+        <div class="note warn">
+          <span class="label">Extraction d’archive — traversée et bombe de décompression</span>
+          <p>Une entrée d’archive nommée <code>../../etc/passwd</code> écrit hors du dossier cible&nbsp;: chaque nom d’entrée est normalisé et vérifié comme un chemin utilisateur ordinaire, via la même couche de stockage. Les liens symboliques contenus dans l’archive sont ignorés. Une archive de quelques mégaoctets pouvant se développer en téraoctets, on plafonne le taux de compression, la taille totale décompressée et le nombre d’entrées, avec abandon dès dépassement.</p>
+        </div>
+
+        <h3><span class="sub">9.3</span>Normalisation Unicode des noms</h3>
+        <p>Le §09 traite jusqu’ici la normalisation des chemins sous l’angle de la sécurité. Elle pose aussi un problème de correction, distinct et tout aussi structurant.</p>
+        <p>Un caractère accentué s’écrit de deux manières en Unicode&nbsp;: composée (un seul point de code) ou décomposée (lettre + accent). macOS écrit historiquement les noms sous forme décomposée, Linux conserve ce qu’on lui donne. Deux fichiers dont le nom paraît identique à l’écran peuvent donc porter des octets différents.</p>
+        <div class="note">
+          <span class="label">Décision</span>
+          <p>Les noms sont normalisés en <strong>forme composée</strong> pour tout ce qui sert de clé&nbsp;: entrées <code>acl</code>, <code>file_owners</code>, <code>shares</code>, index de recherche et comparaisons. La forme réellement présente sur le disque est conservée pour les appels système, jamais pour l’indexation. Sans cette règle, une recherche ne trouve pas un fichier existant, deux entrées semblent identiques sans l’être, et <strong>une règle de permission cesse de s’appliquer parce que le chemin ne correspond plus</strong>.</p>
+        </div>
+        <p>S’y ajoutent la sensibilité à la casse&nbsp;— différente entre systèmes de fichiers&nbsp;— et les caractères interdits selon les plateformes, à traiter au même endroit&nbsp;: la couche de stockage, seule autorité sur la forme d’un chemin.</p>
+
+        <h3><span class="sub">9.4</span>Saturation du disque</h3>
+        <p>Conséquence directe de l’absence de quotas&nbsp;: le disque finira par se remplir. Le danger n’est pas l’envoi qui échoue&nbsp;— c’est attendu et récupérable&nbsp;— mais que <strong>SQLite ne puisse plus écrire</strong>. Sans espace, plus de session, plus de connexion possible&nbsp;: l’application est entièrement hors service alors que les fichiers sont intacts et que l’administrateur ne peut même plus se connecter pour faire du ménage.</p>
+        <div class="note warn">
+          <span class="label">Règles de dégradation</span>
+          <p>Une <strong>réserve d’espace minimale</strong> est vérifiée avant tout envoi&nbsp;: en dessous du seuil, les écritures sont refusées avec une erreur explicite, mais la lecture, la connexion et la suppression restent possibles&nbsp;— le service passe en lecture seule plutôt que de mourir. L’espace disponible est vérifié <strong>avant</strong> d’ouvrir une session d’envoi, pas seulement pendant, pour ne pas découvrir le problème après 30&nbsp;Go transférés. Les fragments d’envois abandonnés et la corbeille sont purgés en priorité, et l’état de saturation est visible dans l’interface.</p>
+        </div>
+      </section>
+
+      <!-- 10 -->
+      <section id="perf">
+        <h2><span class="num">10</span><span>Performance de transfert</span></h2>
+
+        <p>Le §08 traite les requêtes <code>Range</code> sous l’angle de la compatibilité avec les gestionnaires de téléchargement. Cette section pose les exigences de débit, qui sont un objectif distinct et vérifiable.</p>
+
+        <div class="note">
+          <span class="label">Attente réaliste</span>
+          <p>Sur un téléchargement simple à une seule connexion, <strong>aucun gain n’est à espérer face à File Browser</strong>&nbsp;: les deux sont écrits en Go et servent leurs fichiers par le même chemin noyau. C’est déjà l’optimum. Le gain réel se situe ailleurs&nbsp;— dans le nombre de connexions que le client peut ouvrir, et dans les erreurs de configuration qu’on évite.</p>
+        </div>
+
+        <h3><span class="sub">10.1</span>Préserver le chemin <code>sendfile</code></h3>
+        <p>Sous Linux, <code>http.ServeContent</code> transfère les données du cache disque vers la socket réseau <strong>sans jamais les faire transiter par l’espace utilisateur</strong>. Toute couche qui transforme les octets annule cette optimisation. Trois règles en découlent&nbsp;:</p>
+        <ul>
+          <li><strong>Aucune compression sur les types déjà compressés</strong>&nbsp;— archives, images disque, médias. Compresser un <code>.iso</code> brûle du processeur sans rien gagner et supprime <code>sendfile</code>.</li>
+          <li>Aucun intergiciel de journalisation ou de métrique n’enveloppe le corps des réponses de contenu.</li>
+          <li><code>Content-Length</code> toujours renseigné&nbsp;: pas d’encodage par fragments sur un fichier dont la taille est connue, sans quoi le client ne peut ni afficher une progression fiable, ni reprendre proprement.</li>
+        </ul>
+
+        <h3><span class="sub">10.2</span>Le vrai levier&nbsp;: le nombre de connexions</h3>
+        <p>Quand un serveur à haut débit délivre lentement, la cause est presque toujours <strong>un flux TCP unique sur une longue distance</strong>&nbsp;: son débit est plafonné par la latence et le taux de perte, pas par la bande passante disponible. Seize flux parallèles disposent de seize fenêtres de congestion indépendantes et remplissent un lien qu’un flux unique ne remplit jamais.</p>
+        <p>C’est la justification de performance&nbsp;— et non plus seulement d’ergonomie&nbsp;— des liens de partage sans état décrits au §08&nbsp;: rien ne doit s’opposer à ce qu’un client ouvre autant de connexions qu’il le souhaite. Aucune limite de concurrence par jeton, aucune session à établir, aucun verrou côté serveur.</p>
+
+        <div class="note warn">
+          <span class="label">HTTP/2 dessert le transfert volumineux</span>
+          <p>Son multiplexage fait passer tous les flux dans une seule connexion TCP, donc une seule fenêtre de congestion, avec blocage en tête de file. Pour du téléchargement de masse, HTTP/1.1 avec plusieurs connexions fait mieux&nbsp;— c’est précisément pourquoi les gestionnaires de téléchargement y restent. HTTP/2 est utile sur l’origine application, pas sur l’origine contenu.</p>
+        </div>
+
+        <h3><span class="sub">10.3</span>Ce qui se règle en dehors du code</h3>
+        <ul>
+          <li><strong>Pas de mise en tampon par le proxy inverse.</strong> Un proxy qui accumule la réponse avant de la relayer ajoute latence et mémoire pour rien. Traefik ne le fait pas par défaut, nginx si&nbsp;— à documenter.</li>
+          <li><strong>Terminaison TLS.</strong> Son coût processeur devient le plafond au-delà de quelques Gb/s. Négligeable en dessous sur un processeur doté d’AES-NI.</li>
+          <li><strong>Transfert de serveur à serveur.</strong> Le téléchargement depuis une URL (§3.2) contourne entièrement la connexion domestique de l’utilisateur&nbsp;: c’est le gain de débit le plus spectaculaire du produit, et il ne doit rien au serveur HTTP.</li>
+        </ul>
+
+        <h3><span class="sub">10.4</span>Exigences vérifiables</h3>
+        <div class="scope">
+          <div class="scope-row">
+            <div class="name">Débit à une connexion</div>
+            <div class="desc">Doit atteindre la limite du disque ou du lien réseau, la plus basse des deux, sur un fichier plus volumineux que la mémoire disponible&nbsp;— afin de mesurer le disque et non le cache.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Montée en charge parallèle</div>
+            <div class="desc">Seize requêtes <code>Range</code> simultanées sur un même fichier doivent additionner leurs débits sans dégradation ni contention.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Consommation mémoire constante</div>
+            <div class="desc">Servir un fichier de 40&nbsp;Go ne doit pas faire croître la mémoire du processus. Toute croissance signale une mise en tampon accidentelle&nbsp;— le symptôme le plus courant d’une régression de performance.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Sémantique <code>Range</code></div>
+            <div class="desc">Couverte par des tests dédiés&nbsp;: plages ouvertes, plages suffixes, plages invalides, requêtes concurrentes sur un même fichier, reprise après coupure.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 11 -->
+      <section id="api">
+        <h2><span class="num">11</span><span>API</span></h2>
+
+        <p>Une bonne API est l’une des deux choses que l’auteur de File Browser cite comme manquantes dans son projet. Elle est ici traitée comme le produit, pas comme un détail d’implémentation.</p>
+
+        <h3><span class="sub">11.1</span>Origine application</h3>
+        <div class="block"><pre><b>POST</b>   /api/v1/auth/login | logout
+<b>GET</b>    /api/v1/auth/me
+<b>POST</b>   /api/v1/auth/totp/enroll | verify | disable
+<b>GET</b>    /api/v1/sessions            <b>DELETE</b> /api/v1/sessions/{id}
+<b>GET</b>    /api/v1/tokens              <b>POST DELETE</b> /api/v1/tokens
+
+<b>GET</b>    /api/v1/fs?path=            <i>listing</i>
+<b>GET</b>    /api/v1/fs/stat?path=
+<b>POST</b>   /api/v1/fs/dirs | move | copy
+<b>DELETE</b> /api/v1/fs?path=            <i>→ corbeille</i>
+<b>GET</b>    /api/v1/fs/link?path=       <i>→ URL signée, origine contenu</i>
+
+<b>POST</b>   /api/v1/uploads             <i>ouvre une session reprenable</i>
+<b>HEAD</b>   /api/v1/uploads/{id}        <i>offset courant</i>
+
+<b>GET</b>    /api/v1/trash               <b>POST</b> /api/v1/trash/{id}/restore
+<b>DELETE</b> /api/v1/trash/{id} | /api/v1/trash
+
+<b>GET</b>    /api/v1/shares              <b>POST</b> /api/v1/shares
+<b>PATCH</b>  /api/v1/shares/{id}         <b>DELETE</b> /api/v1/shares/{id}
+<b>GET</b>    /api/v1/shares/{id}/access-log
+
+<b>GET</b>    /api/v1/users | invitations
+<b>GET</b>    /api/v1/acl?path=           <b>PUT</b> /api/v1/acl
+
+<b>POST</b>   /api/v1/jobs/fetch-url | extract | checksum
+<b>GET</b>    /api/v1/jobs/{id}/events    <i>(SSE)</i>
+<b>GET</b>    /api/v1/search?q=</pre></div>
+
+        <h3><span class="sub">11.2</span>Origine contenu, sans état de session</h3>
+        <div class="block"><pre><b>GET</b>    /s/{jeton}/{nom}        partage public, <u>Range</u> complet
+<b>GET</b>    /d/{signature}/{nom}    téléchargement authentifié
+<b>GET</b>    /p/{signature}          aperçu / vignette
+<b>PATCH</b>  /u/{id}                 fragments d'upload</pre></div>
+
+        <h3><span class="sub">11.3</span>Conventions transversales</h3>
+        <div class="scope">
+          <div class="scope-row">
+            <div class="name">Erreurs normalisées</div>
+            <div class="desc"><code>application/problem+json</code> (RFC 9457) partout, avec un code machine stable en plus du message lisible. Un client doit distinguer «&nbsp;permission refusée&nbsp;» de «&nbsp;chemin introuvable&nbsp;» sans analyser du texte.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Progression par SSE</div>
+            <div class="desc">Les tâches longues diffusent leur avancement en flux unidirectionnel. Le SSE traverse tous les proxies inverses sans configuration et se reconnecte seul. Un WebSocket ne se justifierait que pour de la collaboration temps réel, hors périmètre.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Versionnage strict</div>
+            <div class="desc"><code>/api/v1</code> figé à la première publication. La spécification OpenAPI est <strong>générée depuis le code</strong>, jamais écrite à la main&nbsp;— sinon elle diverge en trois semaines.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Limitation de débit</div>
+            <div class="desc">Par jeton sur l’API, par IP sur les liens de partage.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 11 -->
+      <section id="technos">
+        <h2><span class="num">12</span><span>Choix technologiques</span></h2>
+        <p class="caption">Recommandations tranchées, à valider. Chaque ligne indique la raison du choix plutôt que la liste des alternatives.</p>
+
+        <h3><span class="sub">12.1</span>Backend</h3>
+        <div class="note">
+          <span class="label">Règle d’accueil des contributeurs</span>
+          <p>Ce qui compte pour un projet ouvert n’est pas la notoriété des outils mais la facilité d’entrée. <strong>Tout code généré est commité dans le dépôt&nbsp;: cloner puis <code>go build</code> suffit.</strong> Seul celui qui modifie une requête SQL régénère, et l’intégration continue vérifie que le généré correspond bien à la source.</p>
+        </div>
+        <div class="scope">
+          <div class="scope-row">
+            <div class="name">Go 1.24+ <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Binaire unique, excellente diffusion de flux, concurrence native. La version 1.24 est un minimum réel&nbsp;: c’est elle qui apporte <code>os.Root</code>.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Routage&nbsp;: <code>net/http</code> standard <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Le routage par motifs de la bibliothèque standard (Go 1.22+) couvre le besoin. Zéro dépendance sur le chemin critique des requêtes. On n’ajoute <code>chi</code> que si les intergiciels deviennent réellement complexes.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">SQLite&nbsp;: <code>modernc.org/sqlite</code> <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Implémentation en Go pur, donc <code>CGO_ENABLED=0</code>&nbsp;: compilation croisée triviale et binaire réellement statique. Plus lente que la liaison cgo, mais notre charge est une poignée de requêtes de métadonnées&nbsp;— la distribution compte davantage. Mode WAL. <em>Le pilote plus célèbre, <code>mattn/go-sqlite3</code>, impose cgo&nbsp;: incompatible avec la promesse d’un binaire unique multi-plateformes.</em></div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Accès données&nbsp;: <code>sqlc</code> <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Génère du Go typé à partir de SQL écrit à la main. Pas d’ORM&nbsp;: les requêtes de résolution ACL sont trop spécifiques pour être bien servies par une abstraction. <em>Pour un contributeur, l’effet est inverse de ce qu’on craint&nbsp;: il lit du SQL, universel, plutôt que le langage de requêtes propre à un ORM.</em></div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Migrations&nbsp;: <code>goose</code> embarqué <span class="chip prop">Proposé</span></div>
+            <div class="desc">Fichiers SQL inclus via <code>embed.FS</code>, appliqués au démarrage. Aucun outil externe à installer pour mettre à jour. <em>Le choix le moins engageant du lot&nbsp;: ce sont des fichiers SQL numérotés dans un dossier, et basculer vers <code>golang-migrate</code> ou <code>atlas</code> plus tard coûte une après-midi.</em></div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Uploads&nbsp;: sous-ensemble TUS maison <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">TUS est un protocole ouvert d’upload reprenable&nbsp;: le client ouvre une session, envoie des fragments successifs, et après une coupure interroge le serveur (<code>HEAD</code>) pour connaître la position atteinte et reprendre là plutôt que de tout recommencer. Suivre un protocole existant plutôt qu’en inventer un donne des clients tout faits dans la plupart des langages&nbsp;— cohérent avec «&nbsp;l’API est le produit&nbsp;». On l’implémente soi-même plutôt que d’importer <code>tusd</code>, qui embarque ses propres backends de stockage alors que toute écriture doit passer par notre couche ACL&nbsp;; on reste compatible sur le fil, donc les clients standard fonctionnent.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Tâches de fond&nbsp;: table <code>jobs</code> + goroutines <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">C’est le moteur des trois fonctionnalités longues de §3.2. Une requête HTTP ne peut pas durer trois heures. La persistance en base permet de <strong>survivre à un redémarrage</strong> (une mise à jour du binaire ne doit pas anéantir un téléchargement en cours), de diffuser l’avancement, d’annuler, et de <strong>limiter la concurrence</strong> — trois extractions simultanées saturent le disque du VPS. Sert aussi aux tâches périodiques&nbsp;: purge de corbeille, vignettes, index de recherche. Aucune dépendance externe&nbsp;: pas de Redis, pas de courtier de messages.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Journalisation&nbsp;: <code>log/slog</code></div>
+            <div class="desc">Structuré, dans la bibliothèque standard.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Cryptographie</div>
+            <div class="desc"><code>golang.org/x/crypto/argon2</code> pour les mots de passe, <code>pquerna/otp</code> pour le TOTP. Rien d’écrit à la main.</div>
+          </div>
+        </div>
+
+        <h3><span class="sub">12.2</span>Interface web</h3>
+        <div class="scope">
+          <div class="scope-row">
+            <div class="name">React + Vite <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Svelte produirait un paquet plus léger&nbsp;— environ 80&nbsp;Ko contre 150&nbsp;Ko&nbsp;— mais sur une application servie par ton propre VPS et mise en cache dès la première visite, l’écart ne se ressent pas. Trois arguments l’emportent&nbsp;: un vivier de contributeurs bien plus large, une relecture des contributions faite avec autorité, et surtout un <strong>client mobile déjà en React Native</strong>&nbsp;— même paradigme, logique d’API partagée. <em>La légèreté reste un principe du projet&nbsp;; elle se joue sur le poids des dépendances qu’on ajoute, pas sur le framework.</em></div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Material 3 Expressive <span class="chip locked">Verrouillé</span></div>
+            <div class="desc"><code>@language-lit/material3-expressive</code>&nbsp;— 41 composants React sous licence MIT, éléments HTML natifs, sans dépendance d’exécution hors React, thème dérivé d’une couleur source avec vérification de contraste. Ensemencé par le vert du projet, <code>#2F5D50</code>. La bibliothèque possède les composants, la couleur, la typographie et le mouvement&nbsp;; on ne la surcharge pas. <strong>Coût&nbsp;: 82&nbsp;Ko de JavaScript compressé et 50&nbsp;Ko de CSS</strong>, la plus grosse décision de poids du projet&nbsp;— à partir d’ici, toute dépendance d’interface supplémentaire doit se justifier. Détail dans <a class="ext" href="ui.html">la conception de l’interface</a>.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Tailwind CSS 4 <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Cantonné à la mise en page&nbsp;— grilles, flex, espacements, cas ponctuels&nbsp;— la couleur et la typographie appartenant à M3E. Sa configuration lit les propriétés CSS de la bibliothèque, donc une seule source de vérité pour la couleur et aucune valeur écrite deux fois. Outil de compilation, sans aucun moteur d’exécution&nbsp;: le CSS produit ne contient que les classes réellement employées, de l’ordre de 10 à 20&nbsp;Ko compressés&nbsp;— soit à peu près ce qu’on écrirait à la main, la déduplication en plus. <strong>Le poids n’est donc pas un critère ici.</strong> Ce qui décide, c’est qu’un contributeur React sait déjà l’écrire, et que l’échelle imposée d’espacements et de tailles évite la dérive typique d’un projet ouvert où chacun invente ses valeurs. Les jetons de design vivent dans un unique fichier CSS, ce qui rend le thème modifiable par l’administrateur d’une instance.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">CSS ordinaire en porte de sortie <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Le reproche sérieux fait à Tailwind est la verbosité du balisage&nbsp;: une ligne de liste virtualisée cumulant sélection, survol, glisser-déposer et focus clavier devient illisible en chaîne d’utilitaires. Ces quelques composants passent en CSS classique. Combinaison courante, supportée nativement par Vite.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Discipline de structure</div>
+            <div class="desc">Tailwind ne dispense pas de concevoir. Un projet ouvert dérive vite vers des chaînes de classes recopiées d’un composant à l’autre&nbsp;: les motifs récurrents s’extraient en composants React, jamais en classes utilitaires maison. À inscrire dans le <code>CONTRIBUTING.md</code>.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">TanStack Virtual <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Un dossier de dix mille fichiers, c’est dix mille éléments dans le DOM&nbsp;: défilement saccadé, navigateur à genoux. La virtualisation ne construit que la trentaine de lignes réellement visibles et les recycle au défilement. Très concret ici&nbsp;— un dossier d’installation de jeu contient facilement des milliers de fichiers. Environ 5&nbsp;Ko.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Client TUS écrit à la main <span class="chip prop">Proposé</span></div>
+            <div class="desc">Environ deux cents lignes. Les bibliothèques d’upload clés en main type Uppy pèsent bien plus que la fonctionnalité rendue.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Client d’API généré <span class="chip prop">Proposé</span></div>
+            <div class="desc">Types TypeScript produits depuis la spécification OpenAPI, partagés entre l’interface web et le client mobile. Une seule source de vérité pour le contrat.</div>
+          </div>
+        </div>
+
+        <h3><span class="sub">12.3</span>Distribution &amp; qualité</h3>
+        <div class="scope">
+          <div class="scope-row">
+            <div class="name">Nommage <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Module Go <code>github.com/&lt;compte&gt;/zefile</code>, binaire <code>zefile</code>, image Docker <code>zefile</code>, préfixe de jetons <code>zefile_live_</code>. Fixé avant la première ligne de code&nbsp;: renommer un module Go après publication oblige tous les consommateurs à modifier leurs imports.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Binaire unique</div>
+            <div class="desc">Interface web embarquée par <code>embed.FS</code>. Publication multi-plateformes via GoReleaser.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Docker minimal</div>
+            <div class="desc">Image <code>scratch</code> ou distroless, multi-architecture. Rien d’autre que le binaire.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Service direct depuis Go</div>
+            <div class="desc"><code>http.ServeContent</code> gère correctement <code>Range</code> et s’appuie sur <code>sendfile</code> sous Linux&nbsp;: les performances sont déjà là. Le déchargement vers nginx (<code>X-Accel-Redirect</code>) reste une optimisation facultative, pas un prérequis.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Licence Apache-2.0 <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Permissive&nbsp;: usage commercial, modification, redistribution et fermeture des dérivés sont autorisés sans contrepartie. Retenue plutôt que MIT pour sa <strong>concession de brevet explicite</strong>&nbsp;— un contributeur ne peut pas céder du code puis attaquer les utilisateurs sur un brevet le couvrant&nbsp;— et pour rester dans le même régime que File Browser, ce qui évite toute friction si l’on reprend un fragment ou une idée d’implémentation.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Chaîne de sécurité dès le premier jour</div>
+            <div class="desc"><code>govulncheck</code> et <code>gosec</code> en intégration continue, mises à jour de dépendances automatisées, <code>SECURITY.md</code> et procédure de divulgation publiés avant la première version. C’est la leçon directe de File Browser.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Tests</div>
+            <div class="desc">Bibliothèque standard. Tests d’intégration sur une vraie base SQLite et un système de fichiers temporaire. Couverture prioritaire&nbsp;: résolution ACL, normalisation des chemins, sémantique de <code>Range</code>, reprise d’upload.</div>
+          </div>
+        </div>
+
+        <h3><span class="sub">12.4</span>Organisation du dépôt</h3>
+        <p>Dépôt unique, frontend et backend ensemble. Ce n’est pas un choix de confort&nbsp;: le binaire embarque l’interface via <code>embed.FS</code>, donc la compilation Go dépend des fichiers produits par Vite. Deux dépôts imposeraient de synchroniser deux versions pour un artefact final unique. S’y ajoute le contrat d’API partagé&nbsp;— spec OpenAPI générée depuis le Go, types TypeScript générés depuis la spec.</p>
+
+        <div class="block"><pre><b>zefile/</b>
+├── <b>cmd/zefile/</b>          point d'entrée
+├── <b>internal/</b>
+│   ├── storage/         VFS, os.Root, application des ACL
+│   ├── auth/            sessions, jetons, TOTP
+│   ├── acl/             résolution des permissions
+│   ├── share/           liens publics
+│   ├── jobs/            file de tâches
+│   ├── api/             handlers, origine app
+│   ├── content/         origine contenu
+│   └── db/              sqlc généré + migrations
+├── <b>web/</b>                 React + Vite + Tailwind <i>(pnpm)</i>
+├── <b>api/</b>openapi.yaml     généré depuis le code
+├── <b>deploy/</b>              compose, template Dokploy
+├── <b>docs/</b>
+└── <b>Makefile</b></pre></div>
+
+        <p>Le répertoire <code>internal/</code> n’est pas décoratif&nbsp;: Go interdit son importation depuis l’extérieur du module, ce qui laisse toute liberté de remanier ces paquets sans rien casser chez personne. <strong>Seule l’API HTTP constitue un contrat public.</strong></p>
+
+        <div class="scope">
+          <div class="scope-row">
+            <div class="name">Client mobile hors dépôt</div>
+            <div class="desc">Cycle de publication distinct et contraintes de magasin d’applications. Il consomme le client TypeScript généré, versionné avec l’API.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name"><code>web/dist</code> non versionné <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Trois raisons, par ordre de gravité. <strong>Relecture&nbsp;:</strong> du code compilé n’est pas relisable&nbsp;— une contribution dont le <code>dist</code> ne correspond pas à ses sources ferait entrer du JavaScript invisible en revue, ce qu’un outil à vocation sécurisée ne peut pas se permettre. <strong>Conflits&nbsp;:</strong> chaque contributeur qui construit régénère des empreintes de fichiers différentes, donc chaque proposition porte un diff massif qui entre en collision avec toutes les autres. <strong>Lisibilité de l’historique&nbsp;:</strong> les vrais changements se noient dans le bruit. Contrepartie assumée&nbsp;: pas d’installation par <code>go install</code> en une commande&nbsp;— l’image Docker et les binaires publiés couvrent la quasi-totalité des cas, et compiler depuis les sources demande Node, ce qui est attendu pour un projet doté d’une interface web. <em>Les seuls artefacts distribués sont ceux que l’intégration continue produit à partir des sources.</em></div>
+          </div>
+        </div>
+
+      <!-- 13 -->
+      </section>
+      <section id="deploiement">
+        <h2><span class="num">13</span><span>Déploiement</span></h2>
+        <p>La facilité d’installation est un critère de conception, pas une phase de documentation. File Browser doit une bonne part de son adoption à son binaire unique&nbsp;: Zefile doit être au moins aussi simple à mettre en service.</p>
+
+        <h3><span class="sub">13.1</span>Un conteneur, un port, deux hôtes</h3>
+        <p>La séparation d’origine (§4.1) est le seul surcoût de déploiement par rapport à File Browser. Il reste modeste&nbsp;: le binaire route selon l’en-tête <code>Host</code>, donc <strong>un seul conteneur et un seul port desservent les deux domaines</strong>. Le coût réel se limite à un enregistrement DNS supplémentaire et à un second domaine déclaré dans le proxy inverse.</p>
+
+        <h3><span class="sub">13.2</span>Données et configuration strictement séparées</h3>
+        <div class="note warn">
+          <span class="label">Règle de démarrage</span>
+          <p>Si la base SQLite se trouve à l’intérieur de l’arborescence parcourue, les utilisateurs peuvent la lister, la télécharger&nbsp;— hachés de mots de passe compris&nbsp;— voire la supprimer. <strong>Zefile refuse de démarrer si le répertoire de configuration est situé dans la racine de stockage.</strong></p>
+        </div>
+        <p>La corbeille et les fragments d’upload en cours doivent en revanche résider <strong>sur le même système de fichiers que les données</strong>, faute de quoi supprimer un fichier de 40&nbsp;Go déclenche une copie complète au lieu d’un simple renommage. Ils vivent donc en répertoires cachés à l’intérieur de la racine, exclus des listings.</p>
+
+        <h3><span class="sub">13.3</span>Composition de référence</h3>
+        <div class="block"><pre><i>services:</i>
+  <b>zefile:</b>
+    image: ghcr.io/&lt;compte&gt;/zefile:latest
+    restart: unless-stopped
+    environment:
+      ZEFILE_APP_URL:     https://zefile.exemple.tld
+      ZEFILE_CONTENT_URL: https://dl.exemple.tld
+      ZEFILE_DATA_DIR:    /data
+      ZEFILE_CONFIG_DIR:  /config
+      PUID: 1000
+      PGID: 1000
+    volumes:
+      - <u>/mnt/stockage:/data</u>      <i># disque de l'hôte, pas un volume Docker</i>
+      - zefile-config:/config
+    ports:
+      - "8080:8080"
+
+<i>volumes:</i>
+  <b>zefile-config:</b></pre></div>
+        <p class="caption">Le montage direct d’un répertoire de l’hôte donne accès à la totalité du disque du VPS, ou à un disque supplémentaire monté ailleurs&nbsp;— pas à un volume Docker cloisonné.</p>
+
+        <h3><span class="sub">13.4</span>Mode origine unique</h3>
+        <p>Une partie des utilisateurs ne configurera jamais le second domaine. Plutôt que de les laisser désactiver la protection sans le savoir, un mode explicite durcit automatiquement le service&nbsp;:</p>
+        <ul>
+          <li>Tout contenu utilisateur est servi en <code>Content-Disposition: attachment</code> avec un en-tête <code>Content-Security-Policy: sandbox</code></li>
+          <li>L’affichage en ligne se limite aux types que le navigateur isole lui-même&nbsp;: images matricielles, vidéo, audio, PDF</li>
+          <li><strong>Le SVG est exclu de l’affichage en ligne</strong>&nbsp;— c’est une image capable d’exécuter du script, et c’est le piège classique</li>
+          <li>Avertissement au démarrage dans les journaux</li>
+        </ul>
+        <p>Les aperçus restent fonctionnels, sur une surface réduite. Ce n’est pas l’équivalent des deux origines, mais c’est explicite et documenté.</p>
+
+        <h3><span class="sub">13.5</span>Ce qui décide si l’installation est réellement facile</h3>
+        <div class="scope">
+          <div class="scope-row">
+            <div class="name"><code>PUID</code> / <code>PGID</code></div>
+            <div class="desc">Le conteneur s’exécute sans privilèges, mais un répertoire monté depuis l’hôte appartient à un utilisateur donné. Sans ces variables, les envois échouent sur une erreur de permission incompréhensible&nbsp;— le tout premier obstacle rencontré en auto-hébergement.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Aucune configuration initiale</div>
+            <div class="desc">Aucun fichier à rédiger avant le premier lancement. Zefile génère un lien d’installation à usage unique, affiché dans les journaux, qui sert à créer le compte administrateur. Pas d’identifiants par défaut.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Images multi-architectures</div>
+            <div class="desc">Beaucoup de VPS économiques et de machines domestiques tournent sur ARM. Publication sur GHCR pour <code>amd64</code> et <code>arm64</code>.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Sonde de santé</div>
+            <div class="desc">Endpoint dédié, pour que l’orchestrateur sache si le service répond réellement.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Aucun réglage de proxy inverse</div>
+            <div class="desc">Effet secondaire du choix TUS&nbsp;: les envois étant fragmentés, <strong>aucune requête ne transporte 40&nbsp;Go</strong>. On échappe aux limites de taille de corps et aux délais d’expiration qui sont la plaie des serveurs de fichiers classiques. Fonctionne derrière Traefik sans configuration particulière.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Base de données sur disque local</div>
+            <div class="desc">Le répertoire de configuration ne doit pas résider sur un partage réseau&nbsp;: le verrouillage SQLite y est peu fiable. Seules les données peuvent l’être.</div>
+          </div>
+        </div>
+        <p>Un <strong>template Dokploy</strong> est publiable dès la première version&nbsp;: leur catalogue est un dépôt ouvert aux contributions.</p>
+
+        <h3><span class="sub">13.6</span>Sauvegarde, restauration, déménagement</h3>
+        <p>Attente de base en auto-hébergement, et elle comporte un piège&nbsp;: <strong>copier le fichier SQLite pendant que le service tourne produit une sauvegarde corrompue</strong>. Une écriture peut être en cours, et le journal WAL vit dans des fichiers annexes. C’est l’erreur classique, et elle ne se découvre qu’au moment de restaurer.</p>
+        <div class="scope">
+          <div class="scope-row">
+            <div class="name"><code>zefile backup</code></div>
+            <div class="desc">Produit un instantané cohérent de la base à chaud, par <code>VACUUM INTO</code>&nbsp;— sûr sans interrompre le service. Sauvegarde les métadonnées seules&nbsp;: ACL, comptes, partages, corbeille, propriété. Les fichiers eux-mêmes relèvent des outils habituels (<code>rsync</code>, instantanés du système de fichiers), et il n’y a aucune raison de les dupliquer dans un format propriétaire.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name"><code>zefile restore</code></div>
+            <div class="desc">Restaure une sauvegarde, puis <strong>signale les divergences</strong>&nbsp;: entrées ACL et de propriété pointant vers des chemins absents, éléments de corbeille disparus. Métadonnées et fichiers étant sauvegardés séparément, ils peuvent dater de moments différents&nbsp;— l’outil le dit plutôt que de laisser une incohérence silencieuse.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Déménagement de serveur</div>
+            <div class="desc">Copier les données, restaurer la base, ajuster les deux URL d’origine. Documenté comme procédure, testé comme un scénario à part entière&nbsp;— c’est ce que feront les gens qui migrent depuis File Browser.</div>
+          </div>
+          <div class="scope-row">
+            <div class="name">Sauvegarde avant migration de schéma</div>
+            <div class="desc">Les migrations s’appliquent au démarrage&nbsp;; un instantané est pris automatiquement juste avant. Sur une machine auto-hébergée, personne n’a de plan de retour arrière&nbsp;— autant le fournir.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 14 -->
+      <section id="phases">
+        <h2><span class="num">14</span><span>Découpage</span></h2>
+        <p class="caption">Ordonné par dépendances techniques, sans échéance. Chaque phase se termine sur quelque chose d’utilisable. Le découpage détaillé, lot par lot et avec les critères d’achèvement, vit dans un document séparé&nbsp;: <a class="ext" href="roadmap.html">roadmap d’implémentation</a>.</p>
+
+        <div class="phases">
+          <div class="phase">
+            <div class="idx">1</div>
+            <div class="title">Fondations</div>
+            <div class="body">Couche de stockage avec <code>os.Root</code>, SQLite, sessions révocables, moteur ACL, API v1 sur les opérations fichiers, upload et download reprenables. Interface minimale mais fonctionnelle. La phase la plus longue et la moins gratifiante&nbsp;; celle qui décide de la qualité de tout le reste.</div>
+          </div>
+          <div class="phase">
+            <div class="idx">2</div>
+            <div class="title">Multi-utilisateurs</div>
+            <div class="body">Invitations, gestion des comptes, interface d’ACL, corbeille.</div>
+          </div>
+          <div class="phase">
+            <div class="idx">3</div>
+            <div class="title">Partage</div>
+            <div class="body">Liens, origine de contenu séparée, journal d’accès, jetons d’API. Les partages sont une projection du modèle ACL&nbsp;: les construire avant qu’il soit éprouvé, c’est se condamner à les réécrire.</div>
+          </div>
+          <div class="phase">
+            <div class="idx">4</div>
+            <div class="title">Confort</div>
+            <div class="body">Aperçus, vignettes, recherche FTS, tâches de fond&nbsp;— téléchargement depuis URL, extraction, empreintes.</div>
+          </div>
+          <div class="phase">
+            <div class="idx">5</div>
+            <div class="title">Finition &amp; ouverture</div>
+            <div class="body">Interface aboutie, OpenAPI publiée, image Docker, outil de migration depuis File Browser, adaptation du client mobile existant.</div>
+          </div>
+          <div class="phase later">
+            <div class="idx">→</div>
+            <div class="title">Ensuite</div>
+            <div class="body">WebDAV, OIDC, S3, versions de fichiers.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 15 -->
+      <section id="ouvert">
+        <h2><span class="num">15</span><span>Questions ouvertes</span></h2>
+
+        <div class="note">
+          <span class="label">Aucune question ouverte</span>
+          <p>La conception est close&nbsp;: périmètre, architecture, modèle de données, sécurité, API, technologies, organisation du dépôt et déploiement sont arrêtés. L’implémentation peut commencer.</p>
+          <p>Trois lignes restent marquées «&nbsp;Proposé&nbsp;» en §12&nbsp;— l’outil de migration, le client TUS et la génération du client d’API. Ce ne sont pas des questions ouvertes mais des détails d’implémentation sans effet sur l’architecture&nbsp;; ils se trancheront en les écrivant.</p>
+        </div>
+
+        <p>Les points volontairement reportés&nbsp;— WebDAV, OIDC, S3, versions de fichiers&nbsp;— figurent en §3.3 avec leurs contraintes de conception, pour qu’aucun ne devienne impossible.</p>
+      </section>
+
+      <div class="colophon">
+        <span>Zefile — document de conception</span>
+        <span>Révision 1.2</span>
+        <span>29 juillet 2026</span>
+        <span>Statut&nbsp;: prêt pour l’implémentation</span>
+      </div>
+
+    </main>
+  </div>
+</div>

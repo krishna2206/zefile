@@ -1,0 +1,21 @@
+# Build artefacts
+/bin/
+/dist/
+
+# Frontend build output is never versioned — see docs/conception.html §12.4.
+# Committing it makes contributions unreviewable and conflicts constant.
+/web/dist/*
+!/web/dist/.gitkeep
+/web/node_modules/
+
+# Local runtime data
+*.db
+*.db-wal
+*.db-shm
+/data/
+/config/
+
+# Editor and OS
+.DS_Store
+.idea/
+.vscode/

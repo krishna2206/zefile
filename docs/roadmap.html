@@ -1,0 +1,494 @@
+<title>Zefile — Roadmap d'implémentation</title>
+
+<style>
+  :root {
+    --ground:#F4F5F2; --surface:#FFFFFF; --surface-2:#EAEDE8;
+    --ink:#191D1B; --ink-2:#4C5652; --ink-3:#79837E;
+    --line:#DBDFD9; --accent:#2F5D50; --accent-ink:#234840; --accent-soft:#E2ECE7;
+    --brass:#8E6528; --brass-soft:#F3EBDC;
+    --font-display:"Charter","Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --font-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --radius:3px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#121614; --surface:#1A201D; --surface-2:#232A27;
+      --ink:#E6EAE7; --ink-2:#A9B3AE; --ink-3:#7C8782;
+      --line:#2B3330; --accent:#74C3A6; --accent-ink:#9AD6BF; --accent-soft:#1C2A26;
+      --brass:#C99A5B; --brass-soft:#29231A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#121614; --surface:#1A201D; --surface-2:#232A27;
+    --ink:#E6EAE7; --ink-2:#A9B3AE; --ink-3:#7C8782;
+    --line:#2B3330; --accent:#74C3A6; --accent-ink:#9AD6BF; --accent-soft:#1C2A26;
+    --brass:#C99A5B; --brass-soft:#29231A;
+  }
+  :root[data-theme="light"] {
+    --ground:#F4F5F2; --surface:#FFFFFF; --surface-2:#EAEDE8;
+    --ink:#191D1B; --ink-2:#4C5652; --ink-3:#79837E;
+    --line:#DBDFD9; --accent:#2F5D50; --accent-ink:#234840; --accent-soft:#E2ECE7;
+    --brass:#8E6528; --brass-soft:#F3EBDC;
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .shell { max-width:960px; margin:0 auto; padding:0 clamp(20px,4vw,48px) 96px; }
+
+  header.masthead {
+    padding:clamp(48px,8vw,88px) 0 36px;
+    border-bottom:1px solid var(--line);
+    display:flex; flex-direction:column; gap:16px;
+  }
+  .eyebrow {
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent);
+  }
+  h1 {
+    font-family:var(--font-display); font-weight:600; margin:0;
+    font-size:clamp(2rem,5vw,2.9rem); line-height:1.1; letter-spacing:-.015em;
+  }
+  .standfirst {
+    font-family:var(--font-display); font-size:1.15rem; color:var(--ink-2);
+    max-width:58ch; margin:0; line-height:1.55;
+  }
+
+  .intro { padding-top:40px; display:flex; flex-direction:column; gap:16px; }
+  p { margin:0; max-width:70ch; }
+
+  .rule {
+    background:var(--accent-soft); border-left:3px solid var(--accent);
+    padding:14px 18px; border-radius:0 var(--radius) var(--radius) 0;
+    max-width:70ch; display:flex; flex-direction:column; gap:6px;
+  }
+  .rule .label {
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.11em;
+    text-transform:uppercase; color:var(--accent-ink);
+  }
+  .rule.warn { background:var(--brass-soft); border-left-color:var(--brass); }
+  .rule.warn .label { color:var(--brass); }
+  .rule p { font-size:15.5px; max-width:none; }
+
+  .phase { margin-top:64px; }
+
+  .phase-head {
+    display:grid; grid-template-columns:auto 1fr; gap:0 18px;
+    align-items:baseline; padding-bottom:14px;
+    border-bottom:2px solid var(--ink); margin-bottom:0;
+  }
+  .phase-head .n {
+    font-family:var(--font-mono); font-size:1.5rem; color:var(--accent);
+    font-variant-numeric:tabular-nums; line-height:1;
+  }
+  .phase-head h2 {
+    font-family:var(--font-display); font-size:1.6rem; font-weight:600;
+    margin:0; letter-spacing:-.01em; line-height:1.2;
+  }
+  .phase-head .goal {
+    grid-column:2; color:var(--ink-2); font-size:15.5px; margin-top:6px; max-width:62ch;
+  }
+
+  .items {
+    display:flex; flex-direction:column; gap:1px;
+    background:var(--line); border:1px solid var(--line);
+    border-top:none; border-radius:0 0 var(--radius) var(--radius); overflow:hidden;
+  }
+  .item {
+    background:var(--surface); padding:18px 20px;
+    display:grid; grid-template-columns:3.4rem 1fr; gap:6px 16px; align-items:baseline;
+  }
+  .item .id {
+    font-family:var(--font-mono); font-size:13px; color:var(--accent);
+    font-variant-numeric:tabular-nums; grid-row:span 3;
+  }
+  .item .title { font-weight:640; font-size:16px; }
+  .item .body { color:var(--ink-2); font-size:15px; max-width:60ch; }
+  .item .done {
+    font-size:14px; color:var(--ink-3); max-width:60ch;
+    padding-left:14px; border-left:2px solid var(--line); margin-top:4px;
+  }
+  .item .done b {
+    font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--accent); display:block; margin-bottom:2px;
+    font-weight:500;
+  }
+  .item.pivot { background:var(--accent-soft); }
+  .item.pivot .body { color:var(--accent-ink); }
+
+  code {
+    font-family:var(--font-mono); font-size:.86em; background:var(--surface-2);
+    padding:.12em .38em; border-radius:var(--radius); color:var(--accent-ink);
+  }
+  .item.pivot code { background:var(--surface); }
+
+  .later {
+    margin-top:64px; padding:20px; background:var(--surface-2);
+    border-radius:var(--radius); max-width:70ch;
+  }
+  .later h2 {
+    font-family:var(--font-body); font-size:.95rem; font-weight:650;
+    margin:0 0 8px; letter-spacing:.02em;
+  }
+  .later p { color:var(--ink-2); font-size:15px; }
+
+  .colophon {
+    margin-top:72px; padding-top:22px; border-top:1px solid var(--line);
+    font-family:var(--font-mono); font-size:12px; color:var(--ink-3);
+    display:flex; flex-wrap:wrap; gap:6px 24px;
+  }
+  a { color:var(--accent); text-underline-offset:2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation:none!important; transition:none!important; } }
+</style>
+
+<div class="shell">
+
+  <header class="masthead">
+    <div class="eyebrow">Zefile · roadmap d'implémentation · v1</div>
+    <h1>Roadmap d'implémentation</h1>
+    <p class="standfirst">Découpage ordonné par dépendances techniques, sans échéance. Chaque élément est un lot de travail cohérent, avec son critère d’achèvement.</p>
+  </header>
+
+  <div class="intro">
+    <p>Ce document accompagne <a href="conception.html">le document de conception</a>, qui reste la référence sur le <em>quoi</em> et le <em>pourquoi</em>. Celui-ci ne traite que du <em>dans quel ordre</em>.</p>
+
+    <div class="rule">
+      <span class="label">Règle d’ordonnancement</span>
+      <p>L’ordre n’est pas négociable là où il traduit une dépendance réelle&nbsp;: la couche de stockage avant tout, l’ACL avant les partages, l’API avant l’interface. Une inversion de commodité se paie par une réécriture.</p>
+    </div>
+
+    <div class="rule warn">
+      <span class="label">La phase 1 est longue</span>
+      <p>Elle contient toute la fondation et ne produit rien de visible avant son dernier tiers. C’est normal et c’est le bon investissement&nbsp;— mais il faut le savoir pour ne pas se décourager au milieu. Le premier jalon réellement gratifiant est le <b>1.9</b>&nbsp;: l’instance qui tourne sur le VPS.</p>
+    </div>
+  </div>
+
+  <!-- PHASE 1 -->
+  <section class="phase">
+    <div class="phase-head">
+      <span class="n">1</span>
+      <h2>Fondations</h2>
+      <p class="goal">Objectif&nbsp;: remplacer l’instance File Browser actuelle. Mono-utilisateur, mais toute la mécanique de permissions est en place et éprouvée.</p>
+    </div>
+    <div class="items">
+
+      <div class="item">
+        <span class="id">1.1</span>
+        <div class="title">Amorçage du dépôt</div>
+        <div class="body"><code>git init</code>, <code>go.mod</code> en Go 1.24, arborescence de §12.4, licence Apache-2.0, <code>.gitignore</code> avec <code>web/dist</code> dès le premier commit, Makefile. Chaîne d’intégration continue&nbsp;: compilation, tests, <code>govulncheck</code>, <code>gosec</code>.</div>
+        <div class="done"><b>Terminé quand</b> <code>make build</code> produit un binaire qui démarre et s’arrête proprement, et que la CI passe au vert sur une PR de test.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">1.2</span>
+        <div class="title">Couche de stockage</div>
+        <div class="body">Le cœur du projet. Interface <code>Stat/List/Open/Create/Move/Remove/MkDir</code>, confinement par <code>os.Root</code>, normalisation Unicode en forme composée pour les clés, réserve d’espace disque et bascule en lecture seule, exclusion des répertoires cachés de corbeille et d’envois.</div>
+        <div class="done"><b>Terminé quand</b> la suite de tests d’échappement ne laisse passer aucun chemin hors racine&nbsp;: <code>../</code>, liens symboliques et durs, séparateurs Windows, formes Unicode équivalentes, casse.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">1.3</span>
+        <div class="title">Base de données</div>
+        <div class="body">Schéma initial en migrations <code>goose</code> embarquées, <code>sqlc</code> configuré et code généré commité, ouverture en mode WAL, refus de démarrage si le répertoire de configuration est situé dans la racine de stockage.</div>
+        <div class="done"><b>Terminé quand</b> un démarrage sur répertoire vierge crée la base, et qu’une configuration mal placée provoque un refus explicite.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">1.4</span>
+        <div class="title">Authentification et sessions</div>
+        <div class="body">Argon2id, sessions opaques en base, cookie <code>HttpOnly</code> / <code>SameSite=Lax</code> / <code>Secure</code>, <code>login</code> / <code>logout</code> / <code>me</code>, limitation de débit sur la connexion. Premier démarrage&nbsp;: lien d’installation à usage unique affiché dans les journaux.</div>
+        <div class="done"><b>Terminé quand</b> un jeton cesse de fonctionner <em>immédiatement</em> après déconnexion — le défaut fondateur de File Browser, à vérifier par un test dédié.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">1.5</span>
+        <div class="title">Moteur ACL</div>
+        <div class="body">Masque de bits, résolution par remontée de chemin, priorité au plus spécifique, refus explicite prioritaire, droits implicites du propriétaire. <strong>Appliqué dans la couche de stockage</strong>, jamais dans les gestionnaires HTTP.</div>
+        <div class="done"><b>Terminé quand</b> une table de cas couvre héritage, spécificité, refus, propriété et combinaisons de groupes — et qu’aucun appel de stockage ne peut contourner la vérification.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">1.6</span>
+        <div class="title">API v1 — opérations fichiers</div>
+        <div class="body">Routage par motifs de <code>net/http</code>, listing, <code>stat</code>, création de dossier, déplacement, copie, suppression. Erreurs en <code>problem+json</code> avec code machine stable. Intergiciel d’authentification commun aux deux mécanismes.</div>
+        <div class="done"><b>Terminé quand</b> l’arborescence est entièrement navigable et manipulable à la seule commande <code>curl</code>.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">1.7</span>
+        <div class="title">Origine contenu et téléchargement</div>
+        <div class="body">Routage par en-tête <code>Host</code>, URLs signées HMAC de courte durée, <code>ServeContent</code> avec <code>Range</code> rigoureux, <code>Content-Length</code> systématique, aucune compression sur les types déjà compressés.</div>
+        <div class="done"><b>Terminé quand</b> les quatre exigences du §10.4 sont mesurées, dont la mémoire constante sur un fichier plus gros que la RAM.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">1.8</span>
+        <div class="title">Envoi reprenable</div>
+        <div class="body">Sous-ensemble TUS&nbsp;: ouverture de session, fragments en <code>PATCH</code>, offset par <code>HEAD</code>, expiration et purge des sessions abandonnées. Écriture passant par la couche de stockage, donc ACL appliquée. Vérification d’espace <em>avant</em> l’ouverture de session. Empreinte vérifiée à la fin.</div>
+        <div class="done"><b>Terminé quand</b> une coupure réseau à mi-parcours d’un envoi volumineux, suivie d’une reprise, produit un fichier dont l’empreinte est correcte.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">1.9</span>
+        <div class="title">Interface minimale</div>
+        <div class="body">Vite, React, Tailwind, embarquée par <code>embed.FS</code> avec fichier gardien pour que les contributeurs backend compilent sans Node. Connexion, navigation, envoi et téléchargement, opérations de base. Virtualisation des listes dès maintenant&nbsp;— la rétrofitter est pénible.</div>
+        <div class="done"><b>Terminé quand</b> l’usage quotidien ne nécessite plus <code>curl</code>.</div>
+      </div>
+
+      <div class="item pivot">
+        <span class="id">1.10</span>
+        <div class="title">Empaquetage et bascule</div>
+        <div class="body">Dockerfile multi-architecture, composition de référence, <code>PUID</code> / <code>PGID</code>, sonde de santé, GoReleaser. Puis déploiement réel sur le VPS et migration des fichiers.</div>
+        <div class="done"><b>Terminé quand</b> l’instance File Browser est éteinte. C’est le premier jalon qui compte&nbsp;: tout ce qui suit se construit sur un outil déjà utilisé pour de vrai.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PHASE 2 -->
+  <section class="phase">
+    <div class="phase-head">
+      <span class="n">2</span>
+      <h2>Multi-utilisateurs</h2>
+      <p class="goal">Objectif&nbsp;: inviter des gens sans leur ouvrir tout le disque. L’ACL existe déjà&nbsp;; cette phase lui donne une interface et des comptes à gouverner.</p>
+    </div>
+    <div class="items">
+
+      <div class="item">
+        <span class="id">2.1</span>
+        <div class="title">Comptes et groupes</div>
+        <div class="body">Création, modification, désactivation, suppression avec transfert de propriété à l’administrateur. Groupes et appartenances.</div>
+        <div class="done"><b>Terminé quand</b> supprimer un compte ne laisse ni fichier orphelin, ni session, ni jeton, ni partage actif.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">2.2</span>
+        <div class="title">Invitations par lien</div>
+        <div class="body">Jeton haché, expiration, usage unique. L’invité choisit son mot de passe à l’acceptation&nbsp;; aucun mot de passe n’est jamais transmis.</div>
+        <div class="done"><b>Terminé quand</b> un invité peut rejoindre l’instance sans qu’un secret ait circulé.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">2.3</span>
+        <div class="title">Interface de permissions</div>
+        <div class="body">Attribution par chemin, héritage lisible, refus explicites visibles. La difficulté est ici entièrement d’ergonomie&nbsp;: rendre compréhensible <em>pourquoi</em> quelqu’un a ou n’a pas accès.</div>
+        <div class="done"><b>Terminé quand</b> l’interface sait expliquer une permission effective en désignant la règle qui l’a produite.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">2.4</span>
+        <div class="title">Corbeille</div>
+        <div class="body">Suppression par déplacement, restauration à l’emplacement d’origine, purge manuelle, purge automatique programmée. Répertoire caché sur le même système de fichiers.</div>
+        <div class="done"><b>Terminé quand</b> supprimer 40&nbsp;Go est instantané — preuve qu’il s’agit bien d’un renommage et non d’une copie.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">2.5</span>
+        <div class="title">Double facteur et sessions</div>
+        <div class="body">TOTP à l’inscription et à la connexion. Écran des sessions actives avec révocation à distance et «&nbsp;déconnecter partout&nbsp;».</div>
+        <div class="done"><b>Terminé quand</b> révoquer une session depuis un autre appareil prend effet sur la requête suivante.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">2.6</span>
+        <div class="title">Journal d’audit</div>
+        <div class="body">Connexions et échecs, modifications de permissions, cycle de vie des jetons, suppressions de comptes et de fichiers. Consultation administrateur, conservation configurable.</div>
+        <div class="done"><b>Terminé quand</b> toute action sensible laisse une trace horodatée et attribuée.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PHASE 3 -->
+  <section class="phase">
+    <div class="phase-head">
+      <span class="n">3</span>
+      <h2>Partage</h2>
+      <p class="goal">Objectif&nbsp;: distribuer un fichier à quelqu’un qui n’a pas de compte. Après la phase 2, parce qu’un lien de partage est une projection du modèle ACL.</p>
+    </div>
+    <div class="items">
+
+      <div class="item">
+        <span class="id">3.1</span>
+        <div class="title">Liens et cycle de vie</div>
+        <div class="body">Création, expiration paramétrable dont «&nbsp;n’expire jamais&nbsp;», révocation immédiate, écran des partages actifs avec date de dernier accès. Interdiction de partager plus de droits qu’on n’en détient.</div>
+        <div class="done"><b>Terminé quand</b> révoquer un lien coupe un téléchargement déjà en cours.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">3.2</span>
+        <div class="title">Point d’accès public</div>
+        <div class="body"><code>/s/{jeton}/{nom}</code> sur l’origine contenu, sans état, sans redirection, sans JavaScript. Support <code>Range</code> et connexions parallèles sans limite ni verrou.</div>
+        <div class="done"><b>Terminé quand</b> un gestionnaire de téléchargement en seize connexions additionne bien ses débits — la contrainte fondatrice du projet.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">3.3</span>
+        <div class="title">Comptage et limitation</div>
+        <div class="body">Décompte des téléchargements <em>distincts</em> par fenêtre glissante, et non des requêtes HTTP. Limitation de débit par IP. Journal d’accès alimenté.</div>
+        <div class="done"><b>Terminé quand</b> un téléchargement en seize connexions compte pour un, et non pour seize.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">3.4</span>
+        <div class="title">Liens protégés</div>
+        <div class="body">Variante avec mot de passe&nbsp;: passage par l’interface web, qui délivre ensuite une URL directe temporaire. Les deux natures de liens sont clairement distinguées à la création.</div>
+        <div class="done"><b>Terminé quand</b> l’interface explique laquelle des deux formes convient à un gestionnaire de téléchargement.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">3.5</span>
+        <div class="title">Jetons d’API</div>
+        <div class="body">Création avec portées, affichage unique à la création, préfixe <code>zefile_live_</code>, date de dernier usage, révocation individuelle.</div>
+        <div class="done"><b>Terminé quand</b> un jeton en lecture seule se voit refuser toute écriture, y compris par un chemin détourné.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">3.6</span>
+        <div class="title">Mode origine unique</div>
+        <div class="body">Durcissement automatique quand une seule origine est configurée&nbsp;: <code>attachment</code> systématique, <code>CSP: sandbox</code>, affichage en ligne restreint, SVG exclu, avertissement au démarrage.</div>
+        <div class="done"><b>Terminé quand</b> un fichier HTML hostile déposé puis ouvert ne peut atteindre aucune session.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PHASE 4 -->
+  <section class="phase">
+    <div class="phase-head">
+      <span class="n">4</span>
+      <h2>Confort</h2>
+      <p class="goal">Objectif&nbsp;: les fonctionnalités qui font préférer Zefile à un partage réseau. La file de tâches vient en premier&nbsp;— c’est le moteur des trois suivantes.</p>
+    </div>
+    <div class="items">
+
+      <div class="item">
+        <span class="id">4.1</span>
+        <div class="title">File de tâches</div>
+        <div class="body">Table <code>jobs</code>, pool de goroutines borné, reprise après redémarrage, annulation, diffusion de progression par SSE.</div>
+        <div class="done"><b>Terminé quand</b> redémarrer le binaire pendant une tâche longue ne la perd pas.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">4.2</span>
+        <div class="title">Téléchargement depuis une URL</div>
+        <div class="body">Avec l’ensemble des protections du §9.2&nbsp;: schémas restreints, résolution DNS vérifiée avant connexion, <strong>revalidation à chaque redirection</strong>, taille et délai plafonnés.</div>
+        <div class="done"><b>Terminé quand</b> une URL redirigeant vers une adresse interne est refusée <em>après</em> la redirection, pas seulement avant.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">4.3</span>
+        <div class="title">Extraction d’archives</div>
+        <div class="body">Noms d’entrées normalisés par la couche de stockage, liens symboliques ignorés, plafonds sur le taux de compression, la taille décompressée et le nombre d’entrées.</div>
+        <div class="done"><b>Terminé quand</b> une archive piégée à traversée et une bombe de décompression sont toutes deux refusées.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">4.4</span>
+        <div class="title">Empreintes</div>
+        <div class="body">Calcul SHA-256 à la demande, mise en cache, vérification. Tâche de fond, car c’est intensif en lecture disque.</div>
+        <div class="done"><b>Terminé quand</b> l’empreinte d’un fichier de 40&nbsp;Go se calcule sans bloquer le service.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">4.5</span>
+        <div class="title">Aperçus</div>
+        <div class="body">Images, vidéo avec navigation temporelle, audio, texte et code, Markdown, PDF. Rendu intégralement côté client dans une iframe cloisonnée&nbsp;: <strong>aucun analyseur de document côté serveur</strong>.</div>
+        <div class="done"><b>Terminé quand</b> les formats prévus s’affichent et que le backend n’a acquis aucune dépendance de parsing.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">4.6</span>
+        <div class="title">Vignettes</div>
+        <div class="body">Génération asynchrone par processus séparé, sans privilèges, avec limites de ressources. Cache sur disque. Vue grille.</div>
+        <div class="done"><b>Terminé quand</b> une image malformée fait échouer la vignette sans affecter le service.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">4.7</span>
+        <div class="title">Recherche</div>
+        <div class="body">Index FTS5 alimenté en tâche de fond, réconciliation périodique avec le disque puisque celui-ci fait foi. Noms normalisés en forme composée.</div>
+        <div class="done"><b>Terminé quand</b> un fichier déposé en SSH devient trouvable, et qu’un nom accentué se trouve quelle que soit la forme saisie.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PHASE 5 -->
+  <section class="phase">
+    <div class="phase-head">
+      <span class="n">5</span>
+      <h2>Ouverture</h2>
+      <p class="goal">Objectif&nbsp;: passer d’un outil personnel à un projet que d’autres installent et auquel ils contribuent. Rien ici n’est optionnel si le projet est publié.</p>
+    </div>
+    <div class="items">
+
+      <div class="item">
+        <span class="id">5.1</span>
+        <div class="title">Sauvegarde et restauration</div>
+        <div class="body"><code>zefile backup</code> par <code>VACUUM INTO</code>, <code>zefile restore</code> avec rapport de divergences, instantané automatique avant migration de schéma, procédure de déménagement documentée et testée.</div>
+        <div class="done"><b>Terminé quand</b> une restauration sur une machine vierge est vérifiée de bout en bout.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">5.2</span>
+        <div class="title">Contrat d’API publié</div>
+        <div class="body">Spécification OpenAPI générée depuis le code, client TypeScript généré depuis la spécification, vérification en intégration continue que le généré correspond aux sources.</div>
+        <div class="done"><b>Terminé quand</b> une modification d’endpoint non répercutée fait échouer la CI.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">5.3</span>
+        <div class="title">Interface aboutie</div>
+        <div class="body">Thème clair et sombre, navigation clavier complète, états vides et d’erreur soignés, glisser-déposer, palette de commandes.</div>
+        <div class="done"><b>Terminé quand</b> toutes les opérations courantes sont réalisables sans souris.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">5.4</span>
+        <div class="title">Documentation et gouvernance</div>
+        <div class="body">README avec le périmètre hors scope écrit noir sur blanc, <code>SECURITY.md</code> et procédure de divulgation, <code>CONTRIBUTING.md</code> avec les jetons de design et la règle sur le code généré, documentation d’installation.</div>
+        <div class="done"><b>Terminé quand</b> quelqu’un installe l’outil sans poser de question.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">5.5</span>
+        <div class="title">Migration depuis File Browser</div>
+        <div class="body">Reprise des comptes et conversion des «&nbsp;scopes&nbsp;» en entrées ACL. Les mots de passe ne sont pas transposables&nbsp;: réinitialisation par lien d’invitation.</div>
+        <div class="done"><b>Terminé quand</b> une base File Browser réelle est importée sans perte de configuration d’accès.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">5.6</span>
+        <div class="title">Distribution</div>
+        <div class="body">Template Dokploy, images publiées sur GHCR, binaires de Releases, annonce.</div>
+        <div class="done"><b>Terminé quand</b> l’installation type se fait en une composition et deux enregistrements DNS.</div>
+      </div>
+
+      <div class="item">
+        <span class="id">5.7</span>
+        <div class="title">Client mobile</div>
+        <div class="body">Bascule du client React Native existant sur le client TypeScript généré, authentification par jeton d’API scopé plutôt que par mot de passe stocké.</div>
+        <div class="done"><b>Terminé quand</b> le client ne dépend plus d’aucun reste de l’API File Browser.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="later">
+    <h2>Au-delà</h2>
+    <p>WebDAV, OIDC, stockage objet S3, versions de fichiers. Aucun n’est planifié&nbsp;; tous sont rendus possibles par les choix de conception, ce qui est exactement l’objectif recherché.</p>
+  </div>
+
+  <div class="colophon">
+    <span>Zefile — roadmap d’implémentation</span>
+    <span>Version 1</span>
+    <span>29 juillet 2026</span>
+    <span>Adossée au document de conception rév. 1.1</span>
+  </div>
+
+</div>
