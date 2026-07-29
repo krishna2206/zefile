@@ -101,6 +101,10 @@ type FS interface {
 	// MkdirAll creates a directory and any missing parents.
 	MkdirAll(ctx context.Context, p Path) error
 
+	// Copy duplicates a single regular file. Directories and anything above
+	// [MaxSyncCopyBytes] are refused: both need the background job queue.
+	Copy(ctx context.Context, from, to Path) error
+
 	// Move renames an entry. It never falls back to copying: a move that would
 	// cross a filesystem boundary returns [ErrCrossDevice] rather than silently
 	// turning an instant operation into a multi-gigabyte copy.

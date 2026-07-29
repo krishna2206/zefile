@@ -131,6 +131,9 @@ func TestNoStorageCallBypassesTheGuard(t *testing.T) {
 		"MkdirAll": func() error {
 			return fs.MkdirAll(ctx, storage.MustParsePath("/a/b/c"))
 		},
+		"Copy": func() error {
+			return fs.Copy(ctx, file, storage.MustParsePath("/copie.txt"))
+		},
 		"Move": func() error {
 			return fs.Move(ctx, file, storage.MustParsePath("/ailleurs.txt"))
 		},
