@@ -6,8 +6,11 @@
  * the tones the system pairs it with. The library checks every pairing the
  * Material specification defines, in both schemes.
  *
- * Run as part of the frontend build, so a change to the seeds cannot ship
- * without being checked.
+ * Run in continuous integration rather than in the build. The palette is
+ * committed, so the application builds without this script or its tooling; only
+ * someone changing the seeds needs either.
+ *
+ *     pnpm run check:theme
  */
 import { defaultTokenSet, validateColorContrasts } from '@language-lit/material3-expressive/tokens'
 

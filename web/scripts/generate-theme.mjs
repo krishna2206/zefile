@@ -7,8 +7,10 @@
  * own implementation rather than approximating it — a palette guessed by eye
  * fails the contrast checks the library runs, and deservedly.
  *
- * It runs at build time and writes a plain TypeScript file. Nothing here ships
- * to the browser: the output is a table of hex values.
+ * The output is committed, so neither this script nor its dependencies are part
+ * of installing or building the application — they are fetched on demand:
+ *
+ *     pnpm run generate:theme
  *
  *   pnpm run generate:theme
  */

@@ -105,6 +105,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Type-check
         run: pnpm run typecheck
+      # The palette is committed, so this is the only thing that would notice a
+      # seed changed to something unreadable.
+      - name: Validate theme contrast
+        run: pnpm run check:theme
       - name: Build
         run: pnpm run build
 
