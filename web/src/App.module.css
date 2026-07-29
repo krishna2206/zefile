@@ -1,0 +1,8 @@
+.empty {
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+}
+
+.hint {
+  color: var(--on-surface-muted);
+}

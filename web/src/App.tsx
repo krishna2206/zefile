@@ -4,6 +4,8 @@ import { CircularProgress, Text } from '@language-lit/material3-expressive'
 import { api, ApiError, type User } from './api'
 import { SignIn } from './SignIn'
 import { Browser } from './Browser'
+ import { Center, Stack } from './ui/Layout'
+ import styles from './App.module.css'
 
 type State =
   | { phase: 'loading' }
@@ -42,9 +44,9 @@ export function App() {
   switch (state.phase) {
     case 'loading':
       return (
-        <div className="flex h-full items-center justify-center">
+        <Center>
           <CircularProgress aria-label="Loading" />
-        </div>
+        </Center>
       )
     case 'setup':
       return <SignIn mode="setup" onDone={resolve} />
@@ -55,16 +57,20 @@ export function App() {
   }
 }
 
-/** Fallback used by screens with nothing to show yet. */
+/** Empty is the state a screen shows when it has nothing to list.
+ *
+ * A distinct component because an empty folder and a folder whose contents are
+ * hidden from you are different things to say, and both deserve better than a
+ * blank rectangle. */
 export function Empty({ title, detail }: { title: string; detail?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+    <Stack gap={2} className={styles.empty}>
       <Text variant="titleMedium">{title}</Text>
       {detail && (
-        <Text variant="bodyMedium" className="text-on-surface-variant">
+        <Text variant="bodyMedium" className={styles.hint}>
           {detail}
         </Text>
       )}
-    </div>
+    </Stack>
   )
 }

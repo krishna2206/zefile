@@ -1,35 +1,15 @@
-/* Layer order is declared before anything is imported, and it is the whole
-   reason the interface lays out at all.
-   
-   Material 3 ships its styles inside m3e.* cascade layers. Layers rank by the
-   order they are first seen, so importing the library after Tailwind put every
-   one of its rules above Tailwind's utilities — and a layered rule wins on
-   layer order regardless of specificity. The symptom was that no utility
-   applied: a card asked to be narrow and centred filled the window instead.
-   
-   Naming the order up front puts the component library below the utilities
-   that are meant to position it. */
-@layer m3e, m3e.tokens, m3e.base, m3e.components, theme, base, components, utilities;
-
-@import "tailwindcss";
+/* Material 3 first, our own rules after.
+ *
+ * The library's styles live in m3e.* cascade layers. Ours are unlayered, which
+ * beats any layer regardless of specificity — so there is one rule to remember
+ * and no order to maintain.
+ *
+ * This project has no utility framework. One was tried and removed: a utility
+ * layer and a component library both want to own the cascade, and every fix on
+ * one side broke the other. Layout lives in the primitives under src/ui and in
+ * per-component CSS modules instead.
+ */
 @import "@language-lit/material3-expressive/styles.css";
 
-/* Tailwind is confined to layout: grids, flex, spacing. Colour, typography and
-   shape belong to Material 3, and reading its custom properties here keeps a
-   single source of truth rather than two palettes drifting apart. */
-@theme {
-  --color-surface: var(--md-sys-color-surface);
-  --color-on-surface: var(--md-sys-color-on-surface);
-  --color-surface-variant: var(--md-sys-color-surface-variant);
-  --color-on-surface-variant: var(--md-sys-color-on-surface-variant);
-  --color-primary: var(--md-sys-color-primary);
-  --color-outline: var(--md-sys-color-outline-variant);
-}
-
-html, body, #root { height: 100%; }
-
-body {
-  margin: 0;
-  background: var(--md-sys-color-surface);
-  color: var(--md-sys-color-on-surface);
-}
+@import "./styles/tokens.css";
+@import "./styles/base.css";

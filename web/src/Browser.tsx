@@ -12,10 +12,14 @@ import {
 import { Empty } from './App'
 import { api, ApiError, formatSize, joinPath, parentOf, type Entry, type User } from './api'
 import { uploadFile, type UploadProgress } from './upload'
+import { Center, Fill, Row, Spacer, Stack, truncate } from './ui/Layout'
+import styles from './Browser.module.css'
 
-/** rowHeight has to be a constant for virtualisation to place rows without
- *  measuring them, which is what keeps a directory of ten thousand entries
- *  scrolling smoothly. */
+/** rowHeight mirrors --row-height in the stylesheet.
+ *
+ * The virtualiser multiplies it to place rows without measuring them, so the
+ * two have to agree; reading it back from the document at run time would cost a
+ * layout on every mount to learn a number that is already known. */
 const rowHeight = 56
 
 export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => void }) {
@@ -47,8 +51,10 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const upload = useCallback(
     async (files: FileList) => {
       for (const file of Array.from(files)) {
-        const entry: UploadProgress = { name: file.name, sent: 0, total: file.size, status: 'uploading' }
-        setTransfers((current) => [...current, entry])
+        setTransfers((current) => [
+          ...current,
+          { name: file.name, sent: 0, total: file.size, status: 'uploading' },
+        ])
 
         const update = (patch: Partial<UploadProgress>) =>
           setTransfers((current) =>
@@ -70,8 +76,8 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   async function download(entry: Entry) {
     try {
       const { url } = await api.downloadLink(entry.path)
-      // Navigating rather than fetching: the browser then owns the transfer,
-      // so it survives this page and shows in the download manager.
+      // Navigating rather than fetching: the browser then owns the transfer, so
+      // it survives this page and appears in the download manager.
       window.location.href = url
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not build a download link.')
@@ -79,7 +85,9 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   }
 
   async function remove(entry: Entry) {
-    if (!confirm(`Delete ${entry.name}?`)) return
+    // Deletion is permanent until the trash exists, so it is confirmed rather
+    // than merely undoable.
+    if (!confirm(`Delete ${entry.name}? This cannot be undone.`)) return
     try {
       await api.remove(entry.path, entry.is_dir)
       void load(path)
@@ -106,7 +114,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
 
   return (
     <div
-      className="flex h-full flex-col"
+      className={styles.screen}
       onDragOver={(e) => {
         e.preventDefault()
         setDragging(true)
@@ -121,56 +129,54 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
       <AppBar
         title="Zefile"
         actions={
-          <>
-            <Text variant="labelLarge" className="hidden sm:inline">
-              {user.username}
-            </Text>
+          <Row gap={2}>
+            <Text variant="labelLarge">{user.username}</Text>
             <Button variant="text" onClick={signOut}>
               Sign out
             </Button>
-          </>
+          </Row>
         }
       />
 
       <Breadcrumb path={path} onNavigate={setPath} />
 
-      <div className="flex items-center gap-2 px-4 pb-2">
+      <Row gap={2} className={styles.toolbar}>
         <Button variant="tonal" onClick={createFolder}>
           New folder
         </Button>
         <UploadButton onFiles={upload} />
-      </div>
+      </Row>
 
       <Divider />
 
       {error && (
-        <div className="px-4 py-2">
-          <Text variant="bodyMedium" role="alert" style={{ color: 'var(--md-sys-color-error)' }}>
-            {error}
-          </Text>
-        </div>
+        <Text variant="bodyMedium" role="alert" className={styles.message}>
+          {error}
+        </Text>
       )}
 
-      <div className="relative min-h-0 flex-1">
+      <Fill>
         {loading ? (
-          <div className="flex h-full items-center justify-center">
+          <Center>
             <CircularProgress aria-label="Loading" />
-          </div>
+          </Center>
         ) : entries.length === 0 ? (
-          <Empty
-            title="Nothing here"
-            detail="Drop files anywhere on this page to upload them."
-          />
+          <Empty title="Nothing here" detail="Drop files anywhere on this page to upload them." />
         ) : (
-          <EntryList entries={entries} onOpen={(e) => setPath(e.path)} onDownload={download} onDelete={remove} />
+          <EntryList
+            entries={entries}
+            onOpen={(entry) => setPath(entry.path)}
+            onDownload={download}
+            onDelete={remove}
+          />
         )}
+      </Fill>
 
-        {dragging && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center border-4 border-dashed border-primary bg-surface/80">
-            <Text variant="headlineSmall">Drop to upload</Text>
-          </div>
-        )}
-      </div>
+      {dragging && (
+        <div className={styles.dropTarget}>
+          <Text variant="headlineSmall">Drop to upload</Text>
+        </div>
+      )}
 
       <Transfers transfers={transfers} onClear={() => setTransfers([])} />
     </div>
@@ -181,28 +187,30 @@ function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string
   const segments = path === '/' ? [] : path.slice(1).split('/')
 
   return (
-    <nav className="flex flex-wrap items-center gap-1 px-4 py-3" aria-label="Location">
-      <Button variant="text" onClick={() => onNavigate('/')}>
-        Home
-      </Button>
-      {segments.map((segment, index) => {
-        const target = '/' + segments.slice(0, index + 1).join('/')
-        return (
-          <span key={target} className="flex items-center gap-1">
-            <span aria-hidden className="text-on-surface-variant">
-              /
-            </span>
-            <Button variant="text" onClick={() => onNavigate(target)}>
-              {segment}
-            </Button>
-          </span>
-        )
-      })}
-      {path !== '/' && (
-        <Button variant="text" onClick={() => onNavigate(parentOf(path))}>
-          Up
+    <nav aria-label="Location" className={styles.breadcrumb}>
+      <Row gap={1} wrap>
+        <Button variant="text" onClick={() => onNavigate('/')}>
+          Home
         </Button>
-      )}
+        {segments.map((segment, index) => {
+          const target = '/' + segments.slice(0, index + 1).join('/')
+          return (
+            <Row key={target} gap={1}>
+              <span aria-hidden className={styles.separator}>
+                /
+              </span>
+              <Button variant="text" onClick={() => onNavigate(target)}>
+                {segment}
+              </Button>
+            </Row>
+          )
+        })}
+        {path !== '/' && (
+          <Button variant="text" onClick={() => onNavigate(parentOf(path))}>
+            Up
+          </Button>
+        )}
+      </Row>
     </nav>
   )
 }
@@ -218,37 +226,32 @@ type ListProps = {
  * EntryList is virtualised from its first version.
  *
  * Retrofitting virtualisation means revisiting selection, scrolling and
- * keyboard handling all at once, so it is cheaper to start with it even while
- * the folders under test hold three files.
+ * keyboard handling together, so starting with it is cheaper than arriving at
+ * it — even while the folders under test hold three files.
  */
 function EntryList({ entries, onOpen, onDownload, onDelete }: ListProps) {
-  const parentRef = useRef<HTMLDivElement>(null)
+  const viewport = useRef<HTMLDivElement>(null)
 
   const virtualizer = useVirtualizer({
     count: entries.length,
-    getScrollElement: () => parentRef.current,
+    getScrollElement: () => viewport.current,
     estimateSize: () => rowHeight,
     overscan: 8,
   })
 
   return (
-    <div ref={parentRef} className="h-full overflow-auto">
-      <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-        {virtualizer.getVirtualItems().map((row) => {
-          const entry = entries[row.index]
+    <div ref={viewport} className={styles.viewport}>
+      <div className={styles.canvas} style={{ height: `${virtualizer.getTotalSize()}px` }}>
+        {virtualizer.getVirtualItems().map((item) => {
+          const entry = entries[item.index]
           if (!entry) return null
           return (
             <div
               key={entry.path}
-              className="absolute inset-x-0 top-0"
-              style={{ height: `${row.size}px`, transform: `translateY(${row.start}px)` }}
+              className={styles.rowSlot}
+              style={{ height: `${item.size}px`, transform: `translateY(${item.start}px)` }}
             >
-              <EntryRow
-                entry={entry}
-                onOpen={onOpen}
-                onDownload={onDownload}
-                onDelete={onDelete}
-              />
+              <EntryRow entry={entry} onOpen={onOpen} onDownload={onDownload} onDelete={onDelete} />
             </div>
           )
         })}
@@ -259,24 +262,22 @@ function EntryList({ entries, onOpen, onDownload, onDelete }: ListProps) {
 
 function EntryRow({ entry, onOpen, onDownload, onDelete }: { entry: Entry } & Omit<ListProps, 'entries'>) {
   return (
-    // Rows stay flat: an elevation here would be repainted for every visible
-    // row on every scroll frame, which is what makes long lists stutter.
-    <div className="flex h-full items-center gap-3 border-b border-outline px-4">
-      {/* Material Symbols would need the icon font bundled; a minimal
-          interface says it in words instead. Icons arrive with lot 5.3. */}
-      <Text variant="labelSmall" className="w-10 shrink-0 text-on-surface-variant">
+    <div className={styles.row}>
+      {/* Material Symbols would need the icon font bundled; a minimal interface
+          says it in words instead. Icons arrive with lot 5.3. */}
+      <Text variant="labelSmall" className={styles.kind}>
         {entry.is_dir ? 'DIR' : 'FILE'}
       </Text>
 
       <button
         type="button"
-        className="min-w-0 flex-1 cursor-pointer truncate text-left"
+        className={`${styles.name} ${truncate}`}
         onClick={() => (entry.is_dir ? onOpen(entry) : onDownload(entry))}
       >
         <Text variant="bodyLarge">{entry.name}</Text>
       </button>
 
-      <Text variant="bodySmall" className="hidden w-24 text-right tabular-nums sm:block">
+      <Text variant="bodySmall" className={styles.size}>
         {entry.is_dir ? '—' : formatSize(entry.size)}
       </Text>
 
@@ -317,45 +318,47 @@ function UploadButton({ onFiles }: { onFiles: (files: FileList) => void }) {
  * Transfers is a persistent panel rather than a toast.
  *
  * An upload is a state, not an event: it outlives navigation, and a
- * notification that disappears after four seconds is useless for something
- * that takes an hour.
+ * notification that fades after four seconds is useless for something that
+ * takes an hour.
  */
 function Transfers({ transfers, onClear }: { transfers: UploadProgress[]; onClear: () => void }) {
   if (transfers.length === 0) return null
   const active = transfers.filter((t) => t.status === 'uploading').length
 
   return (
-    <div className="border-t border-outline bg-surface px-4 py-3">
-      <div className="flex items-center justify-between pb-2">
+    <div className={styles.transfers}>
+      <Row>
         <Text variant="titleSmall">
           {active > 0 ? `Uploading ${active} file${active > 1 ? 's' : ''}` : 'Transfers'}
         </Text>
+        <Spacer />
         {active === 0 && (
           <Button variant="text" onClick={onClear}>
             Clear
           </Button>
         )}
-      </div>
+      </Row>
 
-      <div className="flex max-h-40 flex-col gap-2 overflow-auto">
+      <Stack gap={2} className={styles.transferList}>
         {transfers.map((transfer) => (
-          <div key={transfer.name} className="flex flex-col gap-1">
-            <div className="flex items-baseline justify-between gap-4">
-              <Text variant="bodyMedium" className="truncate">
+          <Stack gap={1} key={transfer.name}>
+            <Row gap={4}>
+              <Text variant="bodyMedium" className={truncate}>
                 {transfer.name}
               </Text>
-              <Text variant="bodySmall" className="shrink-0 tabular-nums">
+              <Spacer />
+              <Text variant="bodySmall" className={styles.transferMeta}>
                 {transfer.status === 'error'
                   ? (transfer.error ?? 'failed')
                   : `${formatSize(transfer.sent)} / ${formatSize(transfer.total)}`}
               </Text>
-            </div>
+            </Row>
             {transfer.status === 'uploading' && (
               <LinearProgress value={transfer.total ? transfer.sent / transfer.total : 0} />
             )}
-          </div>
+          </Stack>
         ))}
-      </div>
+      </Stack>
     </div>
   )
 }

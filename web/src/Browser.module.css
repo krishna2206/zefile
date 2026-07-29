@@ -1,0 +1,122 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+
+.toolbar {
+  padding: 0 var(--space-4) var(--space-2);
+}
+
+.breadcrumb {
+  padding: var(--space-3) var(--space-4);
+}
+
+.separator {
+  color: var(--on-surface-muted);
+}
+
+.message {
+  padding: var(--space-2) var(--space-4);
+  color: var(--danger);
+}
+
+/* The scrolling viewport the virtualiser measures against. */
+.viewport {
+  position: relative;
+  height: 100%;
+  overflow: auto;
+}
+
+/* Sized in script from the row count, and positioned absolutely inside it. */
+.canvas {
+  position: relative;
+  width: 100%;
+}
+
+.rowSlot {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 100%;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--outline);
+}
+
+/* Rows stay flat and carry no transition.
+ *
+ * Both are performance rather than taste: an elevation is repainted for every
+ * visible row on every scroll frame, and a transition multiplied by the number
+ * of rows on screen turns scrolling into work. */
+.row:hover {
+  background: var(--surface-container);
+}
+
+.kind {
+  width: var(--space-8);
+  flex: none;
+  color: var(--on-surface-muted);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  text-align: start;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.size {
+  width: 6rem;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-surface-muted);
+  flex: none;
+}
+
+/* Hidden on narrow screens: the name matters more than the size when there is
+   only room for one. */
+@media (max-width: 40rem) {
+  .size {
+    display: none;
+  }
+}
+
+.dropTarget {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border: 3px dashed var(--accent);
+}
+
+.transfers {
+  border-top: 1px solid var(--outline);
+  background: var(--surface);
+  padding: var(--space-3) var(--space-4);
+}
+
+.transferList {
+  max-height: 10rem;
+  overflow: auto;
+}
+
+.transferMeta {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-surface-muted);
+}
