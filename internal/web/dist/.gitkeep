@@ -1,0 +1,5 @@
+This directory receives the built interface, which is never committed.
+
+The file you are reading is, and must stay: //go:embed refuses a pattern that
+matches nothing, so without it a clone that has never run the frontend build
+would not compile at all.

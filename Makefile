@@ -14,6 +14,7 @@ run: build
 
 ## web: build the interface into internal/web/dist
 web:
+	rm -rf internal/web/dist/assets internal/web/dist/index.html
 	cd web && pnpm install --frozen-lockfile && pnpm run build
 
 ## dist: build the interface, then a binary embedding it
