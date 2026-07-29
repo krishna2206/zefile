@@ -7,6 +7,7 @@ import (
 	"github.com/krishna2206/zefile/internal/auth"
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/storage"
+	"github.com/krishna2206/zefile/internal/upload"
 )
 
 // Server holds everything the handlers need. It owns nothing: the storage
@@ -17,16 +18,18 @@ type Server struct {
 	auth          *auth.Service
 	acl           *acl.Engine
 	signer        *content.Signer
+	uploads       *upload.Service
 	contentBase   string
 	secureCookies bool
 }
 
 // Options configures a [Server].
 type Options struct {
-	FS     storage.FS
-	Auth   *auth.Service
-	ACL    *acl.Engine
-	Signer *content.Signer
+	FS      storage.FS
+	Auth    *auth.Service
+	ACL     *acl.Engine
+	Signer  *content.Signer
+	Uploads *upload.Service
 
 	// ContentBase is the public origin serving files, without a trailing
 	// slash. In single-origin mode it is the application's own address.
@@ -42,6 +45,7 @@ func New(opts Options) *Server {
 		auth:          opts.Auth,
 		acl:           opts.ACL,
 		signer:        opts.Signer,
+		uploads:       opts.Uploads,
 		contentBase:   opts.ContentBase,
 		secureCookies: opts.SecureCookies,
 	}
@@ -74,6 +78,12 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("POST /api/v1/fs/copy", s.handleCopy)
 	authed.HandleFunc("GET /api/v1/fs/link", s.handleLink)
 	authed.HandleFunc("GET /api/v1/fs/space", s.handleSpace)
+
+	authed.HandleFunc("OPTIONS /api/v1/uploads", s.handleUploadOptions)
+	authed.HandleFunc("POST /api/v1/uploads", s.handleUploadCreate)
+	authed.HandleFunc("HEAD /api/v1/uploads/{token}", s.handleUploadOffset)
+	authed.HandleFunc("PATCH /api/v1/uploads/{token}", s.handleUploadWrite)
+	authed.HandleFunc("DELETE /api/v1/uploads/{token}", s.handleUploadCancel)
 
 	mux.Handle("/", s.requireAuth(authed))
 

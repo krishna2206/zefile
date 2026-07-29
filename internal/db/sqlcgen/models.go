@@ -140,6 +140,7 @@ type Upload struct {
 	Checksum   sql.NullString
 	CreatedAt  int64
 	ExpiresAt  int64
+	StageID    string
 }
 
 type User struct {

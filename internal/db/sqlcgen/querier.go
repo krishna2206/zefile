@@ -14,12 +14,14 @@ type Querier interface {
 	CountUsers(ctx context.Context) (int64, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	CreateUpload(ctx context.Context, arg CreateUploadParams) (Upload, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteACL(ctx context.Context, id int64) error
 	DeleteACLForSubject(ctx context.Context, arg DeleteACLForSubjectParams) error
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
 	DeleteFileOwner(ctx context.Context, path string) error
 	DeleteUnusedInvitations(ctx context.Context) error
+	DeleteUpload(ctx context.Context, id int64) error
 	GetFileOwner(ctx context.Context, path string) (FileOwner, error)
 	// Batched so that listing a directory costs one query rather than one per entry.
 	GetFileOwnersForPaths(ctx context.Context, paths []string) ([]FileOwner, error)
@@ -30,12 +32,16 @@ type Querier interface {
 	// are filtered here rather than in Go: a caller that forgets the check must not
 	// be able to resurrect a dead session.
 	GetSessionByTokenHash(ctx context.Context, arg GetSessionByTokenHashParams) (GetSessionByTokenHashRow, error)
+	// Expiry is filtered here so an abandoned session cannot be revived days later
+	// by a client that kept its token.
+	GetUpload(ctx context.Context, arg GetUploadParams) (Upload, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	ListACLForGroups(ctx context.Context, groupIds []int64) ([]Acl, error)
 	// Backs the permissions screen: everything granted at one exact path.
 	ListACLForPath(ctx context.Context, path string) ([]Acl, error)
 	ListACLForUser(ctx context.Context, subjectID int64) ([]Acl, error)
+	ListExpiredUploads(ctx context.Context, expiresAt int64) ([]Upload, error)
 	ListGroupsForUser(ctx context.Context, userID int64) ([]int64, error)
 	ListSessionsForUser(ctx context.Context, arg ListSessionsForUserParams) ([]Session, error)
 	MarkInvitationUsed(ctx context.Context, arg MarkInvitationUsedParams) error
@@ -44,6 +50,7 @@ type Querier interface {
 	RevokeSession(ctx context.Context, arg RevokeSessionParams) error
 	SetFileOwner(ctx context.Context, arg SetFileOwnerParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	UpdateUploadOffset(ctx context.Context, arg UpdateUploadOffsetParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpsertACL(ctx context.Context, arg UpsertACLParams) (Acl, error)
 }

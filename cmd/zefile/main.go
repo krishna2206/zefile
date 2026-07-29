@@ -21,6 +21,7 @@ import (
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/db"
 	"github.com/krishna2206/zefile/internal/storage"
+	"github.com/krishna2206/zefile/internal/upload"
 )
 
 // version is overridden at build time with -ldflags.
@@ -88,8 +89,11 @@ func run() error {
 	}
 	warnAboutSingleOrigin(cfg)
 
+	uploads := upload.New(database, fs)
+
 	appHandler := api.New(api.Options{
 		FS:            fs,
+		Uploads:       uploads,
 		Auth:          authService,
 		ACL:           engine,
 		Signer:        signer,
