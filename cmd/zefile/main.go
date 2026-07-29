@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/krishna2206/zefile/internal/api"
 	"github.com/krishna2206/zefile/internal/auth"
 	"github.com/krishna2206/zefile/internal/config"
+	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/db"
 	"github.com/krishna2206/zefile/internal/storage"
 )
@@ -76,20 +78,35 @@ func run() error {
 	}
 	defer func() { _ = fs.Close() }()
 
+	signer, err := content.NewSigner()
+	if err != nil {
+		return err
+	}
 	authService := auth.New(database)
 	if err := announceSetup(context.Background(), authService, cfg); err != nil {
 		return err
 	}
 	warnAboutSingleOrigin(cfg)
 
+	appHandler := api.New(api.Options{
+		FS:            fs,
+		Auth:          authService,
+		ACL:           engine,
+		Signer:        signer,
+		ContentBase:   contentBase(cfg),
+		SecureCookies: cfg.SecureCookies(),
+	}).Handler()
+
+	contentHandler := content.New(content.Options{
+		FS:           fs,
+		Signer:       signer,
+		Subject:      acl.NewSubjectLoader(database, engine),
+		SingleOrigin: cfg.SingleOrigin(),
+	}).Handler()
+
 	server := &http.Server{
-		Addr: cfg.Listen,
-		Handler: api.New(api.Options{
-			FS:            fs,
-			Auth:          authService,
-			ACL:           engine,
-			SecureCookies: cfg.SecureCookies(),
-		}).Handler(),
+		Addr:              cfg.Listen,
+		Handler:           route(cfg, appHandler, contentHandler),
 		ReadHeaderTimeout: 15 * time.Second,
 		// No write timeout: a download of tens of gigabytes is a single
 		// response, and a deadline here would sever it mid-transfer.
@@ -132,6 +149,39 @@ func warnAboutSingleOrigin(cfg config.Config) {
 	slog.Warn("running with a single origin: user content is served from the application origin",
 		"consequence", "inline preview is restricted and every file is sent as an attachment",
 		"fix", "set "+config.EnvContentURL+" to a second hostname")
+}
+
+// route dispatches on the Host header, so one listener and one port serve both
+// origins. Separating them costs a DNS record, not a second process.
+//
+// In single-origin mode there is no second host to compare against, and the
+// content routes simply live alongside the API on the same one.
+func route(cfg config.Config, app, files http.Handler) http.Handler {
+	if cfg.SingleOrigin() {
+		mux := http.NewServeMux()
+		mux.Handle("/d/", files)
+		mux.Handle("/", app)
+		return mux
+	}
+
+	contentHost := cfg.ContentURL.Host
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// r.Host carries the port when the client sent one, so the comparison
+		// is against the configured authority rather than the hostname alone.
+		if strings.EqualFold(r.Host, contentHost) {
+			files.ServeHTTP(w, r)
+			return
+		}
+		app.ServeHTTP(w, r)
+	})
+}
+
+// contentBase is the public prefix links are built from.
+func contentBase(cfg config.Config) string {
+	if cfg.SingleOrigin() {
+		return cfg.AppURL.String()
+	}
+	return cfg.ContentURL.String()
 }
 
 func serve(server *http.Server, cfg config.Config) error {

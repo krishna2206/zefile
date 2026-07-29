@@ -2,9 +2,11 @@ package api
 
 import (
 	"net/http"
+	"net/url"
 	"sort"
 	"time"
 
+	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/storage"
 )
 
@@ -195,6 +197,47 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, r, http.StatusNoContent, nil)
+}
+
+type linkResponse struct {
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// handleLink mints a short-lived download URL on the content origin.
+//
+// The caller's read permission is checked here, by opening the file through the
+// storage layer rather than by asking the ACL engine directly — that way the
+// answer cannot drift from what an actual download would do.
+func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
+	p, ok := pathParam(w, r)
+	if !ok {
+		return
+	}
+
+	info, err := s.fs.Stat(r.Context(), p)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if info.IsDir {
+		writeError(w, r, storage.ErrIsDir)
+		return
+	}
+
+	c, found := callerFrom(r.Context())
+	if !found {
+		writeProblem(w, r, http.StatusUnauthorized, CodeUnauthenticated, "Not signed in", "")
+		return
+	}
+
+	token := s.signer.Sign(p, c.user.ID)
+	writeJSON(w, r, http.StatusOK, linkResponse{
+		// The filename rides at the end of the path because that is what a
+		// download manager names the saved file from.
+		URL:       s.contentBase + "/d/" + token + "/" + url.PathEscape(p.Name()),
+		ExpiresAt: time.Now().Add(content.DefaultTTL).UTC(),
+	})
 }
 
 type spaceResponse struct {

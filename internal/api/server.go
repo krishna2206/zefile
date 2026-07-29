@@ -5,6 +5,7 @@ import (
 
 	"github.com/krishna2206/zefile/internal/acl"
 	"github.com/krishna2206/zefile/internal/auth"
+	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/storage"
 )
 
@@ -15,14 +16,22 @@ type Server struct {
 	fs            storage.FS
 	auth          *auth.Service
 	acl           *acl.Engine
+	signer        *content.Signer
+	contentBase   string
 	secureCookies bool
 }
 
 // Options configures a [Server].
 type Options struct {
-	FS            storage.FS
-	Auth          *auth.Service
-	ACL           *acl.Engine
+	FS     storage.FS
+	Auth   *auth.Service
+	ACL    *acl.Engine
+	Signer *content.Signer
+
+	// ContentBase is the public origin serving files, without a trailing
+	// slash. In single-origin mode it is the application's own address.
+	ContentBase string
+
 	SecureCookies bool
 }
 
@@ -32,6 +41,8 @@ func New(opts Options) *Server {
 		fs:            opts.FS,
 		auth:          opts.Auth,
 		acl:           opts.ACL,
+		signer:        opts.Signer,
+		contentBase:   opts.ContentBase,
 		secureCookies: opts.SecureCookies,
 	}
 }
@@ -61,6 +72,7 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("POST /api/v1/fs/dirs", s.handleMkdir)
 	authed.HandleFunc("POST /api/v1/fs/move", s.handleMove)
 	authed.HandleFunc("POST /api/v1/fs/copy", s.handleCopy)
+	authed.HandleFunc("GET /api/v1/fs/link", s.handleLink)
 	authed.HandleFunc("GET /api/v1/fs/space", s.handleSpace)
 
 	mux.Handle("/", s.requireAuth(authed))
