@@ -5,7 +5,10 @@
 FROM node:22-alpine AS web
 WORKDIR /src/web
 RUN corepack enable
-COPY web/package.json web/pnpm-lock.yaml ./
+# pnpm-workspace.yaml carries the approval for esbuild's install script, which
+# tsx needs and which pnpm blocks by default. Leaving it out makes the install
+# succeed and the build fail one step later, on a missing binary.
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY web/ ./
 COPY internal/web/dist/.gitkeep /src/internal/web/dist/.gitkeep
