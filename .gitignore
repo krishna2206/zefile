@@ -4,9 +4,10 @@
 
 # Frontend build output is never versioned — see docs/conception.html §12.4.
 # Committing it makes contributions unreviewable and conflicts constant.
-/web/dist/*
-!/web/dist/.gitkeep
+/internal/web/dist/*
+!/internal/web/dist/.gitkeep
 /web/node_modules/
+/web/tsconfig.tsbuildinfo
 
 # Local runtime data
 *.db

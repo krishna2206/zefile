@@ -4,13 +4,20 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 
 .DEFAULT_GOAL := help
 
-## build: compile the binary into bin/
+## build: compile the binary into bin/ (Go only; run `make dist` to include the interface)
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/zefile
 
 ## run: build and run
 run: build
 	./bin/$(BINARY)
+
+## web: build the interface into internal/web/dist
+web:
+	cd web && pnpm install --frozen-lockfile && pnpm run build
+
+## dist: build the interface, then a binary embedding it
+dist: web build
 
 ## generate: regenerate sqlc code from the schema and queries
 generate:
@@ -37,10 +44,10 @@ check: fmt vet test vuln
 
 ## clean: remove build artefacts
 clean:
-	rm -rf bin/
+	rm -rf bin/ internal/web/dist/assets internal/web/dist/index.html
 
 ## help: list available targets
 help:
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## /  /'
 
-.PHONY: build run generate test vet fmt vuln check clean help
+.PHONY: build web dist run generate test vet fmt vuln check clean help

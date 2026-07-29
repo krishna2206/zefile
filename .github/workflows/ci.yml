@@ -84,3 +84,26 @@ jobs:
             echo "Generated code is out of date. Run: make generate"
             exit 1
           fi
+
+  web:
+    name: Interface
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm run typecheck
+      - name: Build
+        run: pnpm run build

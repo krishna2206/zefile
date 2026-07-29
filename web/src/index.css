@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@import "@language-lit/material3-expressive/styles.css";
+
+/* Tailwind is confined to layout: grids, flex, spacing. Colour, typography and
+   shape belong to Material 3, and reading its custom properties here keeps a
+   single source of truth rather than two palettes drifting apart. */
+@theme {
+  --color-surface: var(--md-sys-color-surface);
+  --color-on-surface: var(--md-sys-color-on-surface);
+  --color-surface-variant: var(--md-sys-color-surface-variant);
+  --color-on-surface-variant: var(--md-sys-color-on-surface-variant);
+  --color-primary: var(--md-sys-color-primary);
+  --color-outline: var(--md-sys-color-outline-variant);
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+}

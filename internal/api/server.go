@@ -2,12 +2,14 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/krishna2206/zefile/internal/acl"
 	"github.com/krishna2206/zefile/internal/auth"
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/storage"
 	"github.com/krishna2206/zefile/internal/upload"
+	"github.com/krishna2206/zefile/internal/web"
 )
 
 // Server holds everything the handlers need. It owns nothing: the storage
@@ -85,11 +87,34 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("PATCH /api/v1/uploads/{token}", s.handleUploadWrite)
 	authed.HandleFunc("DELETE /api/v1/uploads/{token}", s.handleUploadCancel)
 
-	mux.Handle("/", s.requireAuth(authed))
+	// The interface is served from the root, so anything the API does not claim
+	// falls through to it. Registered last, and only when the binary was built
+	// with one: a backend-only build still serves the API rather than 404s.
+	if ui, ok := web.Handler(); ok {
+		mux.Handle("/", s.apiOrInterface(s.requireAuth(authed), ui))
+	} else {
+		mux.Handle("/", s.requireAuth(authed))
+	}
 
 	// Outermost first: recovery has to wrap the logger so that a panic is still
 	// logged as a request, and the request id has to exist before either runs.
 	return withRequestID(recoverPanics(logRequests(mux)))
+}
+
+// apiOrInterface sends API paths to the authenticated handler and everything
+// else to the interface.
+//
+// The split is on the path prefix rather than on content negotiation: an
+// unknown /api/v1 path must answer as the API, with a machine-readable error,
+// not silently return the HTML shell for a client to choke on.
+func (s *Server) apiOrInterface(api, ui http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			api.ServeHTTP(w, r)
+			return
+		}
+		ui.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
