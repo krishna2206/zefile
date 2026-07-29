@@ -33,9 +33,10 @@ type Problem struct {
 // Stable error codes. They are part of the API contract: they may be added to,
 // never renamed.
 const (
-	CodeBadRequest         = "bad_request"
-	CodeInvalidPath        = "invalid_path"
-	CodeUnauthenticated    = "unauthenticated"
+	CodeBadRequest      = "bad_request"
+	CodeInvalidPath     = "invalid_path"
+	CodeUnauthenticated = "unauthenticated"
+	// #nosec G101 -- an error code shown to clients, not a credential
 	CodeInvalidCredentials = "invalid_credentials"
 	CodePermissionDenied   = "permission_denied"
 	CodeNotFound           = "not_found"
