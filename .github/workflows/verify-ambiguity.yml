@@ -1,0 +1,10 @@
+name: verify-ambiguity
+on: workflow_dispatch
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.25' }
+      - run: go test ./internal/storage/ -run Ambiguous -v
