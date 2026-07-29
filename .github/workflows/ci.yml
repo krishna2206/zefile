@@ -58,3 +58,24 @@ jobs:
       - uses: securego/gosec@master
         with:
           args: ./...
+
+  generated:
+    name: Generated code is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          check-latest: true
+      # Contributors never need sqlc: the generated code is committed, so a
+      # clone plus `go build` is enough. This job is what keeps that promise
+      # honest — a query edited without regenerating fails here.
+      - name: Regenerate
+        run: go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
+      - name: Check for drift
+        run: |
+          if ! git diff --exit-code; then
+            echo "Generated code is out of date. Run: make generate"
+            exit 1
+          fi

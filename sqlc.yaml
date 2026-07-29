@@ -1,0 +1,11 @@
+version: "2"
+sql:
+  - engine: sqlite
+    schema: internal/db/migrations
+    queries: internal/db/queries
+    gen:
+      go:
+        package: sqlcgen
+        out: internal/db/sqlcgen
+        emit_interface: true
+        emit_empty_slices: true
