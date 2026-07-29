@@ -13,3 +13,6 @@ SELECT * FROM users WHERE id = ?;
 INSERT INTO users (username, email, password_hash, is_admin, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?)
 RETURNING *;
+
+-- name: UpdateUserPassword :exec
+UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?;

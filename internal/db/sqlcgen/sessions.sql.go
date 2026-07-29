@@ -109,6 +109,50 @@ func (q *Queries) GetSessionByTokenHash(ctx context.Context, arg GetSessionByTok
 	return i, err
 }
 
+const listSessionsForUser = `-- name: ListSessionsForUser :many
+SELECT id, user_id, token_hash, created_at, last_seen_at, expires_at, user_agent, ip, revoked_at FROM sessions
+WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+ORDER BY last_seen_at DESC
+`
+
+type ListSessionsForUserParams struct {
+	UserID    int64
+	ExpiresAt int64
+}
+
+func (q *Queries) ListSessionsForUser(ctx context.Context, arg ListSessionsForUserParams) ([]Session, error) {
+	rows, err := q.db.QueryContext(ctx, listSessionsForUser, arg.UserID, arg.ExpiresAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Session{}
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.TokenHash,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.ExpiresAt,
+			&i.UserAgent,
+			&i.Ip,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const revokeAllSessionsForUser = `-- name: RevokeAllSessionsForUser :exec
 UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL
 `
@@ -134,5 +178,19 @@ type RevokeSessionParams struct {
 
 func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) error {
 	_, err := q.db.ExecContext(ctx, revokeSession, arg.RevokedAt, arg.ID)
+	return err
+}
+
+const touchSession = `-- name: TouchSession :exec
+UPDATE sessions SET last_seen_at = ? WHERE id = ?
+`
+
+type TouchSessionParams struct {
+	LastSeenAt int64
+	ID         int64
+}
+
+func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) error {
+	_, err := q.db.ExecContext(ctx, touchSession, arg.LastSeenAt, arg.ID)
 	return err
 }

@@ -23,3 +23,11 @@ UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL;
 
 -- name: DeleteExpiredSessions :exec
 DELETE FROM sessions WHERE expires_at < ?;
+
+-- name: TouchSession :exec
+UPDATE sessions SET last_seen_at = ? WHERE id = ?;
+
+-- name: ListSessionsForUser :many
+SELECT * FROM sessions
+WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+ORDER BY last_seen_at DESC;

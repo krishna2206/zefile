@@ -12,17 +12,26 @@ type Querier interface {
 	// Backs first-run detection: an instance with no account shows the setup link
 	// rather than a sign-in form.
 	CountUsers(ctx context.Context) (int64, error)
+	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
+	DeleteUnusedInvitations(ctx context.Context) error
+	// Single use and expiry are filtered here, so a caller cannot accidentally
+	// accept an invitation twice.
+	GetInvitationByTokenHash(ctx context.Context, arg GetInvitationByTokenHashParams) (Invitation, error)
 	// The lookup performed on every authenticated request. Expiry and revocation
 	// are filtered here rather than in Go: a caller that forgets the check must not
 	// be able to resurrect a dead session.
 	GetSessionByTokenHash(ctx context.Context, arg GetSessionByTokenHashParams) (GetSessionByTokenHashRow, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	ListSessionsForUser(ctx context.Context, arg ListSessionsForUserParams) ([]Session, error)
+	MarkInvitationUsed(ctx context.Context, arg MarkInvitationUsedParams) error
 	RevokeAllSessionsForUser(ctx context.Context, arg RevokeAllSessionsForUserParams) error
 	RevokeSession(ctx context.Context, arg RevokeSessionParams) error
+	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 }
 
 var _ Querier = (*Queries)(nil)
