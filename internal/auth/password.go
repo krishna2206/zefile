@@ -151,8 +151,9 @@ func decodeHash(encoded string) (p Params, salt, key []byte, err error) {
 		return p, nil, nil, ErrInvalidHash
 	}
 
-	// Safe to widen: both lengths were just bounded well below uint32.
-	p.SaltLength = uint32(len(salt))
-	p.KeyLength = uint32(len(key))
+	// Both lengths were bounded a few lines above, well below what uint32
+	// holds. The analyser does not follow the value through that check.
+	p.SaltLength = uint32(len(salt)) // #nosec G115 -- bounded by maxSaltBytes above
+	p.KeyLength = uint32(len(key))   // #nosec G115 -- bounded by maxKeyBytes above
 	return p, salt, key, nil
 }
