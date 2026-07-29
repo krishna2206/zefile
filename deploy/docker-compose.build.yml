@@ -1,0 +1,27 @@
+# Deployment that builds from source rather than pulling a published image.
+#
+# Used while there is no release: what runs is exactly what is on the branch,
+# which is what a trial deployment should be testing.
+
+services:
+  zefile:
+    build:
+      # Relative to this file, so the context is the repository root.
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      ZEFILE_APP_URL: ${ZEFILE_APP_URL}
+      ZEFILE_CONTENT_URL: ${ZEFILE_CONTENT_URL}
+      ZEFILE_DATA_DIR: /data
+      ZEFILE_CONFIG_DIR: /config
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    volumes:
+      - ${ZEFILE_HOST_DATA}:/data
+      - zefile-config:/config
+    expose:
+      - "8080"
+
+volumes:
+  zefile-config:

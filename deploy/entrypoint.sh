@@ -21,10 +21,23 @@ if [ "$(id -u)" = "0" ]; then
         adduser -D -u "$PUID" -G zefile zefile
     fi
 
-    # Only the configuration directory is adjusted. The data directory is the
-    # user's own tree, possibly holding terabytes; walking it to change
-    # ownership on every start would be both slow and presumptuous.
     chown "$PUID:$PGID" "${ZEFILE_CONFIG_DIR:-/config}" 2>/dev/null || true
+
+    # The data directory is only adopted while it is empty, which is exactly the
+    # case Docker creates by making a missing bind-mount target owned by root —
+    # after which nothing can write to it and the first upload fails for a
+    # reason nobody would guess.
+    #
+    # An existing tree is left alone. It is the user's own, possibly holding
+    # terabytes, and walking it on every start would be both slow and
+    # presumptuous about files this service did not put there.
+    DATA="${ZEFILE_DATA_DIR:-/data}"
+    if [ -d "$DATA" ] && [ -z "$(ls -A "$DATA" 2>/dev/null)" ]; then
+        chown "$PUID:$PGID" "$DATA" 2>/dev/null || true
+    elif ! su-exec "$PUID:$PGID" test -w "$DATA" 2>/dev/null; then
+        echo "zefile: $DATA is not writable by ${PUID}:${PGID}." >&2
+        echo "zefile: run 'chown -R ${PUID}:${PGID} <host directory>' or set PUID/PGID to its owner." >&2
+    fi
 
     exec su-exec "$PUID:$PGID" "$@"
 fi
