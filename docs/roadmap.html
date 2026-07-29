@@ -204,10 +204,10 @@
         <div class="done"><b>Terminé quand</b> un démarrage sur répertoire vierge crée la base, et qu’une configuration mal placée provoque un refus explicite.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">1.4</span>
-        <div class="title">Authentification et sessions</div>
-        <div class="body">Argon2id, sessions opaques en base, cookie <code>HttpOnly</code> / <code>SameSite=Lax</code> / <code>Secure</code>, <code>login</code> / <code>logout</code> / <code>me</code>, limitation de débit sur la connexion. Premier démarrage&nbsp;: lien d’installation à usage unique affiché dans les journaux.</div>
+        <div class="title">Authentification et sessions<span class="status">Fait</span></div>
+        <div class="body">Argon2id, sessions opaques en base, cookie <code>HttpOnly</code> / <code>SameSite=Lax</code> / <code>Secure</code>, limitation de débit sur la connexion, jeton d’installation à usage unique. <em>Les endpoints <code>login</code> / <code>logout</code> / <code>me</code> et l’affichage du lien d’installation au démarrage se posent en 1.6, quand le routeur et les conventions d’erreur existent&nbsp;— un échafaudage HTTP construit ici serait jeté.</em></div>
         <div class="done"><b>Terminé quand</b> un jeton cesse de fonctionner <em>immédiatement</em> après déconnexion — le défaut fondateur de File Browser, à vérifier par un test dédié.</div>
       </div>
 
