@@ -117,6 +117,13 @@
     text-transform:uppercase; color:var(--accent); display:block; margin-bottom:2px;
     font-weight:500;
   }
+  .item .status {
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.09em;
+    text-transform:uppercase; padding:2px 7px; border-radius:2px;
+    background:var(--accent); color:var(--ground); margin-left:8px;
+    vertical-align:.15em; white-space:nowrap; font-weight:500;
+  }
+  .item.shipped .title { color:var(--ink-3); }
   .item.pivot { background:var(--accent-soft); }
   .item.pivot .body { color:var(--accent-ink); }
 
@@ -148,7 +155,7 @@
 <div class="shell">
 
   <header class="masthead">
-    <div class="eyebrow">Zefile · roadmap d'implémentation · v1</div>
+    <div class="eyebrow">Zefile · roadmap d'implémentation · v1.1</div>
     <h1>Roadmap d'implémentation</h1>
     <p class="standfirst">Découpage ordonné par dépendances techniques, sans échéance. Chaque élément est un lot de travail cohérent, avec son critère d’achèvement.</p>
   </header>
@@ -163,7 +170,7 @@
 
     <div class="rule warn">
       <span class="label">La phase 1 est longue</span>
-      <p>Elle contient toute la fondation et ne produit rien de visible avant son dernier tiers. C’est normal et c’est le bon investissement&nbsp;— mais il faut le savoir pour ne pas se décourager au milieu. Le premier jalon réellement gratifiant est le <b>1.9</b>&nbsp;: l’instance qui tourne sur le VPS.</p>
+      <p>Elle contient toute la fondation et ne produit rien de visible avant son dernier tiers. C’est normal et c’est le bon investissement&nbsp;— mais il faut le savoir pour ne pas se décourager au milieu. Le premier jalon réellement gratifiant est le <b>1.10</b>&nbsp;: l’instance qui tourne sur le VPS.</p>
     </div>
   </div>
 
@@ -176,16 +183,16 @@
     </div>
     <div class="items">
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">1.1</span>
-        <div class="title">Amorçage du dépôt</div>
-        <div class="body"><code>git init</code>, <code>go.mod</code> en Go 1.24, arborescence de §12.4, licence Apache-2.0, <code>.gitignore</code> avec <code>web/dist</code> dès le premier commit, Makefile. Chaîne d’intégration continue&nbsp;: compilation, tests, <code>govulncheck</code>, <code>gosec</code>.</div>
+        <div class="title">Amorçage du dépôt<span class="status">Fait</span></div>
+        <div class="body"><code>git init</code>, <code>go.mod</code> en Go 1.25, arborescence de §12.4, licence Apache-2.0, <code>.gitignore</code> avec <code>web/dist</code> dès le premier commit, Makefile. Chaîne d’intégration continue&nbsp;: compilation, tests, <code>govulncheck</code>, <code>gosec</code>.</div>
         <div class="done"><b>Terminé quand</b> <code>make build</code> produit un binaire qui démarre et s’arrête proprement, et que la CI passe au vert sur une PR de test.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">1.2</span>
-        <div class="title">Couche de stockage</div>
+        <div class="title">Couche de stockage<span class="status">Fait</span></div>
         <div class="body">Le cœur du projet. Interface <code>Stat/List/Open/Create/Move/Remove/MkDir</code>, confinement par <code>os.Root</code>, normalisation Unicode en forme composée pour les clés, réserve d’espace disque et bascule en lecture seule, exclusion des répertoires cachés de corbeille et d’envois.</div>
         <div class="done"><b>Terminé quand</b> la suite de tests d’échappement ne laisse passer aucun chemin hors racine&nbsp;: <code>../</code>, liens symboliques et durs, séparateurs Windows, formes Unicode équivalentes, casse.</div>
       </div>
@@ -486,9 +493,9 @@
 
   <div class="colophon">
     <span>Zefile — roadmap d’implémentation</span>
-    <span>Version 1</span>
+    <span>Version 1.1</span>
     <span>29 juillet 2026</span>
-    <span>Adossée au document de conception rév. 1.1</span>
+    <span>Adossée au document de conception rév. 1.3</span>
   </div>
 
 </div>

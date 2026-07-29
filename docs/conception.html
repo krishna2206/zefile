@@ -475,7 +475,7 @@
 <div class="shell">
 
   <header class="masthead">
-    <div class="eyebrow">Document de conception · v1.2 · conception close</div>
+    <div class="eyebrow">Document de conception · v1.3 · conception close</div>
     <h1>Zefile</h1>
     <p class="standfirst">Un binaire unique pour stocker, organiser et partager de gros fichiers sur un VPS. Conçu comme le successeur spirituel de File Browser&nbsp;: la même promesse d’installation, avec un modèle de sécurité et une API pensés dès le départ.</p>
     <p class="tagline">«&nbsp;Because it’s not just another file browser&nbsp;— it’s <em>Ze</em> file browser.&nbsp;»</p>
@@ -849,7 +849,7 @@
 
         <div class="note">
           <span class="label">Décision</span>
-          <p>Utilisation de <code>os.Root</code> (Go 1.24+), qui contraint toutes les opérations à un sous-arbre au niveau de l’appel système. Conçu exactement pour ce problème, il élimine une classe entière de bugs par construction plutôt que par vigilance.</p>
+          <p>Utilisation de <code>os.Root</code>, qui contraint toutes les opérations à un sous-arbre au niveau de l’appel système. Conçu exactement pour ce problème, il élimine une classe entière de bugs par construction plutôt que par vigilance.</p>
         </div>
 
         <p>L’interface de stockage reste volontairement générique&nbsp;— <code>Stat</code>, <code>List</code>, <code>Open</code>, <code>Create</code>, <code>Move</code>, <code>Remove</code>, <code>MkDir</code>&nbsp;— pour accueillir plus tard WebDAV et S3 sans refonte. Les vérifications ACL sont appliquées à ce niveau, pas au-dessus.</p>
@@ -878,6 +878,11 @@
           <span class="label">Décision</span>
           <p>Les noms sont normalisés en <strong>forme composée</strong> pour tout ce qui sert de clé&nbsp;: entrées <code>acl</code>, <code>file_owners</code>, <code>shares</code>, index de recherche et comparaisons. La forme réellement présente sur le disque est conservée pour les appels système, jamais pour l’indexation. Sans cette règle, une recherche ne trouve pas un fichier existant, deux entrées semblent identiques sans l’être, et <strong>une règle de permission cesse de s’appliquer parce que le chemin ne correspond plus</strong>.</p>
         </div>
+        <div class="note warn">
+          <span class="label">Ambiguïté&nbsp;: refuser plutôt que deviner</span>
+          <p>Deux entrées d’un même dossier peuvent se normaliser vers la même clé&nbsp;— deux orthographes d’un même nom accentué. Choisir l’une des deux reviendrait à agir sur un fichier que l’appelant n’a pas désigné, ce qui est inacceptable pour une suppression. <strong>L’opération échoue explicitement.</strong> Le cas est rare mais atteignable&nbsp;: il suffit de deux marques diacritiques écrites dans l’ordre inverse. <em>Décidé en implémentant le §14 lot 1.2.</em></p>
+        </div>
+
         <p>S’y ajoutent la sensibilité à la casse&nbsp;— différente entre systèmes de fichiers&nbsp;— et les caractères interdits selon les plateformes, à traiter au même endroit&nbsp;: la couche de stockage, seule autorité sur la forme d’un chemin.</p>
 
         <h3><span class="sub">9.4</span>Saturation du disque</h3>
@@ -1019,8 +1024,8 @@
         </div>
         <div class="scope">
           <div class="scope-row">
-            <div class="name">Go 1.24+ <span class="chip locked">Verrouillé</span></div>
-            <div class="desc">Binaire unique, excellente diffusion de flux, concurrence native. La version 1.24 est un minimum réel&nbsp;: c’est elle qui apporte <code>os.Root</code>.</div>
+            <div class="name">Go 1.25+ <span class="chip locked">Verrouillé</span></div>
+            <div class="desc">Binaire unique, excellente diffusion de flux, concurrence native. Le minimum est <strong>1.25</strong>, pas 1.24&nbsp;: <code>os.Root</code> apparaît bien en 1.24, mais <code>Rename</code>, <code>RemoveAll</code> et <code>MkdirAll</code> ne lui sont ajoutées qu’en 1.25 — sans elles, déplacer ou supprimer imposerait de résoudre les chemins à la main et de rouvrir la fenêtre de course que <code>os.Root</code> ferme. <em>Corrigé après implémentation du §14 lot 1.2.</em></div>
           </div>
           <div class="scope-row">
             <div class="name">Routage&nbsp;: <code>net/http</code> standard <span class="chip locked">Verrouillé</span></div>
@@ -1310,7 +1315,7 @@
 
       <div class="colophon">
         <span>Zefile — document de conception</span>
-        <span>Révision 1.2</span>
+        <span>Révision 1.3</span>
         <span>29 juillet 2026</span>
         <span>Statut&nbsp;: prêt pour l’implémentation</span>
       </div>

@@ -58,7 +58,7 @@ The design is written down before the code, and kept current.
 
 ## Stack
 
-Go 1.24+ · SQLite (`modernc.org/sqlite`, pure Go) · React + Vite ·
+Go 1.25+ · SQLite (`modernc.org/sqlite`, pure Go) · React + Vite ·
 [Material 3 Expressive](https://m3e.language-lit.com/) · Tailwind CSS 4
 
 ## Building
@@ -67,7 +67,7 @@ Go 1.24+ · SQLite (`modernc.org/sqlite`, pure Go) · React + Vite ·
 make build
 ```
 
-Requires Go 1.24 or newer. The web interface is not versioned in the repository — building it
+Requires Go 1.25 or newer. The web interface is not versioned in the repository — building it
 requires Node and pnpm. See `make help` for the available targets.
 
 ## Licence
