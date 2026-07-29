@@ -57,7 +57,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: securego/gosec@master
         with:
-          args: ./...
+          # Generated code is excluded rather than annotated: it cannot carry
+          # a #nosec comment that survives regeneration, and sqlc's query
+          # constants trip the hardcoded-credentials rule on any string
+          # containing "token_hash". Narrowing to the directory keeps the rule
+          # active everywhere it can actually find something.
+          args: -exclude-dir=internal/db/sqlcgen ./...
 
   generated:
     name: Generated code is current
