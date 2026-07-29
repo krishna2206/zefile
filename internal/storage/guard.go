@@ -42,16 +42,35 @@ func (o Op) String() string {
 // as a failure to decide and refuses the operation too: a Guard that cannot
 // reach its data must never fall open.
 type Guard interface {
+	// Authorize reports whether one operation on one path may proceed.
 	Authorize(ctx context.Context, op Op, p Path) error
+
+	// Permitted answers the same question for many paths at once, returning one
+	// verdict per input in the same order.
+	//
+	// It exists because listing a directory has to hide entries the caller may
+	// not see — otherwise a listing leaks the names of files denied to them.
+	// Asking Authorize per entry would mean one database round trip per file,
+	// which a directory of ten thousand entries cannot afford.
+	Permitted(ctx context.Context, op Op, paths []Path) ([]bool, error)
 }
 
 // AllowAll permits everything. It is the Guard used by tests and by the
-// single-user phase, before the ACL engine exists.
+// single-user phase, before the ACL engine is wired in.
 //
 // It is a named type rather than a nil check so that "no authorisation" is
 // something a caller writes down deliberately, and something that shows up in
-// a grep when the ACL engine lands.
+// a grep.
 type AllowAll struct{}
 
 // Authorize implements [Guard].
 func (AllowAll) Authorize(context.Context, Op, Path) error { return nil }
+
+// Permitted implements [Guard].
+func (AllowAll) Permitted(_ context.Context, _ Op, paths []Path) ([]bool, error) {
+	verdicts := make([]bool, len(paths))
+	for i := range verdicts {
+		verdicts[i] = true
+	}
+	return verdicts, nil
+}

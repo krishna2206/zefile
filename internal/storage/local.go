@@ -135,7 +135,7 @@ func (l *Local) List(ctx context.Context, p Path) ([]FileInfo, error) {
 		return nil, mapErr(err)
 	}
 
-	out := make([]FileInfo, 0, len(entries))
+	candidates := make([]FileInfo, 0, len(entries))
 	for _, entry := range entries {
 		if p.IsRoot() && isReservedName(entry.Name()) {
 			continue
@@ -156,9 +156,45 @@ func (l *Local) List(ctx context.Context, p Path) ([]FileInfo, error) {
 			}
 			return nil, mapErr(err)
 		}
-		out = append(out, toFileInfo(child, entryInfo))
+		candidates = append(candidates, toFileInfo(child, entryInfo))
 	}
-	return out, nil
+
+	return l.filterReadable(ctx, candidates)
+}
+
+// filterReadable drops entries the caller may not see.
+//
+// Without this, a listing reveals the names of everything in a directory even
+// where a rule denies access to some of it — and a filename is often the whole
+// secret. The verdicts are fetched in one batch: a directory can hold tens of
+// thousands of entries, and a query each would make listing unusable.
+func (l *Local) filterReadable(ctx context.Context, entries []FileInfo) ([]FileInfo, error) {
+	if len(entries) == 0 {
+		return entries, nil
+	}
+
+	paths := make([]Path, len(entries))
+	for i, entry := range entries {
+		paths[i] = entry.Path
+	}
+
+	verdicts, err := l.guard.Permitted(ctx, OpRead, paths)
+	if err != nil {
+		return nil, fmt.Errorf("storage: authorisation failed: %w", err)
+	}
+	if len(verdicts) != len(entries) {
+		// A Guard returning a mismatched result cannot be interpreted, and
+		// guessing would mean either leaking entries or hiding legitimate ones.
+		return nil, fmt.Errorf("storage: guard returned %d verdicts for %d paths", len(verdicts), len(entries))
+	}
+
+	visible := entries[:0]
+	for i, ok := range verdicts {
+		if ok {
+			visible = append(visible, entries[i])
+		}
+	}
+	return visible, nil
 }
 
 // Open implements [FS].

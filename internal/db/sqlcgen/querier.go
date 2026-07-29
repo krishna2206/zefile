@@ -15,8 +15,14 @@ type Querier interface {
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteACL(ctx context.Context, id int64) error
+	DeleteACLForSubject(ctx context.Context, arg DeleteACLForSubjectParams) error
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
+	DeleteFileOwner(ctx context.Context, path string) error
 	DeleteUnusedInvitations(ctx context.Context) error
+	GetFileOwner(ctx context.Context, path string) (FileOwner, error)
+	// Batched so that listing a directory costs one query rather than one per entry.
+	GetFileOwnersForPaths(ctx context.Context, paths []string) ([]FileOwner, error)
 	// Single use and expiry are filtered here, so a caller cannot accidentally
 	// accept an invitation twice.
 	GetInvitationByTokenHash(ctx context.Context, arg GetInvitationByTokenHashParams) (Invitation, error)
@@ -26,12 +32,20 @@ type Querier interface {
 	GetSessionByTokenHash(ctx context.Context, arg GetSessionByTokenHashParams) (GetSessionByTokenHashRow, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	ListACLForGroups(ctx context.Context, groupIds []int64) ([]Acl, error)
+	// Backs the permissions screen: everything granted at one exact path.
+	ListACLForPath(ctx context.Context, path string) ([]Acl, error)
+	ListACLForUser(ctx context.Context, subjectID int64) ([]Acl, error)
+	ListGroupsForUser(ctx context.Context, userID int64) ([]int64, error)
 	ListSessionsForUser(ctx context.Context, arg ListSessionsForUserParams) ([]Session, error)
 	MarkInvitationUsed(ctx context.Context, arg MarkInvitationUsedParams) error
+	MoveFileOwner(ctx context.Context, arg MoveFileOwnerParams) error
 	RevokeAllSessionsForUser(ctx context.Context, arg RevokeAllSessionsForUserParams) error
 	RevokeSession(ctx context.Context, arg RevokeSessionParams) error
+	SetFileOwner(ctx context.Context, arg SetFileOwnerParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpsertACL(ctx context.Context, arg UpsertACLParams) (Acl, error)
 }
 
 var _ Querier = (*Queries)(nil)

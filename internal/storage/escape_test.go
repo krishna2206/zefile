@@ -325,10 +325,18 @@ type denyAll struct{}
 
 func (denyAll) Authorize(context.Context, Op, Path) error { return ErrPermission }
 
+func (denyAll) Permitted(_ context.Context, _ Op, paths []Path) ([]bool, error) {
+	return make([]bool, len(paths)), nil
+}
+
 type brokenGuard struct{}
 
 func (brokenGuard) Authorize(context.Context, Op, Path) error {
 	return errors.New("acl database unreachable")
+}
+
+func (brokenGuard) Permitted(context.Context, Op, []Path) ([]bool, error) {
+	return nil, errors.New("acl database unreachable")
 }
 
 // recordingGuard captures what the storage layer asked for, so tests can assert
@@ -342,6 +350,14 @@ func (g *recordingGuard) Authorize(_ context.Context, op Op, p Path) error {
 	g.ops = append(g.ops, op)
 	g.paths = append(g.paths, p.String())
 	return nil
+}
+
+func (g *recordingGuard) Permitted(ctx context.Context, op Op, paths []Path) ([]bool, error) {
+	verdicts := make([]bool, len(paths))
+	for i, p := range paths {
+		verdicts[i] = g.Authorize(ctx, op, p) == nil
+	}
+	return verdicts, nil
 }
 
 func (g *recordingGuard) sawOp(op Op) bool {
