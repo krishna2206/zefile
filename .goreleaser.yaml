@@ -1,0 +1,47 @@
+version: 2
+
+# Releases are built from source by CI and nowhere else. A binary anyone can
+# reproduce from a tag is the only kind worth publishing.
+
+before:
+  hooks:
+    - make web
+
+builds:
+  - main: ./cmd/zefile
+    binary: zefile
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+
+archives:
+  - formats: [tar.gz]
+    files:
+      - README.md
+      - LICENSE
+      - deploy/docker-compose.yml
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  # Grouped rather than a flat list: a release note is read by someone deciding
+  # whether to upgrade, and a security fix must not be buried among renames.
+  groups:
+    - title: Security
+      regexp: '(?i)^.*(security|vulnerab|CVE).*'
+      order: 0
+    - title: Features
+      regexp: '(?i)^.*(add|support).*'
+      order: 1
+    - title: Fixes
+      order: 2
+  filters:
+    exclude:
+      - '(?i)^.*typo.*'
+      - '(?i)^mark lot .* as shipped'

@@ -1,0 +1,37 @@
+# Reference deployment.
+#
+# Two hostnames are what keeps an uploaded file from ever reaching a session:
+# on the content host there is no cookie to steal. Running with only one is
+# supported and hardens itself automatically, but it costs the ability to
+# preview anything in place.
+
+services:
+  zefile:
+    image: ghcr.io/krishna2206/zefile:latest
+    restart: unless-stopped
+    environment:
+      ZEFILE_APP_URL: https://zefile.example.tld
+      ZEFILE_CONTENT_URL: https://dl.example.tld
+      ZEFILE_DATA_DIR: /data
+      ZEFILE_CONFIG_DIR: /config
+
+      # The user that owns /mnt/storage on the host. Getting this wrong shows
+      # up as a permission error on the first upload.
+      PUID: 1000
+      PGID: 1000
+
+    volumes:
+      # A directory on the host, not a Docker volume: that is what gives Zefile
+      # the whole disk instead of a partition of it.
+      - /mnt/storage:/data
+
+      # The database lives apart from the browsable tree, and Zefile refuses to
+      # start otherwise — a database users can list is a database they can
+      # download, password hashes included.
+      - zefile-config:/config
+
+    ports:
+      - "8080:8080"
+
+volumes:
+  zefile-config:
