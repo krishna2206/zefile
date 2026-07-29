@@ -146,7 +146,7 @@ func (e *Engine) loadRules(ctx context.Context, s Subject) ([]rule, error) {
 	for _, row := range rows {
 		rules = append(rules, rule{
 			path:      row.Path,
-			perms:     Perm(row.Perms),
+			perms:     permFromStored(row.Perms),
 			recursive: row.Recursive == 1,
 			deny:      row.Deny == 1,
 		})
@@ -438,10 +438,26 @@ func toRule(row sqlcgen.Acl) Rule {
 		SubjectType: SubjectType(row.SubjectType),
 		SubjectID:   row.SubjectID,
 		Path:        p,
-		Perms:       Perm(row.Perms),
+		Perms:       permFromStored(row.Perms),
 		Recursive:   row.Recursive == 1,
 		Deny:        row.Deny == 1,
 	}
+}
+
+// permFromStored rebuilds a permission set from a stored value, bit by bit.
+//
+// Only bits this build defines are honoured. A row holding an unknown bit —
+// written by a newer version, or by hand — must not have it reinterpreted as
+// some other permission, and a negative or oversized value must not wrap into
+// one. Rebuilding rather than converting makes both impossible.
+func permFromStored(v int64) Perm {
+	var out Perm
+	for _, bit := range permBits {
+		if v&int64(bit) != 0 {
+			out |= bit
+		}
+	}
+	return out
 }
 
 func boolToInt(b bool) int64 {

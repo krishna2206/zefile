@@ -529,3 +529,32 @@ func TestLoadSubjectReadsGroups(t *testing.T) {
 		t.Errorf("Groups = %v, want [%d]", subject.Groups, h.team)
 	}
 }
+
+// TestStoredPermissionsAreRebuiltNotReinterpreted covers a row holding bits
+// this build does not define — written by a newer version, or by hand. An
+// unknown bit must be dropped, never folded into a permission that happens to
+// share its position after a conversion.
+func TestStoredPermissionsAreRebuiltNotReinterpreted(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		stored int64
+		want   Perm
+	}{
+		{"exact set", int64(PermRead | PermWrite), PermRead | PermWrite},
+		{"unknown high bit", int64(PermRead) | 1<<20, PermRead},
+		{"beyond uint32", int64(PermRead) | 1<<40, PermRead},
+		{"negative", -1, PermAll},
+		{"zero", 0, PermNone},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := permFromStored(tc.stored); got != tc.want {
+				t.Fatalf("permFromStored(%d) = %s, want %s", tc.stored, got, tc.want)
+			}
+		})
+	}
+}
