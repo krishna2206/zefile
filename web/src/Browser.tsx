@@ -786,12 +786,10 @@ function EntryMenu({ entry, actions, children }: { entry: Entry; actions: EntryA
           {entry.is_dir ? <FolderOpen /> : <Download />}
           {entry.is_dir ? 'Open' : 'Download'}
         </ContextMenuItem>
-        {!entry.is_dir && (
-          <ContextMenuItem onSelect={() => actions.share(entry)}>
-            <ShareNetwork />
-            Share…
-          </ContextMenuItem>
-        )}
+        <ContextMenuItem onSelect={() => actions.share(entry)}>
+          <ShareNetwork />
+          Share…
+        </ContextMenuItem>
         <ContextMenuItem onSelect={() => actions.rename(entry)}>
           <Pencil />
           Rename

@@ -83,7 +83,8 @@ export function ShareDialog({
         {created ? (
           <div className="space-y-3 py-2">
             <p className="text-sm text-muted-foreground">
-              Anyone with this link can download the file, no account needed. It is shown once — copy it now.
+              Anyone with this link can {entry.is_dir ? 'browse this folder' : 'download the file'}, no account
+              needed. It is shown once — copy it now.
             </p>
             <div className="flex gap-2">
               <Input
@@ -119,20 +120,28 @@ export function ShareDialog({
               </select>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="share-password">Password</Label>
-              <Input
-                id="share-password"
-                type="password"
-                placeholder="No password"
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.currentTarget.value)}
-              />
+            {!entry.is_dir && (
+              <div className="space-y-1.5">
+                <Label htmlFor="share-password">Password</Label>
+                <Input
+                  id="share-password"
+                  type="password"
+                  placeholder="No password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.currentTarget.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  A protected link opens a password page in the browser (not usable by a download manager).
+                </p>
+              </div>
+            )}
+
+            {entry.is_dir && (
               <p className="text-xs text-muted-foreground">
-                A protected link opens a password page in the browser (not usable by a download manager).
+                Anyone with the link can browse this folder and download its files.
               </p>
-            </div>
+            )}
 
             {err && <p className="text-sm text-destructive">{err}</p>}
 
