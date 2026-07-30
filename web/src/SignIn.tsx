@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 type Props = { mode: 'login' | 'setup'; onDone: () => void }
 
@@ -116,12 +117,11 @@ export function SignIn({ mode, onDone }: Props) {
   }
 
   return (
-    <div className="grid min-h-dvh place-items-center bg-background p-6">
+    <div className="relative grid min-h-dvh place-items-center bg-background p-6">
+      <ThemeToggle className="absolute right-4 top-4" />
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-1 text-center">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Ze<span className="text-brand">file</span>
-          </h1>
+          <h1 className="font-serif text-4xl font-semibold tracking-tight">Zefile</h1>
           <p className="text-sm text-muted-foreground">
             {setup ? 'Let’s create your account.' : 'Your files, on your own server.'}
           </p>

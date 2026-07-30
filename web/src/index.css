@@ -91,9 +91,13 @@
   --color-ring: var(--ring);
   --color-brand: var(--brand);
 
+  /* Typography mirrors the design docs: a Charter-led serif for display text
+   * (the wordmark, headings) over a plain system sans for everything read at
+   * length. The app is not the documents, but it shares their letterforms. */
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-serif:
+    "Charter", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
 }
 
 @layer base {
