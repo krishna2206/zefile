@@ -1,69 +1,49 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 
-import { api, type Entry } from '@/api'
-
-// Signed links are cached for the session so scrolling a folder back and forth
-// does not re-ask the server for the same URL. They expire eventually; an
-// expired one simply fails to load and falls back to the icon, which is fine.
-const linkCache = new Map<string, string>()
+import type { Entry } from '@/api'
 
 /**
- * Thumbnail shows an image entry as a picture, loaded only once it nears the
- * viewport. Until then — and if the fetch or the image itself fails — it renders
- * `children`, which the caller passes as the coloured file icon.
+ * Thumbnail shows an image entry as a small picture served by the thumbnail
+ * endpoint — a compressed JPEG a few kilobytes in size, not the whole original.
+ * Until it arrives, and if it fails, `children` (the coloured file icon) stands
+ * in as the placeholder.
  *
- * There is no server-side thumbnailing yet, so this downloads the full image and
- * lets the browser scale it. The deferred load keeps that from happening for a
- * whole folder at once; a real thumbnail endpoint is the eventual fix.
+ * Loaded state is tracked against the current src rather than as a bare flag, so
+ * when the entry changes — the gallery reuses one instance as the selection
+ * moves — the placeholder shows immediately instead of the previous image
+ * lingering while the new one loads.
  */
 export function Thumbnail({
   entry,
   className,
+  size = 256,
   children,
 }: {
   entry: Entry
   className?: string
+  size?: number
   children: ReactNode
 }) {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const [src, setSrc] = useState<string | null>(() => linkCache.get(entry.path) ?? null)
-  const [failed, setFailed] = useState(false)
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null)
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
 
-  useEffect(() => {
-    const el = ref.current
-    if (!el || src || failed) return
-
-    const observer = new IntersectionObserver(
-      (entries, obs) => {
-        if (!entries.some((e) => e.isIntersecting)) return
-        obs.disconnect()
-        api
-          .downloadLink(entry.path)
-          .then(({ url }) => {
-            linkCache.set(entry.path, url)
-            setSrc(url)
-          })
-          .catch(() => setFailed(true))
-      },
-      { rootMargin: '200px' },
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [entry.path, src, failed])
+  const src = `/api/v1/fs/thumb?path=${encodeURIComponent(entry.path)}&s=${size}`
+  const shown = loadedSrc === src
+  const failed = failedSrc === src
 
   return (
-    <div ref={ref} className={className}>
-      {src && !failed ? (
+    <div className={className}>
+      {!shown && children}
+      {!failed && (
         <img
           src={src}
           alt=""
           loading="lazy"
           decoding="async"
-          className="h-full w-full object-cover"
-          onError={() => setFailed(true)}
+          onLoad={() => setLoadedSrc(src)}
+          onError={() => setFailedSrc(src)}
+          className={`h-full w-full object-cover ${shown ? '' : 'hidden'}`}
         />
-      ) : (
-        children
       )}
     </div>
   )

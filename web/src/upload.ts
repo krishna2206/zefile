@@ -5,10 +5,12 @@
 // extensions the server does not implement.
 
 export type UploadProgress = {
+  /** Stable identity for the transfer, so same-named files never collide. */
+  id: string
   name: string
   sent: number
   total: number
-  status: 'uploading' | 'done' | 'error' | 'cancelled'
+  status: 'queued' | 'uploading' | 'done' | 'error' | 'cancelled'
   /** Bytes per second, smoothed. Present while a transfer is in flight. */
   speed?: number
   error?: string

@@ -184,6 +184,8 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const [inlinePreview, setInlinePreview] = useState(false)
 
   const fileInput = useRef<HTMLInputElement>(null)
+  const pathRef = useRef(path)
+  pathRef.current = path
 
   useEffect(() => {
     localStorage.setItem(
@@ -237,26 +239,39 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
 
   const upload = useCallback(
     async (files: FileList) => {
-      for (const file of Array.from(files)) {
-        setTransfers((current) => [
-          ...current,
-          { name: file.name, sent: 0, total: file.size, status: 'uploading' },
-        ])
+      const target = path
+      const items = Array.from(files).map((file) => ({ id: crypto.randomUUID(), file }))
 
+      // Show the whole batch at once, as a queue, so someone sees every file
+      // they meant to send rather than only the one in flight.
+      setTransfers((current) => [
+        ...current,
+        ...items.map(({ id, file }) => ({
+          id,
+          name: file.name,
+          sent: 0,
+          total: file.size,
+          status: 'queued' as const,
+        })),
+      ])
+
+      for (const { id, file } of items) {
         const update = (patch: Partial<UploadProgress>) =>
-          setTransfers((current) =>
-            current.map((t) => (t.name === file.name ? { ...t, ...patch } : t)),
-          )
+          setTransfers((current) => current.map((t) => (t.id === id ? { ...t, ...patch } : t)))
 
+        update({ status: 'uploading' })
         try {
-          await uploadFile(file, joinPath(path, file.name), (sent, speed) => update({ sent, speed }))
+          await uploadFile(file, joinPath(target, file.name), (sent, speed) => update({ sent, speed }))
           update({ status: 'done', sent: file.size, speed: 0 })
         } catch (err) {
           update({ status: 'error', error: err instanceof Error ? err.message : 'failed' })
         }
+
+        // Reflect each finished file in the listing straight away, but only if
+        // the user is still looking at the folder it landed in.
+        void refreshSpace()
+        if (pathRef.current === target) void load(target)
       }
-      void load(path)
-      void refreshSpace()
     },
     [path, load, refreshSpace],
   )
@@ -894,7 +909,7 @@ function ListRow({ entry, actions }: { entry: Entry; actions: EntryActions }) {
         }}
       >
         {isImage(entry) ? (
-          <Thumbnail entry={entry} className="grid size-6 place-items-center overflow-hidden rounded bg-muted">
+          <Thumbnail entry={entry} size={64} className="grid size-6 place-items-center overflow-hidden rounded bg-muted">
             <Icon className={`size-5 ${color}`} />
           </Thumbnail>
         ) : (
@@ -1059,7 +1074,7 @@ function PreviewPane({
   return (
     <aside className="hidden w-80 shrink-0 flex-col gap-4 overflow-auto border-l bg-card/30 p-4 lg:flex">
       {isImage(entry) ? (
-        <Thumbnail entry={entry} className="grid aspect-square w-full place-items-center overflow-hidden rounded-lg border bg-muted/40">
+        <Thumbnail entry={entry} size={512} className="grid aspect-square w-full place-items-center overflow-hidden rounded-lg border bg-muted/40">
           <Icon className={`size-20 ${color}`} />
         </Thumbnail>
       ) : (
@@ -1211,26 +1226,33 @@ function DeleteDialog({
  */
 function Transfers({ transfers, onClear }: { transfers: UploadProgress[]; onClear: () => void }) {
   if (transfers.length === 0) return null
-  const active = transfers.filter((t) => t.status === 'uploading').length
+  const remaining = transfers.filter((t) => t.status === 'uploading' || t.status === 'queued').length
+  const busy = remaining > 0
 
   return (
     <div className="fixed bottom-4 right-4 z-20 w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-4 shadow-lg">
       <div className="flex items-center">
         <p className="text-sm font-medium">
-          {active > 0 ? `Uploading ${active} file${active > 1 ? 's' : ''}` : 'Transfers'}
+          {busy ? `Uploading — ${remaining} left` : 'Transfers'}
         </p>
-        {active === 0 && (
+        {!busy && (
           <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>
             Clear
           </Button>
         )}
       </div>
 
-      <div className="mt-2 space-y-2">
+      <div className="mt-2 max-h-64 space-y-2 overflow-auto">
         {transfers.map((transfer) => (
-          <div key={transfer.name} className="space-y-1">
+          <div key={transfer.id} className="space-y-1">
             <div className="flex items-center gap-4">
-              <span className="min-w-0 flex-1 truncate text-sm">{transfer.name}</span>
+              <span
+                className={`min-w-0 flex-1 truncate text-sm ${
+                  transfer.status === 'queued' ? 'text-muted-foreground' : ''
+                }`}
+              >
+                {transfer.name}
+              </span>
               <span
                 className={`shrink-0 text-xs tabular-nums ${
                   transfer.status === 'error' ? 'text-destructive' : 'text-muted-foreground'
@@ -1238,7 +1260,11 @@ function Transfers({ transfers, onClear }: { transfers: UploadProgress[]; onClea
               >
                 {transfer.status === 'error'
                   ? (transfer.error ?? 'failed')
-                  : `${formatSize(transfer.sent)} / ${formatSize(transfer.total)}`}
+                  : transfer.status === 'queued'
+                    ? 'Waiting…'
+                    : transfer.status === 'done'
+                      ? 'Done'
+                      : `${formatSize(transfer.sent)} / ${formatSize(transfer.total)}`}
               </span>
             </div>
             {transfer.status === 'uploading' && (
