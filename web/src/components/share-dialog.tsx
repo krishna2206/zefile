@@ -8,12 +8,15 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
+// A limited duration is the default; "Never" is last so a permanent link is a
+// deliberate choice rather than what you get by not looking.
+const DEFAULT_EXPIRY_HOURS = 24 * 7
 const EXPIRY_OPTIONS = [
-  { label: 'Never', hours: 0 },
   { label: '1 hour', hours: 1 },
   { label: '1 day', hours: 24 },
   { label: '7 days', hours: 24 * 7 },
   { label: '30 days', hours: 24 * 30 },
+  { label: 'Never', hours: 0 },
 ]
 
 const selectClass =
@@ -25,7 +28,7 @@ const selectClass =
  * only as a hash and cannot be recovered later.
  */
 export function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => void }) {
-  const [expiryHours, setExpiryHours] = useState(0)
+  const [expiryHours, setExpiryHours] = useState(DEFAULT_EXPIRY_HOURS)
   const [maxDownloads, setMaxDownloads] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')

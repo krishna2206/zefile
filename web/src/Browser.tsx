@@ -17,7 +17,6 @@ import {
   DownloadSimple as Download,
   FolderOpen,
   SquaresFour as LayoutGrid,
-  Link as Link2,
   List as ListIcon,
   CircleNotch as Loader2,
   PencilSimple as Pencil,
@@ -147,7 +146,6 @@ type EntryActions = {
   select: (entry: Entry, intent: ClickIntent) => void
   open: (entry: Entry) => void
   download: (entry: Entry) => void
-  copyLink: (entry: Entry) => void
   share: (entry: Entry) => void
   rename: (entry: Entry) => void
   remove: (entry: Entry) => void
@@ -332,15 +330,6 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
       else void download(entry)
     },
     download,
-    copyLink: async (entry) => {
-      try {
-        const { url } = await api.downloadLink(entry.path)
-        await navigator.clipboard.writeText(url)
-        toast.success('Link copied to clipboard')
-      } catch {
-        toast.error('Could not copy the link.')
-      }
-    },
     share: (entry) => setDialog({ kind: 'share', entry }),
     rename: (entry) => setDialog({ kind: 'rename', entry }),
     remove: (entry) => setDialog({ kind: 'delete', entries: [entry] }),
@@ -779,16 +768,10 @@ function EntryMenu({ entry, actions, children }: { entry: Entry; actions: EntryA
           {entry.is_dir ? 'Open' : 'Download'}
         </ContextMenuItem>
         {!entry.is_dir && (
-          <>
-            <ContextMenuItem onSelect={() => actions.copyLink(entry)}>
-              <Link2 />
-              Copy link
-            </ContextMenuItem>
-            <ContextMenuItem onSelect={() => actions.share(entry)}>
-              <ShareNetwork />
-              Share…
-            </ContextMenuItem>
-          </>
+          <ContextMenuItem onSelect={() => actions.share(entry)}>
+            <ShareNetwork />
+            Share…
+          </ContextMenuItem>
         )}
         <ContextMenuItem onSelect={() => actions.rename(entry)}>
           <Pencil />
