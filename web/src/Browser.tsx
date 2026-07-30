@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent,
   type MouseEvent,
   type ReactNode,
 } from 'react'
@@ -163,7 +164,17 @@ type EntryActions = {
   isSelected: (entry: Entry) => boolean
   isShared: (entry: Entry) => boolean
   canPaste: boolean
+  // Drag-to-move: dragPaths is what a drag starting on an entry carries (the
+  // selection, or just that entry); moveInto drops those paths into a folder.
+  dragPaths: (entry: Entry) => string[]
+  moveInto: (dirPath: string, dirName: string, paths: string[]) => void
+  dropTarget: string | null
+  setDropTarget: (path: string | null) => void
 }
+
+/** MOVE_MIME marks an in-app drag so it is told apart from an OS file drag (an
+ *  upload). The payload is the JSON array of paths being moved. */
+const MOVE_MIME = 'application/x-zefile-move'
 
 /** Clipboard holds entries cut or copied, waiting to be pasted into a folder. */
 type Clipboard = { mode: 'copy' | 'cut'; entries: Entry[] }
@@ -201,6 +212,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const [inlinePreview, setInlinePreview] = useState(false)
   const [sharedPaths, setSharedPaths] = useState<Set<string>>(() => new Set())
   const [clipboard, setClipboard] = useState<Clipboard | null>(null)
+  const [dropTarget, setDropTarget] = useState<string | null>(null)
 
   const fileInput = useRef<HTMLInputElement>(null)
   const dirInput = useRef<HTMLInputElement>(null)
@@ -433,6 +445,36 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     [anchor, ordered],
   )
 
+  // moveInto moves the given paths into a folder, dropping the ones that would
+  // be no-ops or invalid: an entry onto itself, an entry already in the folder,
+  // or a folder into its own subtree. Names that collide surface as an error
+  // from the server rather than overwriting.
+  const moveInto = useCallback(
+    async (dirPath: string, dirName: string, paths: string[]) => {
+      const targets = paths.filter(
+        (p) => p !== dirPath && parentOf(p) !== dirPath && !dirPath.startsWith(p + '/'),
+      )
+      if (targets.length === 0) return
+      let done = 0
+      for (const p of targets) {
+        const name = p.slice(p.lastIndexOf('/') + 1)
+        try {
+          await api.move(p, joinPath(dirPath, name))
+          done++
+        } catch (err) {
+          toast.error(err instanceof ApiError ? err.message : `Could not move “${name}”`)
+        }
+      }
+      clearSelection()
+      void load(path)
+      void refreshSpace()
+      if (done > 0) {
+        toast.success(done > 1 ? `Moved ${done} items to “${dirName}”` : `Moved to “${dirName}”`)
+      }
+    },
+    [path, clearSelection, load, refreshSpace],
+  )
+
   const actions: EntryActions = {
     select: selectEntry,
     open: (entry) => {
@@ -453,6 +495,11 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     isSelected: (entry) => selection.has(entry.path),
     isShared: (entry) => sharedPaths.has(entry.path),
     canPaste: clipboard !== null,
+    dragPaths: (entry) =>
+      selection.has(entry.path) && selected.length > 0 ? selected.map((e) => e.path) : [entry.path],
+    moveInto,
+    dropTarget,
+    setDropTarget,
   }
 
   // What copy/cut act on: the whole selection when the target is part of it,
@@ -593,11 +640,20 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
       <div
         className="relative flex min-w-0 flex-1 flex-col"
         onDragOver={(e) => {
+          // An in-app move is not an upload: leave it to the folder rows and keep
+          // the "Drop to upload" overlay away.
+          if (e.dataTransfer.types.includes(MOVE_MIME)) return
           e.preventDefault()
           setDragging(true)
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => {
+          // A move dropped on empty space (no folder under it) is simply
+          // cancelled — it is never an upload.
+          if (e.dataTransfer.types.includes(MOVE_MIME)) {
+            setDragging(false)
+            return
+          }
           e.preventDefault()
           setDragging(false)
           // Capture entries synchronously: a DataTransfer is only valid during
@@ -876,6 +932,50 @@ function intentOf(e: MouseEvent): ClickIntent {
   return 'replace'
 }
 
+/**
+ * moveDragProps builds the drag-and-drop handlers a row or tile needs to move
+ * files in-app: any entry can be picked up, and a folder accepts a drop. The
+ * MOVE_MIME payload marks the drag as an internal move so it never triggers the
+ * upload overlay, and `isTarget` says whether this folder is the one hovered.
+ */
+function moveDragProps(entry: Entry, actions: EntryActions) {
+  const isTarget = entry.is_dir && actions.dropTarget === entry.path
+  return {
+    isTarget,
+    draggable: true,
+    onDragStart: (e: DragEvent) => {
+      e.dataTransfer.setData(MOVE_MIME, JSON.stringify(actions.dragPaths(entry)))
+      e.dataTransfer.effectAllowed = 'move'
+    },
+    onDragEnd: () => actions.setDropTarget(null),
+    onDragOver: (e: DragEvent) => {
+      if (!entry.is_dir || !e.dataTransfer.types.includes(MOVE_MIME)) return
+      // Claim the drop here so it does not fall through to the page's upload
+      // handler, and mark this folder as the target for the highlight.
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'move'
+      if (actions.dropTarget !== entry.path) actions.setDropTarget(entry.path)
+    },
+    onDragLeave: () => {
+      if (entry.is_dir && actions.dropTarget === entry.path) actions.setDropTarget(null)
+    },
+    onDrop: (e: DragEvent) => {
+      if (!entry.is_dir) return
+      const raw = e.dataTransfer.getData(MOVE_MIME)
+      if (!raw) return
+      e.preventDefault()
+      e.stopPropagation()
+      actions.setDropTarget(null)
+      try {
+        actions.moveInto(entry.path, entry.name, JSON.parse(raw) as string[])
+      } catch {
+        // A malformed payload is not something to act on.
+      }
+    },
+  }
+}
+
 function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => void }) {
   const options: { value: View; label: string; icon: ReactNode }[] = [
     { value: 'list', label: 'List', icon: <ListIcon /> },
@@ -1149,6 +1249,7 @@ function ListRow({ entry, actions }: { entry: Entry; actions: EntryActions }) {
   const { icon: Icon, color } = entryKind(entry)
   const selected = actions.isSelected(entry)
   const shared = actions.isShared(entry)
+  const { isTarget, ...drag } = moveDragProps(entry, actions)
   return (
     <EntryMenu entry={entry} actions={actions}>
       <div
@@ -1156,8 +1257,13 @@ function ListRow({ entry, actions }: { entry: Entry; actions: EntryActions }) {
         tabIndex={0}
         aria-selected={selected}
         className={`group ${listGrid} h-12 cursor-default border-b border-border/60 px-4 outline-none select-none ${
-          selected ? 'bg-primary/10' : 'hover:bg-accent/60'
+          isTarget
+            ? 'bg-primary/15 ring-2 ring-inset ring-primary'
+            : selected
+              ? 'bg-primary/10'
+              : 'hover:bg-accent/60'
         }`}
+        {...drag}
         onClick={(e) => actions.select(entry, intentOf(e))}
         onDoubleClick={() => actions.open(entry)}
         onKeyDown={(e) => {
@@ -1270,6 +1376,7 @@ function GridTile({ entry, actions, size }: { entry: Entry; actions: EntryAction
   const { icon: Icon, color } = entryKind(entry)
   const selected = actions.isSelected(entry)
   const shared = actions.isShared(entry)
+  const { isTarget, ...drag } = moveDragProps(entry, actions)
   return (
     <EntryMenu entry={entry} actions={actions}>
       <div
@@ -1277,8 +1384,13 @@ function GridTile({ entry, actions, size }: { entry: Entry; actions: EntryAction
         tabIndex={0}
         aria-selected={selected}
         className={`flex cursor-default flex-col gap-2 rounded-lg border p-2 text-center outline-none select-none ${
-          selected ? 'border-primary/40 bg-primary/10' : 'border-transparent hover:border-border hover:bg-accent/60'
+          isTarget
+            ? 'border-primary bg-primary/15 ring-2 ring-primary'
+            : selected
+              ? 'border-primary/40 bg-primary/10'
+              : 'border-transparent hover:border-border hover:bg-accent/60'
         }`}
+        {...drag}
         onClick={(e) => actions.select(entry, intentOf(e))}
         onDoubleClick={() => actions.open(entry)}
         onKeyDown={(e) => {
