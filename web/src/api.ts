@@ -23,7 +23,6 @@ export type Share = {
   url?: string
   path: string
   name: string
-  max_downloads: number
   download_count: number
   created_at: string
   expires_at?: string
@@ -125,7 +124,7 @@ export const api = {
 
   config: () => request<{ inline_preview: boolean }>('/api/v1/config'),
 
-  createShare: (path: string, opts: { expires_in_hours?: number; max_downloads?: number } = {}) =>
+  createShare: (path: string, opts: { expires_in_hours?: number } = {}) =>
     request<Share>('/api/v1/shares', {
       method: 'POST',
       body: JSON.stringify({ path, ...opts }),

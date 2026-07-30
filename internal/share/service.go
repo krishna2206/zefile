@@ -26,11 +26,10 @@ const readPerm = 1
 // Reasons a share cannot be served. They are distinct so the public endpoint
 // can tell a holder why a link they had stopped working.
 var (
-	ErrNotFound  = errors.New("share: no such link")
-	ErrExpired   = errors.New("share: link has expired")
-	ErrRevoked   = errors.New("share: link was revoked")
-	ErrExhausted = errors.New("share: download limit reached")
-	ErrNotFile   = errors.New("share: only files can be shared")
+	ErrNotFound = errors.New("share: no such link")
+	ErrExpired  = errors.New("share: link has expired")
+	ErrRevoked  = errors.New("share: link was revoked")
+	ErrNotFile  = errors.New("share: only files can be shared")
 )
 
 // Share is a link as its owner sees it.
@@ -38,7 +37,6 @@ type Share struct {
 	ID            int64
 	Path          storage.Path
 	OwnerID       int64
-	MaxDownloads  int64 // 0 means unlimited
 	DownloadCount int64
 	CreatedAt     time.Time
 	ExpiresAt     time.Time // zero means never
@@ -47,8 +45,7 @@ type Share struct {
 
 // CreateOptions are the limits set when a link is made.
 type CreateOptions struct {
-	ExpiresAt    time.Time // zero means never
-	MaxDownloads int64     // 0 means unlimited
+	ExpiresAt time.Time // zero means never
 }
 
 // Grant is what the content origin needs to serve a shared file.
@@ -107,10 +104,6 @@ func (s *Service) Create(ctx context.Context, ownerID int64, p storage.Path, opt
 	if !opts.ExpiresAt.IsZero() {
 		expires = sql.NullInt64{Int64: opts.ExpiresAt.Unix(), Valid: true}
 	}
-	var maxDownloads sql.NullInt64
-	if opts.MaxDownloads > 0 {
-		maxDownloads = sql.NullInt64{Int64: opts.MaxDownloads, Valid: true}
-	}
 
 	row, err := s.writes.CreateShare(ctx, sqlcgen.CreateShareParams{
 		TokenHash:    hash,
@@ -118,7 +111,6 @@ func (s *Service) Create(ctx context.Context, ownerID int64, p storage.Path, opt
 		Path:         p.String(),
 		Perms:        readPerm,
 		PasswordHash: sql.NullString{},
-		MaxDownloads: maxDownloads,
 		CreatedAt:    s.now().Unix(),
 		ExpiresAt:    expires,
 	})
@@ -173,9 +165,6 @@ func (s *Service) Resolve(ctx context.Context, token string) (Grant, error) {
 	if row.ExpiresAt.Valid && s.now().Unix() >= row.ExpiresAt.Int64 {
 		return Grant{}, ErrExpired
 	}
-	if row.MaxDownloads.Valid && row.DownloadCount >= row.MaxDownloads.Int64 {
-		return Grant{}, ErrExhausted
-	}
 	p, err := storage.ParsePath(row.Path)
 	if err != nil {
 		return Grant{}, err
@@ -206,9 +195,6 @@ func toShare(r sqlcgen.Share) Share {
 	}
 	if p, err := storage.ParsePath(r.Path); err == nil {
 		sh.Path = p
-	}
-	if r.MaxDownloads.Valid {
-		sh.MaxDownloads = r.MaxDownloads.Int64
 	}
 	if r.ExpiresAt.Valid {
 		sh.ExpiresAt = time.Unix(r.ExpiresAt.Int64, 0)

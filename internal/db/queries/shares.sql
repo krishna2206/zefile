@@ -1,9 +1,11 @@
 -- name: CreateShare :one
+-- max_downloads stays in the table but is left NULL: the download-limit feature
+-- was removed, and the column is kept only to avoid a migration.
 INSERT INTO shares (
     token_hash, owner_id, path, perms, password_hash,
-    max_downloads, download_count, created_at, expires_at, revoked_at
+    download_count, created_at, expires_at, revoked_at
 )
-VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NULL)
+VALUES (?, ?, ?, ?, ?, 0, ?, ?, NULL)
 RETURNING *;
 
 -- name: GetShareByHash :one

@@ -68,10 +68,7 @@ export function SharesScreen() {
 
 function ShareRow({ share, onRevoke }: { share: Share; onRevoke: () => void }) {
   const { icon: Icon, color } = entryKind({ name: share.name, is_dir: false } as Entry)
-  const downloads =
-    share.max_downloads > 0
-      ? `${share.download_count} / ${share.max_downloads} downloads`
-      : `${share.download_count} download${share.download_count === 1 ? '' : 's'}`
+  const downloads = `${share.download_count} download${share.download_count === 1 ? '' : 's'}`
   const expiry = share.expires_at ? `expires ${formatRelativeTime(share.expires_at)}` : 'no expiry'
 
   return (

@@ -146,7 +146,7 @@ func (s *Server) handleShare(w http.ResponseWriter, r *http.Request) {
 // else is a 404, so a guessed token cannot be told apart from one that expired.
 func writeShareError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, share.ErrExpired), errors.Is(err, share.ErrRevoked), errors.Is(err, share.ErrExhausted):
+	case errors.Is(err, share.ErrExpired), errors.Is(err, share.ErrRevoked):
 		http.Error(w, "this link is no longer available", http.StatusGone)
 	default:
 		http.Error(w, "this link is invalid or has expired", http.StatusNotFound)

@@ -13,7 +13,6 @@ import (
 type createShareRequest struct {
 	Path           string `json:"path"`
 	ExpiresInHours int    `json:"expires_in_hours,omitempty"` // 0 means never
-	MaxDownloads   int64  `json:"max_downloads,omitempty"`    // 0 means unlimited
 }
 
 type shareResponse struct {
@@ -21,7 +20,6 @@ type shareResponse struct {
 	URL           string `json:"url,omitempty"` // present only at creation — the token is shown once
 	Path          string `json:"path"`
 	Name          string `json:"name"`
-	MaxDownloads  int64  `json:"max_downloads"`
 	DownloadCount int64  `json:"download_count"`
 	CreatedAt     string `json:"created_at"`
 	ExpiresAt     string `json:"expires_at,omitempty"`
@@ -32,7 +30,6 @@ func (s *Server) toShareResponse(sh share.Share, token string) shareResponse {
 		ID:            sh.ID,
 		Path:          sh.Path.String(),
 		Name:          sh.Path.Name(),
-		MaxDownloads:  sh.MaxDownloads,
 		DownloadCount: sh.DownloadCount,
 		CreatedAt:     sh.CreatedAt.UTC().Format(time.RFC3339),
 	}
@@ -61,7 +58,7 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	opts := share.CreateOptions{MaxDownloads: body.MaxDownloads}
+	var opts share.CreateOptions
 	if body.ExpiresInHours > 0 {
 		opts.ExpiresAt = time.Now().Add(time.Duration(body.ExpiresInHours) * time.Hour)
 	}

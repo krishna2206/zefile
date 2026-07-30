@@ -13,9 +13,9 @@ import (
 const createShare = `-- name: CreateShare :one
 INSERT INTO shares (
     token_hash, owner_id, path, perms, password_hash,
-    max_downloads, download_count, created_at, expires_at, revoked_at
+    download_count, created_at, expires_at, revoked_at
 )
-VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NULL)
+VALUES (?, ?, ?, ?, ?, 0, ?, ?, NULL)
 RETURNING id, token_hash, owner_id, path, perms, password_hash, max_downloads, download_count, created_at, expires_at, revoked_at
 `
 
@@ -25,11 +25,12 @@ type CreateShareParams struct {
 	Path         string
 	Perms        int64
 	PasswordHash sql.NullString
-	MaxDownloads sql.NullInt64
 	CreatedAt    int64
 	ExpiresAt    sql.NullInt64
 }
 
+// max_downloads stays in the table but is left NULL: the download-limit feature
+// was removed, and the column is kept only to avoid a migration.
 func (q *Queries) CreateShare(ctx context.Context, arg CreateShareParams) (Share, error) {
 	row := q.db.QueryRowContext(ctx, createShare,
 		arg.TokenHash,
@@ -37,7 +38,6 @@ func (q *Queries) CreateShare(ctx context.Context, arg CreateShareParams) (Share
 		arg.Path,
 		arg.Perms,
 		arg.PasswordHash,
-		arg.MaxDownloads,
 		arg.CreatedAt,
 		arg.ExpiresAt,
 	)

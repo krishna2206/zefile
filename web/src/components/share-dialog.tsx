@@ -29,7 +29,6 @@ const selectClass =
  */
 export function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => void }) {
   const [expiryHours, setExpiryHours] = useState(DEFAULT_EXPIRY_HOURS)
-  const [maxDownloads, setMaxDownloads] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [created, setCreated] = useState<Share | null>(null)
@@ -40,10 +39,8 @@ export function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => v
     setBusy(true)
     setErr('')
     try {
-      const max = Number(maxDownloads)
       const share = await api.createShare(entry.path, {
         expires_in_hours: expiryHours || undefined,
-        max_downloads: Number.isInteger(max) && max > 0 ? max : undefined,
       })
       setCreated(share)
     } catch (e) {
@@ -109,18 +106,6 @@ export function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => v
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="share-max">Download limit</Label>
-              <Input
-                id="share-max"
-                type="number"
-                min={1}
-                placeholder="Unlimited"
-                value={maxDownloads}
-                onChange={(e) => setMaxDownloads(e.currentTarget.value)}
-              />
             </div>
 
             {err && <p className="text-sm text-destructive">{err}</p>}
