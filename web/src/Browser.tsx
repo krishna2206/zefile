@@ -44,6 +44,7 @@ import {
 } from './api'
 import { uploadFile, type UploadProgress } from './upload'
 import { categoryLabel, entryKind, formatRelativeTime, isImage, isPreviewable } from '@/lib/files'
+import { dropEntries, readEntries } from '@/lib/dnd'
 import { Thumbnail } from '@/components/thumbnail'
 import { PreviewOverlay } from '@/components/preview-overlay'
 import { Button } from '@/components/ui/button'
@@ -218,17 +219,23 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     setAnchor(null)
   }, [])
 
-  const load = useCallback(async (target: string) => {
-    setLoading(true)
+  // load fetches a folder's listing. A silent load refreshes the entries in
+  // place without the loading spinner — used while uploading, where flashing the
+  // whole list to a spinner after every file reads as flicker. React reconciles
+  // the rows by path, so a silent refresh updates only what changed.
+  const load = useCallback(async (target: string, opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false
+    if (!silent) setLoading(true)
     setError('')
     try {
       const listing = await api.list(target)
       setEntries(listing.entries)
     } catch (err) {
+      if (silent) return // a transient refresh failure must not blank the view
       setEntries([])
       setError(err instanceof ApiError ? err.message : 'Could not read this folder.')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [])
 
@@ -271,19 +278,19 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     if (screen === 'files') void refreshShares()
   }, [screen, refreshShares])
 
-  // runUpload sends a batch of files, each to target/<nameOf(file)>. The name
-  // resolver is what lets a plain file import land at its own name while a folder
-  // import keeps its relative path, reusing one queue and one progress path.
+  // runUpload sends a batch to target/<name>, where a name may be a bare file
+  // name or a nested path. One queue and one progress path serve a plain import,
+  // a picked folder, and a dropped folder alike.
   const runUpload = useCallback(
-    async (files: File[], target: string, nameOf: (file: File) => string) => {
-      if (files.length === 0) return
-      const items = files.map((file) => ({ id: crypto.randomUUID(), file, name: nameOf(file) }))
+    async (items: { file: File; name: string }[], target: string) => {
+      if (items.length === 0) return
+      const queued = items.map(({ file, name }) => ({ id: crypto.randomUUID(), file, name }))
 
       // Show the whole batch at once, as a queue, so someone sees every file
       // they meant to send rather than only the one in flight.
       setTransfers((current) => [
         ...current,
-        ...items.map(({ id, name, file }) => ({
+        ...queued.map(({ id, name, file }) => ({
           id,
           name,
           sent: 0,
@@ -292,7 +299,19 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         })),
       ])
 
-      for (const { id, file, name } of items) {
+      // Reflecting each finished file with its own reload flickers on a big
+      // batch, so refreshes are coalesced: at most one every so often during the
+      // run, plus a guaranteed one at the end. Both are silent — no spinner.
+      let lastRefresh = 0
+      const refresh = (force: boolean) => {
+        const now = performance.now()
+        if (!force && now - lastRefresh < 800) return
+        lastRefresh = now
+        void refreshSpace()
+        if (pathRef.current === target) void load(target, { silent: true })
+      }
+
+      for (const { id, file, name } of queued) {
         const update = (patch: Partial<UploadProgress>) =>
           setTransfers((current) => current.map((t) => (t.id === id ? { ...t, ...patch } : t)))
 
@@ -304,46 +323,64 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
           update({ status: 'error', error: err instanceof Error ? err.message : 'failed' })
         }
 
-        // Reflect each finished file in the listing straight away, but only if
-        // the user is still looking at the folder it landed in.
-        void refreshSpace()
-        if (pathRef.current === target) void load(target)
+        refresh(false)
       }
+      refresh(true)
     },
     [load, refreshSpace],
   )
 
-  const upload = useCallback(
-    (files: FileList) => runUpload(Array.from(files), path, (f) => f.name),
-    [path, runUpload],
-  )
-
-  // importFolder recreates a picked directory tree under the current folder. The
-  // browser hands us a flat list where each file carries its relative path, so
-  // the directories are created first (MkdirAll makes parents; an existing one
-  // is fine) and then each file is uploaded to its place in the tree.
-  const importFolder = useCallback(
-    async (files: FileList) => {
-      const list = Array.from(files)
-      if (list.length === 0) return
-      const relOf = (f: File) => (f as unknown as { webkitRelativePath?: string }).webkitRelativePath || f.name
-
+  // uploadTree uploads files whose names carry a relative path, creating the
+  // directories they need first — MkdirAll makes parents, and an existing one is
+  // simply merged into. Backs both the folder picker and a dropped folder.
+  const uploadTree = useCallback(
+    async (items: { file: File; name: string }[]) => {
+      if (items.length === 0) return
+      const target = path
       const dirs = new Set<string>()
-      for (const f of list) {
-        const rel = relOf(f)
-        const cut = rel.lastIndexOf('/')
-        if (cut > 0) dirs.add(rel.slice(0, cut))
+      for (const { name } of items) {
+        const cut = name.lastIndexOf('/')
+        if (cut > 0) dirs.add(name.slice(0, cut))
       }
       for (const dir of dirs) {
         try {
-          await api.mkdir(joinPath(path, dir))
+          await api.mkdir(joinPath(target, dir))
         } catch {
           // An existing directory is fine — the tree is being merged into it.
         }
       }
-      await runUpload(list, path, relOf)
+      await runUpload(items, target)
     },
     [path, runUpload],
+  )
+
+  const upload = useCallback(
+    (files: FileList) => runUpload(Array.from(files).map((file) => ({ file, name: file.name })), path),
+    [path, runUpload],
+  )
+
+  // importFolder recreates a picked directory tree: the browser hands us a flat
+  // list where each file carries its path relative to the chosen folder.
+  const importFolder = useCallback(
+    (files: FileList) =>
+      uploadTree(
+        Array.from(files).map((file) => ({
+          file,
+          name: (file as unknown as { webkitRelativePath?: string }).webkitRelativePath || file.name,
+        })),
+      ),
+    [uploadTree],
+  )
+
+  // dropUpload handles a drag-and-drop, descending into any dropped folders via
+  // the entries captured in the drop handler. Unlike the folder picker, this
+  // needs no native "upload everything from this folder?" confirmation.
+  const dropUpload = useCallback(
+    async (entries: FileSystemEntry[]) => {
+      const dropped = await readEntries(entries)
+      await uploadTree(dropped.map(({ file, path: name }) => ({ file, name })))
+    },
+    [uploadTree],
   )
 
   const createActions: CreateActions = {
@@ -563,7 +600,12 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         onDrop={(e) => {
           e.preventDefault()
           setDragging(false)
-          if (e.dataTransfer.files.length) void upload(e.dataTransfer.files)
+          // Capture entries synchronously: a DataTransfer is only valid during
+          // the drop. Folders come through the entries API (no native prompt);
+          // a browser that exposes none falls back to the flat file list.
+          const entries = dropEntries(e.dataTransfer)
+          if (entries.length) void dropUpload(entries)
+          else if (e.dataTransfer.files.length) void upload(e.dataTransfer.files)
         }}
       >
         {selected.length > 0 ? (
@@ -653,7 +695,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
               ) : ordered.length === 0 ? (
                 <Empty
                   title={query ? 'No matches' : 'Nothing here'}
-                  detail={query ? 'No file in this folder matches your search.' : 'Drop files anywhere on this page to upload them.'}
+                  detail={query ? 'No file in this folder matches your search.' : 'Drop files or folders anywhere on this page to upload them.'}
                 />
               ) : view === 'grid' ? (
                 <GridView groups={groups} actions={actions} onClearSelection={clearSelection} size={GRID_SIZES[gridSize]!} />
