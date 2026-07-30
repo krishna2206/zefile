@@ -114,6 +114,9 @@ export const api = {
   move: (from: string, to: string) =>
     request<Entry>('/api/v1/fs/move', { method: 'POST', body: JSON.stringify({ from, to }) }),
 
+  copy: (from: string, to: string) =>
+    request<Entry>('/api/v1/fs/copy', { method: 'POST', body: JSON.stringify({ from, to }) }),
+
   remove: (path: string, recursive = false) =>
     request<void>(
       `/api/v1/fs?path=${encodeURIComponent(path)}${recursive ? '&recursive=true' : ''}`,

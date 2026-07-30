@@ -14,8 +14,11 @@ import {
   ArrowUp,
   CaretRight as ChevronRight,
   CaretUp as ChevronUp,
+  ClipboardText,
+  Copy as CopyIcon,
   DownloadSimple as Download,
   FolderOpen,
+  Scissors,
   SquaresFour as LayoutGrid,
   List as ListIcon,
   CircleNotch as Loader2,
@@ -73,6 +76,7 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuShortcut,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import {
@@ -148,12 +152,19 @@ type EntryActions = {
   open: (entry: Entry) => void
   download: (entry: Entry) => void
   share: (entry: Entry) => void
+  copy: (entry: Entry) => void
+  cut: (entry: Entry) => void
+  paste: () => void
   rename: (entry: Entry) => void
   remove: (entry: Entry) => void
   contextTarget: (entry: Entry) => void
   isSelected: (entry: Entry) => boolean
   isShared: (entry: Entry) => boolean
+  canPaste: boolean
 }
+
+/** Clipboard holds entries cut or copied, waiting to be pasted into a folder. */
+type Clipboard = { mode: 'copy' | 'cut'; entries: Entry[] }
 
 type Group = { key: string; label: string; entries: Entry[] }
 type ListItem = { type: 'header'; id: string; label: string; count: number } | { type: 'entry'; entry: Entry }
@@ -187,6 +198,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const [preview, setPreview] = useState<Entry | null>(null)
   const [inlinePreview, setInlinePreview] = useState(false)
   const [sharedPaths, setSharedPaths] = useState<Set<string>>(() => new Set())
+  const [clipboard, setClipboard] = useState<Clipboard | null>(null)
 
   const fileInput = useRef<HTMLInputElement>(null)
   const pathRef = useRef(path)
@@ -349,6 +361,9 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     },
     download,
     share: (entry) => setDialog({ kind: 'share', entry }),
+    copy: (entry) => setClipboard({ mode: 'copy', entries: clipboardTargets(entry) }),
+    cut: (entry) => setClipboard({ mode: 'cut', entries: clipboardTargets(entry) }),
+    paste: () => void doPaste(),
     rename: (entry) => setDialog({ kind: 'rename', entry }),
     remove: (entry) => setDialog({ kind: 'delete', entries: [entry] }),
     contextTarget: (entry) => {
@@ -356,7 +371,76 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     },
     isSelected: (entry) => selection.has(entry.path),
     isShared: (entry) => sharedPaths.has(entry.path),
+    canPaste: clipboard !== null,
   }
+
+  // What copy/cut act on: the whole selection when the target is part of it,
+  // otherwise just the one entry the menu was opened on.
+  function clipboardTargets(entry: Entry): Entry[] {
+    return selection.has(entry.path) && selected.length > 0 ? selected : [entry]
+  }
+
+  // Paste the clipboard into the current folder. Copy leaves the clipboard so it
+  // can be pasted again; cut clears it. Names that would collide gain a "(copy)"
+  // suffix rather than overwriting.
+  const doPaste = useCallback(async () => {
+    if (!clipboard) return
+    const taken = new Set(entries.map((e) => e.name))
+    let done = 0
+    for (const entry of clipboard.entries) {
+      // Moving an entry into the folder it already sits in is a no-op.
+      if (clipboard.mode === 'cut' && parentOf(entry.path) === path) continue
+      // Copying a folder needs a background job queue that does not exist yet;
+      // say so clearly instead of letting the server answer "needs a file".
+      if (clipboard.mode === 'copy' && entry.is_dir) {
+        toast.error(`“${entry.name}” is a folder — folders can't be copied yet (use Cut to move).`)
+        continue
+      }
+      const name = freeName(entry.name, taken)
+      try {
+        if (clipboard.mode === 'copy') await api.copy(entry.path, joinPath(path, name))
+        else await api.move(entry.path, joinPath(path, name))
+        taken.add(name)
+        done++
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : `Could not paste “${entry.name}”`)
+      }
+    }
+    if (clipboard.mode === 'cut') setClipboard(null)
+    clearSelection()
+    void load(path)
+    void refreshSpace()
+    if (done > 0) {
+      const verb = clipboard.mode === 'copy' ? 'Copied' : 'Moved'
+      toast.success(done > 1 ? `${verb} ${done} items` : `${verb} “${clipboard.entries[0]!.name}”`)
+    }
+  }, [clipboard, entries, path, clearSelection, load, refreshSpace])
+
+  useEffect(() => {
+    if (screen !== 'files') return
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (e.key === 'Escape' && clipboard) {
+        setClipboard(null)
+        return
+      }
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
+      const key = e.key.toLowerCase()
+      if (key === 'c' && selected.length > 0) {
+        e.preventDefault()
+        setClipboard({ mode: 'copy', entries: selected })
+      } else if (key === 'x' && selected.length > 0) {
+        e.preventDefault()
+        setClipboard({ mode: 'cut', entries: selected })
+      } else if (key === 'v' && clipboard) {
+        e.preventDefault()
+        void doPaste()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [screen, selected, clipboard, doPaste])
 
   async function createFolder(name: string) {
     await api.mkdir(joinPath(path, name))
@@ -482,6 +566,17 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
             </div>
 
             <div className="ml-auto flex items-center gap-2">
+              {clipboard && (
+                <button
+                  type="button"
+                  onClick={() => void doPaste()}
+                  title={`Paste ${clipboard.entries.length} item${clipboard.entries.length > 1 ? 's' : ''} here`}
+                  className="flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-sm text-primary hover:bg-primary/15"
+                >
+                  <ClipboardText className="size-4" />
+                  Paste ({clipboard.entries.length})
+                </button>
+              )}
               <ViewToggle view={view} onChange={setView} />
               <DisplayOptions
                 sort={sort}
@@ -646,6 +741,19 @@ function flattenGroups(groups: Group[]): ListItem[] {
   return rows
 }
 
+/** freeName returns name, or name with a "(copy)" suffix, whichever the folder
+ *  does not already hold — so a paste never silently overwrites. */
+function freeName(name: string, taken: Set<string>): string {
+  if (!taken.has(name)) return name
+  const dot = name.lastIndexOf('.')
+  const base = dot > 0 ? name.slice(0, dot) : name
+  const ext = dot > 0 ? name.slice(dot) : ''
+  for (let i = 1; ; i++) {
+    const candidate = i === 1 ? `${base} (copy)${ext}` : `${base} (copy ${i})${ext}`
+    if (!taken.has(candidate)) return candidate
+  }
+}
+
 /** intentOf reads the modifier keys the same way everywhere. */
 function intentOf(e: MouseEvent): ClickIntent {
   if (e.metaKey || e.ctrlKey) return 'toggle'
@@ -790,11 +898,29 @@ function EntryMenu({ entry, actions, children }: { entry: Entry; actions: EntryA
           <ShareNetwork />
           Share…
         </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => actions.copy(entry)}>
+          <CopyIcon />
+          Copy
+          <ContextMenuShortcut>⌘C</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => actions.cut(entry)}>
+          <Scissors />
+          Cut
+          <ContextMenuShortcut>⌘X</ContextMenuShortcut>
+        </ContextMenuItem>
+        {actions.canPaste && (
+          <ContextMenuItem onSelect={() => actions.paste()}>
+            <ClipboardText />
+            Paste
+            <ContextMenuShortcut>⌘V</ContextMenuShortcut>
+          </ContextMenuItem>
+        )}
+        <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => actions.rename(entry)}>
           <Pencil />
           Rename
         </ContextMenuItem>
-        <ContextMenuSeparator />
         <ContextMenuItem variant="destructive" onSelect={() => actions.remove(entry)}>
           <Trash2 />
           Delete
