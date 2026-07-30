@@ -249,8 +249,8 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
           )
 
         try {
-          await uploadFile(file, joinPath(path, file.name), (sent) => update({ sent }))
-          update({ status: 'done', sent: file.size })
+          await uploadFile(file, joinPath(path, file.name), (sent, speed) => update({ sent, speed }))
+          update({ status: 'done', sent: file.size, speed: 0 })
         } catch (err) {
           update({ status: 'error', error: err instanceof Error ? err.message : 'failed' })
         }
@@ -1242,7 +1242,12 @@ function Transfers({ transfers, onClear }: { transfers: UploadProgress[]; onClea
               </span>
             </div>
             {transfer.status === 'uploading' && (
-              <Progress value={transfer.total ? (transfer.sent / transfer.total) * 100 : 0} />
+              <div className="flex items-center gap-2">
+                <Progress value={transfer.total ? (transfer.sent / transfer.total) * 100 : 0} className="flex-1" />
+                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                  {transfer.speed ? `${formatSize(transfer.speed)}/s` : '…'}
+                </span>
+              </div>
             )}
           </div>
         ))}
