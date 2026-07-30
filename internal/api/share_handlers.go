@@ -69,9 +69,9 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) {
 
 	token, sh, err := s.shares.Create(r.Context(), c.user.ID, p, opts)
 	if err != nil {
-		if errors.Is(err, share.ErrNotFile) {
+		if errors.Is(err, share.ErrPasswordOnFolder) {
 			writeProblem(w, r, http.StatusBadRequest, CodeBadRequest,
-				"Cannot share this", "Only files can be shared, not folders.")
+				"Cannot protect a folder", "Folder shares cannot have a password yet.")
 			return
 		}
 		writeError(w, r, err)

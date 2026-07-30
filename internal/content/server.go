@@ -3,12 +3,14 @@ package content
 import (
 	"context"
 	"errors"
+	"fmt"
 	"html/template"
 	"log/slog"
 	"mime"
 	"net"
 	"net/http"
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/krishna2206/zefile/internal/share"
@@ -155,7 +157,35 @@ func (s *Server) handleShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, info, err := s.open(ctx, grant.Path)
+	// A folder share can browse into its subtree: the `p` parameter names the
+	// path within it. It is confined to the share's root, so no `p` can reach a
+	// file the owner has that the share was not meant to expose.
+	target := grant.Path
+	if raw := r.URL.Query().Get("p"); raw != "" {
+		tp, err := storage.ParsePath(raw)
+		if err != nil || !withinShare(grant.Path, tp) {
+			http.Error(w, "this link is invalid or has expired", http.StatusNotFound)
+			return
+		}
+		target = tp
+	}
+
+	info, err := s.fs.Stat(ctx, target)
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+
+	if info.IsDir {
+		s.serveShareBrowse(w, r, ctx, grant.Path, target)
+		return
+	}
+	s.serveShareFile(w, r, ctx, grant.ID, target)
+}
+
+// serveShareFile streams one file of a share, counting the download.
+func (s *Server) serveShareFile(w http.ResponseWriter, r *http.Request, ctx context.Context, shareID int64, p storage.Path) {
+	file, info, err := s.open(ctx, p)
 	if err != nil {
 		s.writeError(w, r, err)
 		return
@@ -165,11 +195,29 @@ func (s *Server) handleShare(w http.ResponseWriter, r *http.Request) {
 	// Count and log the download, but never let a bookkeeping failure deny a
 	// legitimate one. A HEAD is a client checking, not a download.
 	if r.Method != http.MethodHead {
-		_ = s.shares.RecordDownload(ctx, grant.ID, clientIP(r), r.UserAgent())
+		_ = s.shares.RecordDownload(ctx, shareID, clientIP(r), r.UserAgent())
 	}
 
-	s.setHeaders(w, grant.Path, info.Size)
-	http.ServeContent(w, r.WithContext(ctx), grant.Path.Name(), info.ModTime, file)
+	s.setHeaders(w, p, info.Size)
+	http.ServeContent(w, r.WithContext(ctx), p.Name(), info.ModTime, file)
+}
+
+// serveShareBrowse renders the public listing of a shared folder.
+func (s *Server) serveShareBrowse(w http.ResponseWriter, r *http.Request, ctx context.Context, root, dir storage.Path) {
+	entries, err := s.fs.List(ctx, dir)
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	renderBrowse(w, root, dir, entries)
+}
+
+// withinShare reports whether target is the shared root or somewhere beneath it.
+func withinShare(root, target storage.Path) bool {
+	if root.IsRoot() || target.String() == root.String() {
+		return true
+	}
+	return strings.HasPrefix(target.String(), root.String()+"/")
 }
 
 // passwordFormHTML is the whole page shown for a protected link: a single form,
@@ -223,6 +271,106 @@ func renderPasswordForm(w http.ResponseWriter, message string, status int) {
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(strings.Replace(passwordFormHTML, "{{ERR}}", errLine, 1)))
+}
+
+// browseTmpl renders a shared folder's listing. html/template escapes the names
+// (which are user-controlled) and the ?p link values in their contexts, so a
+// filename cannot break out of the page.
+var browseTmpl = template.Must(template.New("browse").Parse(browseHTML))
+
+const browseHTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Title}} · Zefile</title>
+<style>
+:root{color-scheme:light dark}
+body{margin:0;background:#f4f5f2;color:#1a1c1b;
+font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:24px 16px 64px}
+header{display:flex;align-items:baseline;gap:12px;margin-bottom:16px;
+padding-bottom:12px;border-bottom:1px solid #dde1de}
+h1{font-size:1.2rem;margin:0;overflow-wrap:anywhere}
+.up{margin-left:auto;font-size:.85rem;color:#2f5d50;text-decoration:none;white-space:nowrap}
+.up:hover{text-decoration:underline}
+.list{list-style:none;margin:0;padding:0}
+.list li{display:flex;align-items:center;gap:12px;padding:10px 8px;
+border-bottom:1px solid #eceee9}
+.list a{color:inherit;text-decoration:none;overflow-wrap:anywhere;flex:1}
+.list a:hover{text-decoration:underline}
+.list .dir a{color:#2f5d50;font-weight:600}
+.size{font-size:.8rem;color:#79837e;white-space:nowrap}
+.empty{color:#79837e;font-size:.9rem}
+@media(prefers-color-scheme:dark){
+body{background:#0f1412;color:#e6e9e6}
+header{border-color:#2a322d}.list li{border-color:#1f2723}
+.up,.list .dir a{color:#7fd0bb}.size,.empty{color:#9aa39d}}
+</style></head>
+<body><main class="wrap">
+<header><h1>{{.Title}}</h1>{{if .Up}}<a class="up" href="?p={{.Up}}">&uarr; Up</a>{{end}}</header>
+<ul class="list">
+{{range .Entries}}<li class="{{if .IsDir}}dir{{else}}file{{end}}"><a href="?p={{.P}}">{{.Name}}{{if .IsDir}}/{{end}}</a>{{if .Size}}<span class="size">{{.Size}}</span>{{end}}</li>
+{{else}}<li class="empty">This folder is empty.</li>
+{{end}}</ul>
+</main></body></html>`
+
+type browseView struct {
+	Title   string
+	Up      string
+	Entries []browseRow
+}
+
+type browseRow struct {
+	Name  string
+	P     string
+	Size  string
+	IsDir bool
+}
+
+func renderBrowse(w http.ResponseWriter, root, dir storage.Path, entries []storage.FileInfo) {
+	view := browseView{Title: dir.Name()}
+	if view.Title == "" {
+		view.Title = "Shared folder"
+	}
+	if !dir.IsRoot() && dir.String() != root.String() {
+		view.Up = dir.Parent().String()
+	}
+
+	sorted := make([]storage.FileInfo, len(entries))
+	copy(sorted, entries)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].IsDir != sorted[j].IsDir {
+			return sorted[i].IsDir // folders first
+		}
+		return strings.ToLower(sorted[i].Name) < strings.ToLower(sorted[j].Name)
+	})
+	for _, e := range sorted {
+		row := browseRow{Name: e.Name, P: e.Path.String(), IsDir: e.IsDir}
+		if !e.IsDir {
+			row.Size = humanSize(e.Size)
+		}
+		view.Entries = append(view.Entries, row)
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+	_ = browseTmpl.Execute(w, view)
+}
+
+// humanSize renders a byte count the way a file manager does.
+func humanSize(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for m := n / unit; m >= unit; m /= unit {
+		div *= unit
+		exp++
+	}
+	units := []string{"KB", "MB", "GB", "TB", "PB"}
+	return fmt.Sprintf("%.1f %s", float64(n)/float64(div), units[exp])
 }
 
 // writeShareError answers a token that will not serve. Expired, revoked and

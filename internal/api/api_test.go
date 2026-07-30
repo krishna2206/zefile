@@ -341,10 +341,11 @@ func TestShareLifecycle(t *testing.T) {
 		t.Fatalf("name = %q", sh.Name)
 	}
 
-	// A folder cannot be shared in this version.
+	// A folder can be shared, but not with a password yet (that would store a
+	// password the browse flow never checks).
 	c.do(http.MethodPost, "/api/v1/fs/dirs", map[string]string{"path": "/folder"})
-	if resp2, _ := c.do(http.MethodPost, "/api/v1/shares", map[string]any{"path": "/folder"}); resp2.StatusCode != http.StatusBadRequest {
-		t.Fatalf("share folder = %d, want 400", resp2.StatusCode)
+	if resp2, _ := c.do(http.MethodPost, "/api/v1/shares", map[string]any{"path": "/folder", "password": "x"}); resp2.StatusCode != http.StatusBadRequest {
+		t.Fatalf("password folder share = %d, want 400", resp2.StatusCode)
 	}
 
 	// It shows up in the owner's list, without the token.
@@ -366,6 +367,22 @@ func TestShareLifecycle(t *testing.T) {
 	}
 	if resp4, _ := c.do(http.MethodDelete, fmt.Sprintf("/api/v1/shares/%d", sh.ID), nil); resp4.StatusCode != http.StatusNotFound {
 		t.Fatalf("re-revoke = %d, want 404", resp4.StatusCode)
+	}
+}
+
+func TestFolderShareCreate(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+
+	c.do(http.MethodPost, "/api/v1/fs/dirs", map[string]string{"path": "/album"})
+	resp, raw := c.do(http.MethodPost, "/api/v1/shares", map[string]any{"path": "/album"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("folder share = %d: %s", resp.StatusCode, raw)
+	}
+	if sh := decode[shareItem](t, raw); !strings.HasPrefix(sh.URL, "https://content.example/s/") {
+		t.Fatalf("folder share url = %q", sh.URL)
 	}
 }
 

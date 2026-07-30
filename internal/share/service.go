@@ -29,8 +29,8 @@ var (
 	ErrNotFound         = errors.New("share: no such link")
 	ErrExpired          = errors.New("share: link has expired")
 	ErrRevoked          = errors.New("share: link was revoked")
-	ErrNotFile          = errors.New("share: only files can be shared")
 	ErrPasswordRequired = errors.New("share: a password is required")
+	ErrPasswordOnFolder = errors.New("share: folders cannot be password-protected yet")
 )
 
 // Share is a link as its owner sees it.
@@ -96,8 +96,12 @@ func (s *Service) Create(ctx context.Context, ownerID int64, p storage.Path, opt
 	if err != nil {
 		return "", Share{}, err
 	}
-	if info.IsDir {
-		return "", Share{}, ErrNotFile
+	// A password on a folder share is refused for now: unlocking one page does
+	// not carry to the next without a cookie or a signed unlock token, and a
+	// password that is stored but never checked while browsing is worse than
+	// none. Password folder shares wait for that mechanism.
+	if info.IsDir && opts.Password != "" {
+		return "", Share{}, ErrPasswordOnFolder
 	}
 
 	// No prefix: a share token lives in a URL people paste and read, not in a

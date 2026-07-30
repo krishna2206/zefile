@@ -79,6 +79,50 @@ func TestUnknownShareIsNotFound(t *testing.T) {
 	}
 }
 
+func TestFolderShareBrowseAndConfine(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t, func(o *content.Options) {
+		o.Shares = fakeShares{grant: share.Grant{ID: 1, Path: storage.MustParsePath("/album"), OwnerID: 1}}
+	})
+	if err := os.MkdirAll(filepath.Join(f.root, "album", "sub"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(f.root, "album", "photo.txt"), []byte("pixels"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	// A file outside the shared folder, which no p must reach.
+	if err := os.WriteFile(filepath.Join(f.root, "secret.txt"), []byte("classified"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// The root browse page lists the folder's entries.
+	resp := f.get(t, f.server.URL+"/s/tok", nil)
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("browse = %d", resp.StatusCode)
+	}
+	if !strings.Contains(string(body), "photo.txt") || !strings.Contains(string(body), "sub") {
+		t.Fatalf("browse page missing entries:\n%s", body)
+	}
+
+	// A file within the share downloads.
+	resp2 := f.get(t, f.server.URL+"/s/tok?p="+url.QueryEscape("/album/photo.txt"), nil)
+	body2, _ := io.ReadAll(resp2.Body)
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK || string(body2) != "pixels" {
+		t.Fatalf("file in folder = %d %q", resp2.StatusCode, body2)
+	}
+
+	// A path outside the shared folder is refused — confinement holds.
+	resp3 := f.get(t, f.server.URL+"/s/tok?p="+url.QueryEscape("/secret.txt"), nil)
+	resp3.Body.Close()
+	if resp3.StatusCode != http.StatusNotFound {
+		t.Fatalf("escape attempt = %d, want 404", resp3.StatusCode)
+	}
+}
+
 func TestPasswordProtectedShare(t *testing.T) {
 	t.Parallel()
 
