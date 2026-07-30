@@ -51,6 +51,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Sidebar } from '@/components/app-sidebar'
+import { CreateContextItems, type CreateActions } from '@/components/create-menu'
 import { TrashScreen } from '@/components/trash-screen'
 import { SharesScreen } from '@/components/shares-screen'
 import { ShareDialog } from '@/components/share-dialog'
@@ -201,6 +202,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const [clipboard, setClipboard] = useState<Clipboard | null>(null)
 
   const fileInput = useRef<HTMLInputElement>(null)
+  const dirInput = useRef<HTMLInputElement>(null)
   const pathRef = useRef(path)
   pathRef.current = path
 
@@ -269,31 +271,34 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     if (screen === 'files') void refreshShares()
   }, [screen, refreshShares])
 
-  const upload = useCallback(
-    async (files: FileList) => {
-      const target = path
-      const items = Array.from(files).map((file) => ({ id: crypto.randomUUID(), file }))
+  // runUpload sends a batch of files, each to target/<nameOf(file)>. The name
+  // resolver is what lets a plain file import land at its own name while a folder
+  // import keeps its relative path, reusing one queue and one progress path.
+  const runUpload = useCallback(
+    async (files: File[], target: string, nameOf: (file: File) => string) => {
+      if (files.length === 0) return
+      const items = files.map((file) => ({ id: crypto.randomUUID(), file, name: nameOf(file) }))
 
       // Show the whole batch at once, as a queue, so someone sees every file
       // they meant to send rather than only the one in flight.
       setTransfers((current) => [
         ...current,
-        ...items.map(({ id, file }) => ({
+        ...items.map(({ id, name, file }) => ({
           id,
-          name: file.name,
+          name,
           sent: 0,
           total: file.size,
           status: 'queued' as const,
         })),
       ])
 
-      for (const { id, file } of items) {
+      for (const { id, file, name } of items) {
         const update = (patch: Partial<UploadProgress>) =>
           setTransfers((current) => current.map((t) => (t.id === id ? { ...t, ...patch } : t)))
 
         update({ status: 'uploading' })
         try {
-          await uploadFile(file, joinPath(target, file.name), (sent, speed) => update({ sent, speed }))
+          await uploadFile(file, joinPath(target, name), (sent, speed) => update({ sent, speed }))
           update({ status: 'done', sent: file.size, speed: 0 })
         } catch (err) {
           update({ status: 'error', error: err instanceof Error ? err.message : 'failed' })
@@ -305,8 +310,47 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         if (pathRef.current === target) void load(target)
       }
     },
-    [path, load, refreshSpace],
+    [load, refreshSpace],
   )
+
+  const upload = useCallback(
+    (files: FileList) => runUpload(Array.from(files), path, (f) => f.name),
+    [path, runUpload],
+  )
+
+  // importFolder recreates a picked directory tree under the current folder. The
+  // browser hands us a flat list where each file carries its relative path, so
+  // the directories are created first (MkdirAll makes parents; an existing one
+  // is fine) and then each file is uploaded to its place in the tree.
+  const importFolder = useCallback(
+    async (files: FileList) => {
+      const list = Array.from(files)
+      if (list.length === 0) return
+      const relOf = (f: File) => (f as unknown as { webkitRelativePath?: string }).webkitRelativePath || f.name
+
+      const dirs = new Set<string>()
+      for (const f of list) {
+        const rel = relOf(f)
+        const cut = rel.lastIndexOf('/')
+        if (cut > 0) dirs.add(rel.slice(0, cut))
+      }
+      for (const dir of dirs) {
+        try {
+          await api.mkdir(joinPath(path, dir))
+        } catch {
+          // An existing directory is fine — the tree is being merged into it.
+        }
+      }
+      await runUpload(list, path, relOf)
+    },
+    [path, runUpload],
+  )
+
+  const createActions: CreateActions = {
+    newFolder: () => setDialog({ kind: 'new-folder' }),
+    importFiles: () => fileInput.current?.click(),
+    importFolder: () => dirInput.current?.click(),
+  }
 
   const matched = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -494,14 +538,13 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         user={user}
         space={space}
         section={screen}
+        create={createActions}
         onHome={() => {
           setScreen('files')
           setPath('/')
         }}
         onTrash={() => setScreen('trash')}
         onShared={() => setScreen('shared')}
-        onNewFolder={() => setDialog({ kind: 'new-folder' })}
-        onUpload={() => fileInput.current?.click()}
         onSignOut={signOut}
       />
 
@@ -600,22 +643,39 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
           </p>
         )}
 
-        <div className="min-h-0 flex-1">
-          {loading ? (
-            <div className="grid h-full place-items-center">
-              <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div className="min-h-0 flex-1">
+              {loading ? (
+                <div className="grid h-full place-items-center">
+                  <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
+                </div>
+              ) : ordered.length === 0 ? (
+                <Empty
+                  title={query ? 'No matches' : 'Nothing here'}
+                  detail={query ? 'No file in this folder matches your search.' : 'Drop files anywhere on this page to upload them.'}
+                />
+              ) : view === 'grid' ? (
+                <GridView groups={groups} actions={actions} onClearSelection={clearSelection} size={GRID_SIZES[gridSize]!} />
+              ) : (
+                <ListView rows={listRows} sort={sort} onSort={toggleSort} actions={actions} onClearSelection={clearSelection} />
+              )}
             </div>
-          ) : ordered.length === 0 ? (
-            <Empty
-              title={query ? 'No matches' : 'Nothing here'}
-              detail={query ? 'No file in this folder matches your search.' : 'Drop files anywhere on this page to upload them.'}
-            />
-          ) : view === 'grid' ? (
-            <GridView groups={groups} actions={actions} onClearSelection={clearSelection} size={GRID_SIZES[gridSize]!} />
-          ) : (
-            <ListView rows={listRows} sort={sort} onSort={toggleSort} actions={actions} onClearSelection={clearSelection} />
-          )}
-        </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-52">
+            <CreateContextItems actions={createActions} />
+            {clipboard && (
+              <>
+                <ContextMenuSeparator />
+                <ContextMenuItem onSelect={() => void doPaste()}>
+                  <ClipboardText />
+                  Paste ({clipboard.entries.length})
+                  <ContextMenuShortcut>⌘V</ContextMenuShortcut>
+                </ContextMenuItem>
+              </>
+            )}
+          </ContextMenuContent>
+        </ContextMenu>
 
         {dragging && (
           <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-primary/10 backdrop-blur-sm">
@@ -636,6 +696,19 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         hidden
         onChange={(e) => {
           if (e.currentTarget.files?.length) void upload(e.currentTarget.files)
+          e.currentTarget.value = ''
+        }}
+      />
+
+      <input
+        ref={dirInput}
+        type="file"
+        hidden
+        // webkitdirectory turns the picker into a folder picker; it is not in the
+        // React types, so it is spread in as an attribute.
+        {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
+        onChange={(e) => {
+          if (e.currentTarget.files?.length) void importFolder(e.currentTarget.files)
           e.currentTarget.value = ''
         }}
       />
@@ -886,7 +959,15 @@ function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string
 function EntryMenu({ entry, actions, children }: { entry: Entry; actions: EntryActions; children: ReactNode }) {
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild onContextMenu={() => actions.contextTarget(entry)}>
+      <ContextMenuTrigger
+        asChild
+        onContextMenu={(e) => {
+          // Keep the event from also reaching the empty-area menu that wraps the
+          // whole list, so a right-click on a row opens only the entry's menu.
+          e.stopPropagation()
+          actions.contextTarget(entry)
+        }}
+      >
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
