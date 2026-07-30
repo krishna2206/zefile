@@ -101,6 +101,17 @@ export function isImage(entry: Entry): boolean {
   return IMAGE_EXTENSIONS.has(entry.name.slice(dot + 1).toLowerCase())
 }
 
+/** isPdf reports whether an entry is a PDF, previewable in an iframe. */
+export function isPdf(entry: Entry): boolean {
+  return !entry.is_dir && entry.name.toLowerCase().endsWith('.pdf')
+}
+
+/** isPreviewable reports whether opening an entry should show a preview rather
+ *  than download it. */
+export function isPreviewable(entry: Entry): boolean {
+  return isImage(entry) || isPdf(entry)
+}
+
 const CATEGORY_BY_EXTENSION: Record<string, string> = {
   pdf: 'Documents', doc: 'Documents', docx: 'Documents', txt: 'Documents', rtf: 'Documents',
   xls: 'Spreadsheets', xlsx: 'Spreadsheets', csv: 'Spreadsheets',

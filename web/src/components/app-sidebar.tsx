@@ -1,4 +1,4 @@
-import { FolderPlus, House, IconContext, SignOut, UploadSimple } from '@phosphor-icons/react'
+import { FolderPlus, House, IconContext, SignOut, Trash, UploadSimple } from '@phosphor-icons/react'
 
 import { formatSize, type Space, type User } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -8,8 +8,9 @@ import { ThemeToggle } from '@/components/theme-toggle'
 type Props = {
   user: User
   space: Space | null
-  atHome: boolean
+  section: 'files' | 'trash'
   onHome: () => void
+  onTrash: () => void
   onNewFolder: () => void
   onUpload: () => void
   onSignOut: () => void
@@ -19,7 +20,8 @@ type Props = {
  * Sidebar is the app's fixed left column: identity, the two creating actions,
  * navigation, and the storage gauge that tells you when to stop uploading.
  */
-export function Sidebar({ user, space, atHome, onHome, onNewFolder, onUpload, onSignOut }: Props) {
+export function Sidebar({ user, space, section, onHome, onTrash, onNewFolder, onUpload, onSignOut }: Props) {
+  const inTrash = section === 'trash'
   const used = space ? Math.max(0, space.total - space.available) : 0
   const percent = space && space.total > 0 ? (used / space.total) * 100 : 0
 
@@ -33,24 +35,34 @@ export function Sidebar({ user, space, atHome, onHome, onNewFolder, onUpload, on
       </div>
 
       <div className="flex flex-col gap-1.5 px-3 pb-2">
-        <Button className="justify-start gap-2" onClick={onUpload}>
+        <Button className="justify-start gap-2" disabled={inTrash} onClick={onUpload}>
           <UploadSimple />
           Upload
         </Button>
-        <Button variant="secondary" className="justify-start gap-2" onClick={onNewFolder}>
+        <Button variant="secondary" className="justify-start gap-2" disabled={inTrash} onClick={onNewFolder}>
           <FolderPlus />
           New folder
         </Button>
       </div>
 
-      <nav className="flex flex-col gap-0.5 px-3 pt-2">
+      <div className="mx-3 my-4 h-px bg-border" />
+
+      <nav className="flex flex-col gap-0.5 px-3">
         <Button
-          variant={atHome ? 'secondary' : 'ghost'}
+          variant={section === 'files' ? 'secondary' : 'ghost'}
           className="justify-start gap-2"
           onClick={onHome}
         >
           <House />
           My files
+        </Button>
+        <Button
+          variant={section === 'trash' ? 'secondary' : 'ghost'}
+          className="justify-start gap-2"
+          onClick={onTrash}
+        >
+          <Trash />
+          Trash
         </Button>
       </nav>
 

@@ -40,13 +40,15 @@ import {
   type User,
 } from './api'
 import { uploadFile, type UploadProgress } from './upload'
-import { categoryLabel, entryKind, formatRelativeTime, isImage } from '@/lib/files'
+import { categoryLabel, entryKind, formatRelativeTime, isImage, isPreviewable } from '@/lib/files'
 import { Thumbnail } from '@/components/thumbnail'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { PreviewOverlay } from '@/components/preview-overlay'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Sidebar } from '@/components/app-sidebar'
+import { TrashScreen } from '@/components/trash-screen'
 import {
   Dialog,
   DialogContent,
@@ -177,6 +179,9 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const [selection, setSelection] = useState<Set<string>>(() => new Set())
   const [anchor, setAnchor] = useState<string | null>(null)
+  const [screen, setScreen] = useState<'files' | 'trash'>('files')
+  const [preview, setPreview] = useState<Entry | null>(null)
+  const [inlinePreview, setInlinePreview] = useState(false)
 
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -217,11 +222,18 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   useEffect(() => {
     void load(path)
     clearSelection()
+    setPreview(null)
   }, [path, load, clearSelection])
 
   useEffect(() => {
     void refreshSpace()
   }, [refreshSpace])
+
+  useEffect(() => {
+    // Whether files render in place depends on the instance serving them
+    // inline, which only a separate content origin does.
+    api.config().then((c) => setInlinePreview(c.inline_preview)).catch(() => undefined)
+  }, [])
 
   const upload = useCallback(
     async (files: FileList) => {
@@ -258,6 +270,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const ordered = useMemo(() => groups.flatMap((g) => g.entries), [groups])
   const listRows = useMemo(() => flattenGroups(groups), [groups])
   const selected = useMemo(() => ordered.filter((e) => selection.has(e.path)), [ordered, selection])
+  const previewSiblings = useMemo(() => ordered.filter(isPreviewable), [ordered])
 
   const download = useCallback(async (entry: Entry) => {
     try {
@@ -294,7 +307,11 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
 
   const actions: EntryActions = {
     select: selectEntry,
-    open: (entry) => (entry.is_dir ? setPath(entry.path) : void download(entry)),
+    open: (entry) => {
+      if (entry.is_dir) setPath(entry.path)
+      else if (isPreviewable(entry)) setPreview(entry)
+      else void download(entry)
+    },
     download,
     copyLink: async (entry) => {
       try {
@@ -339,7 +356,9 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     clearSelection()
     void load(path)
     void refreshSpace()
-    if (done > 0) toast.success(done > 1 ? `Deleted ${done} items` : `Deleted “${list[0]!.name}”`)
+    if (done > 0) {
+      toast.success(done > 1 ? `${done} items moved to trash` : `“${list[0]!.name}” moved to trash`)
+    }
   }
 
   async function signOut() {
@@ -362,13 +381,20 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
       <Sidebar
         user={user}
         space={space}
-        atHome={path === '/'}
-        onHome={() => setPath('/')}
+        section={screen}
+        onHome={() => {
+          setScreen('files')
+          setPath('/')
+        }}
+        onTrash={() => setScreen('trash')}
         onNewFolder={() => setDialog({ kind: 'new-folder' })}
         onUpload={() => fileInput.current?.click()}
         onSignOut={signOut}
       />
 
+      {screen === 'trash' ? (
+        <TrashScreen onChanged={refreshSpace} />
+      ) : (
       <div
         className="relative flex min-w-0 flex-1 flex-col"
         onDragOver={(e) => {
@@ -482,6 +508,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
 
         <Transfers transfers={transfers} onClear={() => setTransfers([])} />
       </div>
+      )}
 
       <input
         ref={fileInput}
@@ -509,6 +536,17 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
       )}
       {dialog?.kind === 'delete' && (
         <DeleteDialog entries={dialog.entries} onConfirm={() => deleteEntries(dialog.entries)} onClose={() => setDialog(null)} />
+      )}
+
+      {preview && (
+        <PreviewOverlay
+          entry={preview}
+          siblings={previewSiblings}
+          inlinePreview={inlinePreview}
+          onNavigate={setPreview}
+          onClose={() => setPreview(null)}
+          onDownload={download}
+        />
       )}
     </div>
   )
@@ -1150,18 +1188,17 @@ function DeleteDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {many ? `Delete ${entries.length} items?` : `Delete “${entries[0]!.name}”?`}
+            {many ? `Move ${entries.length} items to trash?` : `Move “${entries[0]!.name}” to trash?`}
           </AlertDialogTitle>
           <AlertDialogDescription>
-            This cannot be undone
-            {hasFolder ? ', and everything inside the folders goes with it.' : '.'}
+            {hasFolder
+              ? 'The folders and everything inside go to the trash. You can restore them from there, or empty the trash to remove them for good.'
+              : 'It goes to the trash, where you can restore it or remove it for good.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction className={buttonVariants({ variant: 'destructive' })} onClick={onConfirm}>
-            Delete
-          </AlertDialogAction>
+          <AlertDialogAction onClick={onConfirm}>Move to trash</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

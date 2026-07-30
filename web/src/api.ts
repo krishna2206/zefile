@@ -15,6 +15,16 @@ export type Entry = {
 }
 
 export type Listing = { path: string; entries: Entry[] }
+
+/** TrashItem is an entry sitting in the trash, remembering where to restore it. */
+export type TrashItem = {
+  id: number
+  name: string
+  original_path: string
+  is_dir: boolean
+  size: number
+  deleted_at: string
+}
 export type User = { id: number; username: string; email?: string; is_admin: boolean }
 export type Space = { available: number; total: number; reserve: number; read_only: boolean }
 
@@ -99,6 +109,13 @@ export const api = {
 
   downloadLink: (path: string) =>
     request<{ url: string; expires_at: string }>(`/api/v1/fs/link?path=${encodeURIComponent(path)}`),
+
+  config: () => request<{ inline_preview: boolean }>('/api/v1/config'),
+
+  listTrash: () => request<{ items: TrashItem[] }>('/api/v1/trash'),
+  restoreTrash: (id: number) => request<void>(`/api/v1/trash/${id}/restore`, { method: 'POST' }),
+  purgeTrash: (id: number) => request<void>(`/api/v1/trash/${id}`, { method: 'DELETE' }),
+  emptyTrash: () => request<void>('/api/v1/trash', { method: 'DELETE' }),
 }
 
 /** joinPath builds a child path without producing a double separator at the root. */
