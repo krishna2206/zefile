@@ -901,6 +901,7 @@ function SortHeader({
 function ListRow({ entry, actions }: { entry: Entry; actions: EntryActions }) {
   const { icon: Icon, color } = entryKind(entry)
   const selected = actions.isSelected(entry)
+  const shared = actions.isShared(entry)
   return (
     <EntryMenu entry={entry} actions={actions}>
       <div
@@ -928,7 +929,12 @@ function ListRow({ entry, actions }: { entry: Entry; actions: EntryActions }) {
           <Icon className={`size-5 ${color}`} />
         )}
 
-        <span className="min-w-0 truncate text-sm">{entry.name}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-sm">{entry.name}</span>
+          {shared && (
+            <LinkSimple className="size-3.5 shrink-0 text-muted-foreground" aria-label="Shared" />
+          )}
+        </span>
 
         <span className="text-right text-xs tabular-nums text-muted-foreground">
           {entry.is_dir ? '—' : formatSize(entry.size)}
