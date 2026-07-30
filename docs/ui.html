@@ -153,7 +153,7 @@
 
       <section id="direction">
         <h2><span class="num">01</span><span>Direction</span></h2>
-        <p>L’interface est bâtie sur <strong>shadcn/ui</strong>&nbsp;: non pas une bibliothèque installée mais des composants copiés dans <code>src/components/ui</code>, dont le dépôt est propriétaire. Ils s’appuient sur les primitives <a class="ext" href="https://www.radix-ui.com">Radix</a> pour le comportement accessible, sur <strong>Tailwind CSS</strong> pour le style, et sur <code>lucide-react</code> pour les icônes. <strong>On possède le socle&nbsp;; il n’y a personne contre qui se battre.</strong></p>
+        <p>L’interface est bâtie sur <strong>shadcn/ui</strong>&nbsp;: non pas une bibliothèque installée mais des composants copiés dans <code>src/components/ui</code>, dont le dépôt est propriétaire. Ils s’appuient sur les primitives <a class="ext" href="https://www.radix-ui.com">Radix</a> pour le comportement accessible, sur <strong>Tailwind CSS</strong> pour le style, et sur <a class="ext" href="https://phosphoricons.com"><code>@phosphor-icons/react</code></a> pour les icônes&nbsp;— en trait simple partout, en <em>duotone</em> dans le seul sidebar. <strong>On possède le socle&nbsp;; il n’y a personne contre qui se battre.</strong></p>
         <div class="note">
           <span class="label">Principe directeur</span>
           <p>Le premier choix fut Material 3 Expressive, puis son abandon&nbsp;: une bibliothèque de composants qui possède la cascade impose un contournement à chaque écart, et sur un projet aussi jeune le compte n’y était pas. shadcn inverse le rapport&nbsp;— le composant est du code à nous, qu’on édite au lieu de le surcharger. Une couleur, une densité, un état qui ne convient pas&nbsp;: on ouvre le fichier.</p>
@@ -163,7 +163,7 @@
 
         <div class="note">
           <span class="label">Coût mesuré</span>
-          <p>Environ 5&nbsp;Ko de CSS compressé et un JavaScript divisé par deux face à Material&nbsp;— Tailwind ne livre que les utilitaires réellement employés, et Radix n’embarque que les primitives des composants utilisés. Le principe «&nbsp;la légèreté est le produit&nbsp;» reste tenu au niveau du framework&nbsp;; il se joue désormais surtout sur <em>les dépendances qu’on ajoutera ensuite</em>&nbsp;: chaque nouvelle bibliothèque doit se justifier.</p>
+          <p>Le CSS compressé reste modeste&nbsp;— autour de 7&nbsp;Ko, Tailwind ne livrant que les utilitaires réellement employés. Le JavaScript, lui, a grossi&nbsp;: les primitives Radix, le jeu d’icônes Phosphor et les toasts pèsent leur part, et l’ensemble dépasse désormais le poids d’origine de Material. C’est assumé sur une application auto-hébergée et mise en cache dès la première visite&nbsp;; le principe «&nbsp;la légèreté est le produit&nbsp;» se joue donc entièrement sur <em>les dépendances qu’on ajoute</em>&nbsp;— chaque nouvelle bibliothèque doit se justifier, et un jour on pèsera un import Phosphor plus fin ou du découpage de code.</p>
         </div>
       </section>
 
@@ -226,7 +226,7 @@
 <b>index.css</b>              les jetons (clair/sombre) et le peu de base
                         globale ; c'est là que vivent les couleurs
 
-<b>lucide-react</b>           les icônes</pre></div>
+<b>Phosphor Icons</b>        les icônes (trait simple ; duotone au sidebar)</pre></div>
 
         <div class="note stop">
           <span class="label">Interdits</span>
@@ -242,7 +242,7 @@
           <div class="rowhead">Utilisateur</div>
           <div class="row">
             <div class="name">Navigateur de fichiers</div>
-            <div class="desc">L’écran principal, celui où se passe 90&nbsp;% du temps d’usage. Vue liste et vue grille, fil d’Ariane, recherche, sélection multiple. Tout le reste de l’application est secondaire.</div>
+            <div class="desc">L’écran principal, celui où se passe 90&nbsp;% du temps d’usage. Trois vues&nbsp;— <strong>liste</strong> (colonnes triables), <strong>icônes</strong> (tuiles à taille réglable, avec vignettes d’images), et <strong>galerie</strong> (liste à gauche, panneau d’aperçu et métadonnées à droite). Fil d’Ariane, recherche, tri et regroupement (par type ou date), et sélection multiple façon explorateur&nbsp;: clic pour sélectionner, double-clic pour ouvrir, plage au <em>Maj</em>, ajout au <em>Ctrl/Cmd</em>. Menu contextuel au clic droit. Tout le reste de l’application est secondaire.</div>
           </div>
           <div class="row">
             <div class="name">Aperçu</div>
@@ -383,7 +383,7 @@
         <ul>
           <li><strong>Aucun thème personnalisable par l’utilisateur final</strong>&nbsp;: le mode clair/sombre suit le système, sans réglage. L’administrateur peut retoucher les jetons de l’instance&nbsp;; c’est tout.</li>
           <li><strong>Aucune disposition configurable</strong>&nbsp;: pas de panneaux déplaçables, pas de colonnes réordonnables. Une bonne disposition par défaut vaut mieux qu’une préférence à maintenir.</li>
-          <li><strong>Aucune icône hors de <code>lucide-react</code></strong> quand le jeu en fournit une. Un seul jeu d’icônes fait autorité.</li>
+          <li><strong>Aucune icône hors de <code>@phosphor-icons/react</code></strong> quand le jeu en fournit une. Un seul jeu d’icônes fait autorité.</li>
           <li><strong>Aucune animation décorative.</strong> Le mouvement sert à situer une transition ou à signaler un changement d’état, jamais à impressionner.</li>
           <li><strong>Aucune bibliothèque de composants supplémentaire.</strong> shadcn se copie, il ne s’empile pas&nbsp;; toute vraie dépendance d’interface en plus doit se justifier contre le principe de légèreté.</li>
         </ul>
