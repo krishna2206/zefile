@@ -40,7 +40,7 @@ func TestSharePublicDownload(t *testing.T) {
 	})
 	f.write(t, "shared.txt", []byte("hello share"))
 
-	resp := f.get(t, f.server.URL+"/s/zefile_shr_token/shared.txt", nil)
+	resp := f.get(t, f.server.URL+"/s/zefile_shr_token", nil)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("share download = %d, want 200", resp.StatusCode)

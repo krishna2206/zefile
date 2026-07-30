@@ -64,6 +64,12 @@ func (s *Server) Handler() http.Handler {
 	// manager uses to name the file on disk. Only the token is authoritative.
 	mux.HandleFunc("GET /d/{token}/{name}", s.handleDownload)
 	mux.HandleFunc("HEAD /d/{token}/{name}", s.handleDownload)
+	// A share link carries only its token: the filename would just make the URL
+	// long and awkward to paste, and the download's name comes from the
+	// Content-Disposition header, not the path. The /{name} form is kept so
+	// links already handed out, which included the name, still resolve.
+	mux.HandleFunc("GET /s/{token}", s.handleShare)
+	mux.HandleFunc("HEAD /s/{token}", s.handleShare)
 	mux.HandleFunc("GET /s/{token}/{name}", s.handleShare)
 	mux.HandleFunc("HEAD /s/{token}/{name}", s.handleShare)
 	return mux

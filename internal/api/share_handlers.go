@@ -3,7 +3,6 @@ package api
 import (
 	"errors"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 
@@ -37,7 +36,9 @@ func (s *Server) toShareResponse(sh share.Share, token string) shareResponse {
 		resp.ExpiresAt = sh.ExpiresAt.UTC().Format(time.RFC3339)
 	}
 	if token != "" {
-		resp.URL = s.contentBase + "/s/" + token + "/" + url.PathEscape(sh.Path.Name())
+		// Just the token: the browser and download managers name the file from
+		// the Content-Disposition header, so the path needs no filename.
+		resp.URL = s.contentBase + "/s/" + token
 	}
 	return resp
 }
