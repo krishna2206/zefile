@@ -28,6 +28,12 @@ type Problem struct {
 	Status int    `json:"status"`
 	Code   string `json:"code"`
 	Detail string `json:"detail,omitempty"`
+
+	// Errors maps a field name to what is wrong with it, when the failure is
+	// about specific input. It is what lets an interface put a message beside
+	// the box it concerns instead of in a banner, leaving the reader to work
+	// out which of three inputs is meant.
+	Errors map[string]string `json:"errors,omitempty"`
 }
 
 // Stable error codes. They are part of the API contract: they may be added to,
@@ -52,6 +58,7 @@ const (
 	CodeInvalidSetupToken  = "invalid_setup_token"
 	CodeAmbiguous          = "ambiguous_name"
 	CodeInternal           = "internal_error"
+	CodeValidation         = "validation_failed"
 )
 
 // problemTypeBase namespaces the type URIs. They are documentation links, not
@@ -72,6 +79,24 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, code, titl
 		Status: status,
 		Code:   code,
 		Detail: detail,
+	}
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		slog.ErrorContext(r.Context(), "failed to write error response", "error", err)
+	}
+}
+
+// writeFieldProblem reports which inputs are wrong and why.
+func writeFieldProblem(w http.ResponseWriter, r *http.Request, fields map[string]string) {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusBadRequest)
+
+	body := Problem{
+		Type:   problemTypeBase + CodeValidation,
+		Title:  "Some details need fixing",
+		Status: http.StatusBadRequest,
+		Code:   CodeValidation,
+		Errors: fields,
 	}
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		slog.ErrorContext(r.Context(), "failed to write error response", "error", err)
@@ -137,6 +162,15 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, storage.ErrInvalidPath):
 		writeProblem(w, r, http.StatusBadRequest, CodeInvalidPath,
 			"Invalid path", err.Error())
+
+	case errors.Is(err, auth.ErrInvalidInput):
+		var invalid *auth.ValidationError
+		if errors.As(err, &invalid) {
+			writeFieldProblem(w, r, map[string]string{invalid.Field: invalid.Message})
+			return
+		}
+		writeProblem(w, r, http.StatusBadRequest, CodeValidation,
+			"Invalid input", err.Error())
 
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		writeProblem(w, r, http.StatusUnauthorized, CodeInvalidCredentials,

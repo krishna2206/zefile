@@ -197,9 +197,14 @@ func (s *Service) CompleteSetup(ctx context.Context, token, username, password s
 	if !needed {
 		return User{}, ErrAlreadySetUp
 	}
-	if err := validateCredentials(username, password); err != nil {
+	normalised, err := ValidateUsername(username)
+	if err != nil {
 		return User{}, err
 	}
+	if err := ValidatePassword(password, normalised); err != nil {
+		return User{}, err
+	}
+	username = normalised
 
 	now := s.now()
 	invitation, err := s.reads.GetInvitationByTokenHash(ctx, sqlcgen.GetInvitationByTokenHashParams{
@@ -261,6 +266,11 @@ func (s *Service) Authenticate(ctx context.Context, username, password, address 
 	if !s.byAccount.Allow(username) {
 		return User{}, ErrRateLimited
 	}
+
+	// Matched against the normalised form the account was stored under, so
+	// capitalisation is not the difference between signing in and being told
+	// the credentials are wrong.
+	username = NormaliseUsername(username)
 
 	row, err := s.reads.GetUserByUsername(ctx, username)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -428,31 +438,6 @@ func (s *Service) PurgeExpiredSessions(ctx context.Context) error {
 }
 
 // ------------------------------------------------------------------ helpers
-
-// Credential limits. The minimum password length is the only strength rule:
-// composition requirements push people towards predictable substitutions, and
-// length is what actually costs an attacker.
-const (
-	MinPasswordLength = 12
-	MaxPasswordLength = 1024
-	MaxUsernameLength = 64
-)
-
-func validateCredentials(username, password string) error {
-	switch {
-	case username == "":
-		return errors.New("auth: username is required")
-	case len(username) > MaxUsernameLength:
-		return fmt.Errorf("auth: username is longer than %d characters", MaxUsernameLength)
-	case len(password) < MinPasswordLength:
-		return fmt.Errorf("auth: password must be at least %d characters", MinPasswordLength)
-	case len(password) > MaxPasswordLength:
-		// Argon2 cost grows with input, so an unbounded password is a way to
-		// make the server work hard on request.
-		return fmt.Errorf("auth: password is longer than %d characters", MaxPasswordLength)
-	}
-	return nil
-}
 
 // decoyHash is a real hash of a value nobody uses, verified against when an
 // account does not exist so that both paths cost the same.

@@ -120,10 +120,6 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.auth.CompleteSetup(r.Context(), body.Token, body.Username, body.Password)
 	if err != nil {
-		if isValidationError(err) {
-			writeProblem(w, r, http.StatusBadRequest, CodeBadRequest, "Invalid account details", err.Error())
-			return
-		}
 		writeError(w, r, err)
 		return
 	}
@@ -140,15 +136,6 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: session.ExpiresAt,
 		Token:     token,
 	})
-}
-
-// isValidationError separates a rejected password from a broken setup token.
-// Both come back from CompleteSetup, and answering 403 to "your password is too
-// short" would send the user looking for the wrong problem.
-func isValidationError(err error) bool {
-	return !errors.Is(err, auth.ErrInvalidSetupToken) &&
-		!errors.Is(err, auth.ErrAlreadySetUp) &&
-		!errors.Is(err, auth.ErrRateLimited)
 }
 
 func toUserResponse(u auth.User) userResponse {
