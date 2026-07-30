@@ -14,6 +14,8 @@ type Querier interface {
 	CountUsers(ctx context.Context) (int64, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	// max_downloads stays in the table but is left NULL: the download-limit feature
+	// was removed, and the column is kept only to avoid a migration.
 	CreateShare(ctx context.Context, arg CreateShareParams) (Share, error)
 	CreateTrash(ctx context.Context, arg CreateTrashParams) (Trash, error)
 	CreateUpload(ctx context.Context, arg CreateUploadParams) (Upload, error)

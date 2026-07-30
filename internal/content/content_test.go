@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -26,7 +27,12 @@ type fakeShares struct {
 	err   error
 }
 
-func (f fakeShares) Resolve(context.Context, string) (share.Grant, error) {
+func (f fakeShares) Resolve(_ context.Context, _, password string) (share.Grant, error) {
+	// A stub that behaves like a password wall when asked to: any non-empty
+	// password unlocks the canned grant.
+	if f.err != nil && errors.Is(f.err, share.ErrPasswordRequired) && password != "" {
+		return f.grant, nil
+	}
 	return f.grant, f.err
 }
 
@@ -70,6 +76,49 @@ func TestUnknownShareIsNotFound(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown share = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestPasswordProtectedShare(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t, func(o *content.Options) {
+		o.Shares = fakeShares{
+			grant: share.Grant{ID: 1, Path: storage.MustParsePath("/secret.txt"), OwnerID: 1},
+			err:   share.ErrPasswordRequired,
+		}
+	})
+	f.write(t, "secret.txt", []byte("classified"))
+
+	// A GET with no password shows the form, never the file.
+	resp := f.get(t, f.server.URL+"/s/tok", nil)
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("form status = %d, want 200", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Fatalf("form content-type = %q", ct)
+	}
+	if strings.Contains(string(body), "classified") {
+		t.Fatal("the form leaked the file contents")
+	}
+	if !strings.Contains(string(body), `name="password"`) {
+		t.Fatal("the form has no password field")
+	}
+
+	// Posting the password serves the file.
+	resp2, err := f.server.Client().PostForm(f.server.URL+"/s/tok", url.Values{"password": {"hunter2"}})
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	body2, _ := io.ReadAll(resp2.Body)
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("post status = %d, want 200", resp2.StatusCode)
+	}
+	if string(body2) != "classified" {
+		t.Fatalf("post body = %q, want the file", body2)
 	}
 }
 

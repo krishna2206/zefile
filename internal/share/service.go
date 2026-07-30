@@ -26,10 +26,11 @@ const readPerm = 1
 // Reasons a share cannot be served. They are distinct so the public endpoint
 // can tell a holder why a link they had stopped working.
 var (
-	ErrNotFound = errors.New("share: no such link")
-	ErrExpired  = errors.New("share: link has expired")
-	ErrRevoked  = errors.New("share: link was revoked")
-	ErrNotFile  = errors.New("share: only files can be shared")
+	ErrNotFound         = errors.New("share: no such link")
+	ErrExpired          = errors.New("share: link has expired")
+	ErrRevoked          = errors.New("share: link was revoked")
+	ErrNotFile          = errors.New("share: only files can be shared")
+	ErrPasswordRequired = errors.New("share: a password is required")
 )
 
 // Share is a link as its owner sees it.
@@ -37,6 +38,7 @@ type Share struct {
 	ID            int64
 	Path          storage.Path
 	OwnerID       int64
+	HasPassword   bool
 	DownloadCount int64
 	CreatedAt     time.Time
 	ExpiresAt     time.Time // zero means never
@@ -46,6 +48,7 @@ type Share struct {
 // CreateOptions are the limits set when a link is made.
 type CreateOptions struct {
 	ExpiresAt time.Time // zero means never
+	Password  string    // empty means no password
 }
 
 // Grant is what the content origin needs to serve a shared file.
@@ -59,7 +62,9 @@ type Grant struct {
 // record that it was downloaded. It is an interface so the content package
 // depends on the capability, not on this whole service.
 type Resolver interface {
-	Resolve(ctx context.Context, token string) (Grant, error)
+	// Resolve returns the grant for a token. If the link is password-protected,
+	// pass the supplied password; an empty or wrong one yields ErrPasswordRequired.
+	Resolve(ctx context.Context, token, password string) (Grant, error)
 	RecordDownload(ctx context.Context, shareID int64, ip, userAgent string) error
 }
 
@@ -108,12 +113,21 @@ func (s *Service) Create(ctx context.Context, ownerID int64, p storage.Path, opt
 		expires = sql.NullInt64{Int64: opts.ExpiresAt.Unix(), Valid: true}
 	}
 
+	var password sql.NullString
+	if opts.Password != "" {
+		encoded, err := auth.HashPassword(opts.Password, auth.DefaultParams)
+		if err != nil {
+			return "", Share{}, err
+		}
+		password = sql.NullString{String: encoded, Valid: true}
+	}
+
 	row, err := s.writes.CreateShare(ctx, sqlcgen.CreateShareParams{
 		TokenHash:    hash,
 		OwnerID:      ownerID,
 		Path:         p.String(),
 		Perms:        readPerm,
-		PasswordHash: sql.NullString{},
+		PasswordHash: password,
 		CreatedAt:    s.now().Unix(),
 		ExpiresAt:    expires,
 	})
@@ -154,7 +168,7 @@ func (s *Service) Revoke(ctx context.Context, ownerID, id int64) error {
 }
 
 // Resolve turns a token into a grant, or reports why it will not serve.
-func (s *Service) Resolve(ctx context.Context, token string) (Grant, error) {
+func (s *Service) Resolve(ctx context.Context, token, password string) (Grant, error) {
 	row, err := s.reads.GetShareByHash(ctx, auth.HashToken(token))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -167,6 +181,12 @@ func (s *Service) Resolve(ctx context.Context, token string) (Grant, error) {
 	}
 	if row.ExpiresAt.Valid && s.now().Unix() >= row.ExpiresAt.Int64 {
 		return Grant{}, ErrExpired
+	}
+	if row.PasswordHash.Valid {
+		ok, err := auth.VerifyPassword(password, row.PasswordHash.String)
+		if err != nil || !ok {
+			return Grant{}, ErrPasswordRequired
+		}
 	}
 	p, err := storage.ParsePath(row.Path)
 	if err != nil {
@@ -193,6 +213,7 @@ func toShare(r sqlcgen.Share) Share {
 	sh := Share{
 		ID:            r.ID,
 		OwnerID:       r.OwnerID,
+		HasPassword:   r.PasswordHash.Valid,
 		DownloadCount: r.DownloadCount,
 		CreatedAt:     time.Unix(r.CreatedAt, 0),
 	}

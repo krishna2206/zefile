@@ -12,6 +12,7 @@ import (
 type createShareRequest struct {
 	Path           string `json:"path"`
 	ExpiresInHours int    `json:"expires_in_hours,omitempty"` // 0 means never
+	Password       string `json:"password,omitempty"`         // empty means no password
 }
 
 type shareResponse struct {
@@ -19,6 +20,7 @@ type shareResponse struct {
 	URL           string `json:"url,omitempty"` // present only at creation — the token is shown once
 	Path          string `json:"path"`
 	Name          string `json:"name"`
+	HasPassword   bool   `json:"has_password"`
 	DownloadCount int64  `json:"download_count"`
 	CreatedAt     string `json:"created_at"`
 	ExpiresAt     string `json:"expires_at,omitempty"`
@@ -29,6 +31,7 @@ func (s *Server) toShareResponse(sh share.Share, token string) shareResponse {
 		ID:            sh.ID,
 		Path:          sh.Path.String(),
 		Name:          sh.Path.Name(),
+		HasPassword:   sh.HasPassword,
 		DownloadCount: sh.DownloadCount,
 		CreatedAt:     sh.CreatedAt.UTC().Format(time.RFC3339),
 	}
@@ -59,7 +62,7 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var opts share.CreateOptions
+	opts := share.CreateOptions{Password: body.Password}
 	if body.ExpiresInHours > 0 {
 		opts.ExpiresAt = time.Now().Add(time.Duration(body.ExpiresInHours) * time.Hour)
 	}

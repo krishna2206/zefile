@@ -3,6 +3,7 @@ package content
 import (
 	"context"
 	"errors"
+	"html/template"
 	"log/slog"
 	"mime"
 	"net"
@@ -70,8 +71,10 @@ func (s *Server) Handler() http.Handler {
 	// links already handed out, which included the name, still resolve.
 	mux.HandleFunc("GET /s/{token}", s.handleShare)
 	mux.HandleFunc("HEAD /s/{token}", s.handleShare)
+	mux.HandleFunc("POST /s/{token}", s.handleShare)
 	mux.HandleFunc("GET /s/{token}/{name}", s.handleShare)
 	mux.HandleFunc("HEAD /s/{token}/{name}", s.handleShare)
+	mux.HandleFunc("POST /s/{token}/{name}", s.handleShare)
 	return mux
 }
 
@@ -114,10 +117,32 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 
 // handleShare serves a public share link. Unlike a signed download it needs no
 // account: the token itself is the capability, and the share carries its own
-// expiry, revocation and download limit.
+// expiry and revocation.
+//
+// A password-protected link takes two requests without any cookie: a GET shows
+// an HTML form, and the form POSTs the password back to the same URL, which then
+// streams the file in the response. A download manager cannot fill a form, which
+// is why a password link is a "open in a browser" one — the plain, unprotected
+// link is the download-manager path.
 func (s *Server) handleShare(w http.ResponseWriter, r *http.Request) {
-	grant, err := s.shares.Resolve(r.Context(), r.PathValue("token"))
+	token := r.PathValue("token")
+
+	password := ""
+	if r.Method == http.MethodPost {
+		password = r.PostFormValue("password")
+	}
+
+	grant, err := s.shares.Resolve(r.Context(), token, password)
 	if err != nil {
+		if errors.Is(err, share.ErrPasswordRequired) {
+			// A blank form when first met (GET); an error on a wrong attempt.
+			if r.Method == http.MethodPost {
+				renderPasswordForm(w, "Wrong password.", http.StatusUnauthorized)
+			} else {
+				renderPasswordForm(w, "", http.StatusOK)
+			}
+			return
+		}
 		writeShareError(w, err)
 		return
 	}
@@ -139,12 +164,65 @@ func (s *Server) handleShare(w http.ResponseWriter, r *http.Request) {
 
 	// Count and log the download, but never let a bookkeeping failure deny a
 	// legitimate one. A HEAD is a client checking, not a download.
-	if r.Method == http.MethodGet {
+	if r.Method != http.MethodHead {
 		_ = s.shares.RecordDownload(ctx, grant.ID, clientIP(r), r.UserAgent())
 	}
 
 	s.setHeaders(w, grant.Path, info.Size)
 	http.ServeContent(w, r.WithContext(ctx), grant.Path.Name(), info.ModTime, file)
+}
+
+// passwordFormHTML is the whole page shown for a protected link: a single form,
+// no scripts, no external resources, so it renders under a strict policy and
+// works with the browser's own password manager. {{ERR}} is an optional error
+// line, substituted by plain replacement — the CSS holds a "100%", which a
+// printf format string would choke on.
+const passwordFormHTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Protected file · Zefile</title>
+<style>
+:root{color-scheme:light dark}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f5f2;
+font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#1a1c1b}
+.card{background:#fff;border:1px solid #dde1de;border-radius:12px;padding:32px;
+width:min(90vw,360px);box-shadow:0 8px 30px rgba(0,0,0,.06)}
+h1{font-size:1.15rem;margin:0 0 6px}
+p{margin:0 0 16px;color:#5b625e;font-size:.9rem}
+.error{color:#b3261e}
+input,button{width:100%;box-sizing:border-box;height:40px;border-radius:8px;font-size:1rem}
+input{border:1px solid #dde1de;padding:0 12px;margin-bottom:12px;background:#fff;color:inherit}
+button{border:0;background:#2f5d50;color:#fff;font-weight:600;cursor:pointer}
+button:hover{background:#284f45}
+@media(prefers-color-scheme:dark){
+body{background:#0f1412;color:#e6e9e6}
+.card{background:#171d1a;border-color:#2a322d;box-shadow:none}
+p{color:#9aa39d}
+input{background:#0f1412;border-color:#2a322d}
+button{background:#7fd0bb;color:#06231b}
+button:hover{background:#6fbfaa}}
+</style></head>
+<body><main class="card">
+<h1>Protected file</h1>
+<p>This link is password-protected.</p>
+{{ERR}}<form method="post" action="">
+<input type="password" name="password" placeholder="Password" autocomplete="current-password" autofocus required>
+<button type="submit">Open</button>
+</form>
+</main></body></html>`
+
+func renderPasswordForm(w http.ResponseWriter, message string, status int) {
+	errLine := ""
+	if message != "" {
+		errLine = `<p class="error">` + template.HTMLEscapeString(message) + `</p>`
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "no-store")
+	// No scripts, only inline styles and a same-origin form post.
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(strings.Replace(passwordFormHTML, "{{ERR}}", errLine, 1)))
 }
 
 // writeShareError answers a token that will not serve. Expired, revoked and
