@@ -21,6 +21,7 @@ import (
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/db"
 	"github.com/krishna2206/zefile/internal/storage"
+	"github.com/krishna2206/zefile/internal/share"
 	"github.com/krishna2206/zefile/internal/trash"
 	"github.com/krishna2206/zefile/internal/upload"
 )
@@ -92,11 +93,13 @@ func run() error {
 
 	uploads := upload.New(database, fs)
 	trashService := trash.New(database, fs)
+	shareService := share.New(database, fs)
 
 	appHandler := api.New(api.Options{
 		FS:            fs,
 		Uploads:       uploads,
 		Trash:         trashService,
+		Shares:        shareService,
 		Auth:          authService,
 		ACL:           engine,
 		Signer:        signer,
@@ -109,6 +112,7 @@ func run() error {
 		FS:           fs,
 		Signer:       signer,
 		Subject:      acl.NewSubjectLoader(database, engine),
+		Shares:       shareService,
 		SingleOrigin: cfg.SingleOrigin(),
 	}).Handler()
 
@@ -168,6 +172,7 @@ func route(cfg config.Config, app, files http.Handler) http.Handler {
 	if cfg.SingleOrigin() {
 		mux := http.NewServeMux()
 		mux.Handle("/d/", files)
+		mux.Handle("/s/", files)
 		mux.Handle("/", app)
 		return mux
 	}

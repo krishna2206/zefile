@@ -20,6 +20,7 @@ import (
 	"github.com/krishna2206/zefile/internal/api"
 	"github.com/krishna2206/zefile/internal/auth"
 	"github.com/krishna2206/zefile/internal/db"
+	"github.com/krishna2206/zefile/internal/share"
 	"github.com/krishna2206/zefile/internal/storage"
 	"github.com/krishna2206/zefile/internal/trash"
 )
@@ -60,7 +61,11 @@ func newClient(t *testing.T) *client {
 	}))
 
 	srv := httptest.NewServer(api.New(api.Options{
-		FS: fs, Auth: service, ACL: engine, Trash: trash.New(database, fs), SecureCookies: false,
+		FS: fs, Auth: service, ACL: engine,
+		Trash:         trash.New(database, fs),
+		Shares:        share.New(database, fs),
+		ContentBase:   "https://content.example",
+		SecureCookies: false,
 	}).Handler())
 	t.Cleanup(srv.Close)
 
@@ -299,6 +304,67 @@ func TestDeleteMovesToTrashAndRestores(t *testing.T) {
 	}
 	if _, raw := c.do(http.MethodGet, "/api/v1/trash", nil); len(decode[trashList](t, raw).Items) != 0 {
 		t.Fatalf("trash not empty after restore: %s", raw)
+	}
+}
+
+type shareItem struct {
+	ID   int64  `json:"id"`
+	URL  string `json:"url"`
+	Name string `json:"name"`
+}
+
+type shareList struct {
+	Shares []shareItem `json:"shares"`
+}
+
+func TestShareLifecycle(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+
+	if err := os.WriteFile(filepath.Join(c.root, "report.pdf"), []byte("hi"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	// Create a link to the file.
+	resp, raw := c.do(http.MethodPost, "/api/v1/shares", map[string]any{"path": "/report.pdf"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d: %s", resp.StatusCode, raw)
+	}
+	sh := decode[shareItem](t, raw)
+	if !strings.Contains(sh.URL, "/s/zefile_shr_") {
+		t.Fatalf("share url = %q, want a /s/ link with a share token", sh.URL)
+	}
+	if sh.Name != "report.pdf" {
+		t.Fatalf("name = %q", sh.Name)
+	}
+
+	// A folder cannot be shared in this version.
+	c.do(http.MethodPost, "/api/v1/fs/dirs", map[string]string{"path": "/folder"})
+	if resp2, _ := c.do(http.MethodPost, "/api/v1/shares", map[string]any{"path": "/folder"}); resp2.StatusCode != http.StatusBadRequest {
+		t.Fatalf("share folder = %d, want 400", resp2.StatusCode)
+	}
+
+	// It shows up in the owner's list, without the token.
+	_, raw = c.do(http.MethodGet, "/api/v1/shares", nil)
+	list := decode[shareList](t, raw)
+	if len(list.Shares) != 1 || list.Shares[0].ID != sh.ID {
+		t.Fatalf("list = %+v", list.Shares)
+	}
+	if list.Shares[0].URL != "" {
+		t.Fatalf("list leaked a token: %q", list.Shares[0].URL)
+	}
+
+	// Revoke it; the list empties, and revoking again is a 404.
+	if resp3, _ := c.do(http.MethodDelete, fmt.Sprintf("/api/v1/shares/%d", sh.ID), nil); resp3.StatusCode != http.StatusNoContent {
+		t.Fatalf("revoke = %d", resp3.StatusCode)
+	}
+	if _, raw := c.do(http.MethodGet, "/api/v1/shares", nil); len(decode[shareList](t, raw).Shares) != 0 {
+		t.Fatalf("list not empty after revoke: %s", raw)
+	}
+	if resp4, _ := c.do(http.MethodDelete, fmt.Sprintf("/api/v1/shares/%d", sh.ID), nil); resp4.StatusCode != http.StatusNotFound {
+		t.Fatalf("re-revoke = %d, want 404", resp4.StatusCode)
 	}
 }
 

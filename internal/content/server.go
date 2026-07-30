@@ -5,10 +5,12 @@ import (
 	"errors"
 	"log/slog"
 	"mime"
+	"net"
 	"net/http"
 	"path"
 	"strings"
 
+	"github.com/krishna2206/zefile/internal/share"
 	"github.com/krishna2206/zefile/internal/storage"
 )
 
@@ -27,6 +29,7 @@ type Server struct {
 	fs      storage.FS
 	signer  *Signer
 	subject SubjectLoader
+	shares  share.Resolver
 
 	// singleOrigin hardens every response when the instance serves content from
 	// the application origin. See [Options].
@@ -38,6 +41,7 @@ type Options struct {
 	FS      storage.FS
 	Signer  *Signer
 	Subject SubjectLoader
+	Shares  share.Resolver
 
 	// SingleOrigin reports that no separate content host is configured.
 	//
@@ -50,7 +54,7 @@ type Options struct {
 
 // New builds the content-origin handler.
 func New(opts Options) *Server {
-	return &Server{fs: opts.FS, signer: opts.Signer, subject: opts.Subject, singleOrigin: opts.SingleOrigin}
+	return &Server{fs: opts.FS, signer: opts.Signer, subject: opts.Subject, shares: opts.Shares, singleOrigin: opts.SingleOrigin}
 }
 
 // Handler returns the routed handler.
@@ -60,6 +64,8 @@ func (s *Server) Handler() http.Handler {
 	// manager uses to name the file on disk. Only the token is authoritative.
 	mux.HandleFunc("GET /d/{token}/{name}", s.handleDownload)
 	mux.HandleFunc("HEAD /d/{token}/{name}", s.handleDownload)
+	mux.HandleFunc("GET /s/{token}/{name}", s.handleShare)
+	mux.HandleFunc("HEAD /s/{token}/{name}", s.handleShare)
 	return mux
 }
 
@@ -98,6 +104,68 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	// It also streams: memory stays flat whether the file is one kilobyte or
 	// forty gigabytes, and on Linux the copy goes through the kernel.
 	http.ServeContent(w, r.WithContext(ctx), p.Name(), info.ModTime, file)
+}
+
+// handleShare serves a public share link. Unlike a signed download it needs no
+// account: the token itself is the capability, and the share carries its own
+// expiry, revocation and download limit.
+func (s *Server) handleShare(w http.ResponseWriter, r *http.Request) {
+	grant, err := s.shares.Resolve(r.Context(), r.PathValue("token"))
+	if err != nil {
+		writeShareError(w, err)
+		return
+	}
+
+	// The file is read as the account that made the link — a right the owner has
+	// lost since takes effect, exactly as for a signed link.
+	ctx, err := s.subject.ContextFor(r.Context(), grant.OwnerID)
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+
+	file, info, err := s.open(ctx, grant.Path)
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	defer file.Close()
+
+	// Count and log the download, but never let a bookkeeping failure deny a
+	// legitimate one. A HEAD is a client checking, not a download.
+	if r.Method == http.MethodGet {
+		_ = s.shares.RecordDownload(ctx, grant.ID, clientIP(r), r.UserAgent())
+	}
+
+	s.setHeaders(w, grant.Path, info.Size)
+	http.ServeContent(w, r.WithContext(ctx), grant.Path.Name(), info.ModTime, file)
+}
+
+// writeShareError answers a token that will not serve. Expired, revoked and
+// exhausted are 410 Gone — the holder had a real link that has ended; anything
+// else is a 404, so a guessed token cannot be told apart from one that expired.
+func writeShareError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, share.ErrExpired), errors.Is(err, share.ErrRevoked), errors.Is(err, share.ErrExhausted):
+		http.Error(w, "this link is no longer available", http.StatusGone)
+	default:
+		http.Error(w, "this link is invalid or has expired", http.StatusNotFound)
+	}
+}
+
+// clientIP is the caller's address for the access log, honouring a reverse
+// proxy's X-Forwarded-For before falling back to the connection.
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.IndexByte(xff, ','); i >= 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 func (s *Server) open(ctx context.Context, p storage.Path) (storage.File, storage.FileInfo, error) {

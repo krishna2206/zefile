@@ -16,8 +16,62 @@ import (
 	"testing"
 
 	"github.com/krishna2206/zefile/internal/content"
+	"github.com/krishna2206/zefile/internal/share"
 	"github.com/krishna2206/zefile/internal/storage"
 )
+
+// fakeShares stands in for the share service: one canned grant or one error.
+type fakeShares struct {
+	grant share.Grant
+	err   error
+}
+
+func (f fakeShares) Resolve(context.Context, string) (share.Grant, error) {
+	return f.grant, f.err
+}
+
+func (fakeShares) RecordDownload(context.Context, int64, string, string) error { return nil }
+
+func TestSharePublicDownload(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t, func(o *content.Options) {
+		o.Shares = fakeShares{grant: share.Grant{ID: 1, Path: storage.MustParsePath("/shared.txt"), OwnerID: 1}}
+	})
+	f.write(t, "shared.txt", []byte("hello share"))
+
+	resp := f.get(t, f.server.URL+"/s/zefile_shr_token/shared.txt", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("share download = %d, want 200", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "hello share" {
+		t.Fatalf("body = %q", body)
+	}
+}
+
+func TestExpiredShareIsGone(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t, func(o *content.Options) { o.Shares = fakeShares{err: share.ErrExpired} })
+	resp := f.get(t, f.server.URL+"/s/tok/x", nil)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusGone {
+		t.Fatalf("expired share = %d, want 410", resp.StatusCode)
+	}
+}
+
+func TestUnknownShareIsNotFound(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t, func(o *content.Options) { o.Shares = fakeShares{err: share.ErrNotFound} })
+	resp := f.get(t, f.server.URL+"/s/tok/x", nil)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown share = %d, want 404", resp.StatusCode)
+	}
+}
 
 // openSubject grants every request, standing in for the ACL engine. The
 // engine's own behaviour is covered where it lives; here the question is
