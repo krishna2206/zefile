@@ -27,7 +27,15 @@ const selectClass =
  * link's limits, then the link itself — shown once, because the token is stored
  * only as a hash and cannot be recovered later.
  */
-export function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => void }) {
+export function ShareDialog({
+  entry,
+  onCreated,
+  onClose,
+}: {
+  entry: Entry
+  onCreated?: () => void
+  onClose: () => void
+}) {
   const [expiryHours, setExpiryHours] = useState(DEFAULT_EXPIRY_HOURS)
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -45,6 +53,7 @@ export function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => v
         password: password.trim() || undefined,
       })
       setCreated(share)
+      onCreated?.()
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'Could not create the link.')
     } finally {

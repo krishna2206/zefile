@@ -19,6 +19,7 @@ import {
   SquaresFour as LayoutGrid,
   List as ListIcon,
   CircleNotch as Loader2,
+  LinkSimple,
   PencilSimple as Pencil,
   MagnifyingGlass as Search,
   ShareNetwork,
@@ -151,6 +152,7 @@ type EntryActions = {
   remove: (entry: Entry) => void
   contextTarget: (entry: Entry) => void
   isSelected: (entry: Entry) => boolean
+  isShared: (entry: Entry) => boolean
 }
 
 type Group = { key: string; label: string; entries: Entry[] }
@@ -184,6 +186,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const [screen, setScreen] = useState<'files' | 'trash' | 'shared'>('files')
   const [preview, setPreview] = useState<Entry | null>(null)
   const [inlinePreview, setInlinePreview] = useState(false)
+  const [sharedPaths, setSharedPaths] = useState<Set<string>>(() => new Set())
 
   const fileInput = useRef<HTMLInputElement>(null)
   const pathRef = useRef(path)
@@ -223,6 +226,15 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     }
   }, [])
 
+  const refreshShares = useCallback(async () => {
+    try {
+      const { shares } = await api.listShares()
+      setSharedPaths(new Set(shares.map((s) => s.path)))
+    } catch {
+      // The share badges are a hint; failing to load them must not break browsing.
+    }
+  }, [])
+
   useEffect(() => {
     void load(path)
     clearSelection()
@@ -238,6 +250,12 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     // inline, which only a separate content origin does.
     api.config().then((c) => setInlinePreview(c.inline_preview)).catch(() => undefined)
   }, [])
+
+  // Refresh which files are shared on entering the files view, so a link
+  // revoked in the Shared section clears its badge on return.
+  useEffect(() => {
+    if (screen === 'files') void refreshShares()
+  }, [screen, refreshShares])
 
   const upload = useCallback(
     async (files: FileList) => {
@@ -337,6 +355,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
       if (!selection.has(entry.path)) selectEntry(entry, 'replace')
     },
     isSelected: (entry) => selection.has(entry.path),
+    isShared: (entry) => sharedPaths.has(entry.path),
   }
 
   async function createFolder(name: string) {
@@ -544,7 +563,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
       )}
 
       {dialog?.kind === 'share' && (
-        <ShareDialog entry={dialog.entry} onClose={() => setDialog(null)} />
+        <ShareDialog entry={dialog.entry} onCreated={refreshShares} onClose={() => setDialog(null)} />
       )}
 
       {preview && (
@@ -997,6 +1016,7 @@ function GridView({
 function GridTile({ entry, actions, size }: { entry: Entry; actions: EntryActions; size: GridSize }) {
   const { icon: Icon, color } = entryKind(entry)
   const selected = actions.isSelected(entry)
+  const shared = actions.isShared(entry)
   return (
     <EntryMenu entry={entry} actions={actions}>
       <div
@@ -1016,15 +1036,25 @@ function GridTile({ entry, actions, size }: { entry: Entry; actions: EntryAction
           }
         }}
       >
-        {isImage(entry) ? (
-          <Thumbnail entry={entry} className="grid aspect-square w-full place-items-center overflow-hidden rounded-md bg-muted/60">
-            <Icon className={`${size.icon} ${color}`} />
-          </Thumbnail>
-        ) : (
-          <div className="grid aspect-square w-full place-items-center rounded-md bg-muted/60">
-            <Icon className={`${size.icon} ${color}`} />
-          </div>
-        )}
+        <div className="relative">
+          {isImage(entry) ? (
+            <Thumbnail entry={entry} className="grid aspect-square w-full place-items-center overflow-hidden rounded-md bg-muted/60">
+              <Icon className={`${size.icon} ${color}`} />
+            </Thumbnail>
+          ) : (
+            <div className="grid aspect-square w-full place-items-center rounded-md bg-muted/60">
+              <Icon className={`${size.icon} ${color}`} />
+            </div>
+          )}
+          {shared && (
+            <span
+              className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-background/85 text-primary shadow-sm backdrop-blur-sm"
+              title="Shared"
+            >
+              <LinkSimple className="size-3.5" />
+            </span>
+          )}
+        </div>
         <div className="min-w-0 px-1">
           <p className="line-clamp-2 break-words text-sm">{entry.name}</p>
           <p className="text-xs tabular-nums text-muted-foreground">
