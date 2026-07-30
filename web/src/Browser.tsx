@@ -22,6 +22,7 @@ import {
   CircleNotch as Loader2,
   PencilSimple as Pencil,
   MagnifyingGlass as Search,
+  ShareNetwork,
   SlidersHorizontal,
   Trash as Trash2,
   X,
@@ -48,6 +49,8 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Sidebar } from '@/components/app-sidebar'
 import { TrashScreen } from '@/components/trash-screen'
+import { SharesScreen } from '@/components/shares-screen'
+import { ShareDialog } from '@/components/share-dialog'
 import {
   Dialog,
   DialogContent,
@@ -145,6 +148,7 @@ type EntryActions = {
   open: (entry: Entry) => void
   download: (entry: Entry) => void
   copyLink: (entry: Entry) => void
+  share: (entry: Entry) => void
   rename: (entry: Entry) => void
   remove: (entry: Entry) => void
   contextTarget: (entry: Entry) => void
@@ -158,6 +162,7 @@ type DialogState =
   | { kind: 'new-folder' }
   | { kind: 'rename'; entry: Entry }
   | { kind: 'delete'; entries: Entry[] }
+  | { kind: 'share'; entry: Entry }
 
 export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => void }) {
   const [path, setPath] = useState('/')
@@ -178,7 +183,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const [selection, setSelection] = useState<Set<string>>(() => new Set())
   const [anchor, setAnchor] = useState<string | null>(null)
-  const [screen, setScreen] = useState<'files' | 'trash'>('files')
+  const [screen, setScreen] = useState<'files' | 'trash' | 'shared'>('files')
   const [preview, setPreview] = useState<Entry | null>(null)
   const [inlinePreview, setInlinePreview] = useState(false)
 
@@ -336,6 +341,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         toast.error('Could not copy the link.')
       }
     },
+    share: (entry) => setDialog({ kind: 'share', entry }),
     rename: (entry) => setDialog({ kind: 'rename', entry }),
     remove: (entry) => setDialog({ kind: 'delete', entries: [entry] }),
     contextTarget: (entry) => {
@@ -401,6 +407,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
           setPath('/')
         }}
         onTrash={() => setScreen('trash')}
+        onShared={() => setScreen('shared')}
         onNewFolder={() => setDialog({ kind: 'new-folder' })}
         onUpload={() => fileInput.current?.click()}
         onSignOut={signOut}
@@ -408,6 +415,8 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
 
       {screen === 'trash' ? (
         <TrashScreen onChanged={refreshSpace} />
+      ) : screen === 'shared' ? (
+        <SharesScreen />
       ) : (
       <div
         className="relative flex min-w-0 flex-1 flex-col"
@@ -543,6 +552,10 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
       )}
       {dialog?.kind === 'delete' && (
         <DeleteDialog entries={dialog.entries} onConfirm={() => deleteEntries(dialog.entries)} onClose={() => setDialog(null)} />
+      )}
+
+      {dialog?.kind === 'share' && (
+        <ShareDialog entry={dialog.entry} onClose={() => setDialog(null)} />
       )}
 
       {preview && (
@@ -766,10 +779,16 @@ function EntryMenu({ entry, actions, children }: { entry: Entry; actions: EntryA
           {entry.is_dir ? 'Open' : 'Download'}
         </ContextMenuItem>
         {!entry.is_dir && (
-          <ContextMenuItem onSelect={() => actions.copyLink(entry)}>
-            <Link2 />
-            Copy link
-          </ContextMenuItem>
+          <>
+            <ContextMenuItem onSelect={() => actions.copyLink(entry)}>
+              <Link2 />
+              Copy link
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => actions.share(entry)}>
+              <ShareNetwork />
+              Share…
+            </ContextMenuItem>
+          </>
         )}
         <ContextMenuItem onSelect={() => actions.rename(entry)}>
           <Pencil />

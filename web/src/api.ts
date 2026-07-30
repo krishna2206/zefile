@@ -16,6 +16,19 @@ export type Entry = {
 
 export type Listing = { path: string; entries: Entry[] }
 
+/** Share is a public link to a file. `url` is only present at creation — the
+ *  token is shown once and never stored in plain form. */
+export type Share = {
+  id: number
+  url?: string
+  path: string
+  name: string
+  max_downloads: number
+  download_count: number
+  created_at: string
+  expires_at?: string
+}
+
 /** TrashItem is an entry sitting in the trash, remembering where to restore it. */
 export type TrashItem = {
   id: number
@@ -111,6 +124,14 @@ export const api = {
     request<{ url: string; expires_at: string }>(`/api/v1/fs/link?path=${encodeURIComponent(path)}`),
 
   config: () => request<{ inline_preview: boolean }>('/api/v1/config'),
+
+  createShare: (path: string, opts: { expires_in_hours?: number; max_downloads?: number } = {}) =>
+    request<Share>('/api/v1/shares', {
+      method: 'POST',
+      body: JSON.stringify({ path, ...opts }),
+    }),
+  listShares: () => request<{ shares: Share[] }>('/api/v1/shares'),
+  revokeShare: (id: number) => request<void>(`/api/v1/shares/${id}`, { method: 'DELETE' }),
 
   listTrash: () => request<{ items: TrashItem[] }>('/api/v1/trash'),
   restoreTrash: (id: number) => request<void>(`/api/v1/trash/${id}/restore`, { method: 'POST' }),

@@ -1,16 +1,19 @@
-import { FolderPlus, House, IconContext, SignOut, Trash, UploadSimple } from '@phosphor-icons/react'
+import { FolderPlus, House, IconContext, ShareNetwork, SignOut, Trash, UploadSimple } from '@phosphor-icons/react'
 
 import { formatSize, type Space, type User } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { ThemeToggle } from '@/components/theme-toggle'
 
+type Section = 'files' | 'trash' | 'shared'
+
 type Props = {
   user: User
   space: Space | null
-  section: 'files' | 'trash'
+  section: Section
   onHome: () => void
   onTrash: () => void
+  onShared: () => void
   onNewFolder: () => void
   onUpload: () => void
   onSignOut: () => void
@@ -20,8 +23,8 @@ type Props = {
  * Sidebar is the app's fixed left column: identity, the two creating actions,
  * navigation, and the storage gauge that tells you when to stop uploading.
  */
-export function Sidebar({ user, space, section, onHome, onTrash, onNewFolder, onUpload, onSignOut }: Props) {
-  const inTrash = section === 'trash'
+export function Sidebar({ user, space, section, onHome, onTrash, onShared, onNewFolder, onUpload, onSignOut }: Props) {
+  const inFiles = section === 'files'
   const used = space ? Math.max(0, space.total - space.available) : 0
   const percent = space && space.total > 0 ? (used / space.total) * 100 : 0
 
@@ -35,11 +38,11 @@ export function Sidebar({ user, space, section, onHome, onTrash, onNewFolder, on
       </div>
 
       <div className="flex flex-col gap-1.5 px-3 pb-2">
-        <Button className="justify-start gap-2" disabled={inTrash} onClick={onUpload}>
+        <Button className="justify-start gap-2" disabled={!inFiles} onClick={onUpload}>
           <UploadSimple />
           Upload
         </Button>
-        <Button variant="secondary" className="justify-start gap-2" disabled={inTrash} onClick={onNewFolder}>
+        <Button variant="secondary" className="justify-start gap-2" disabled={!inFiles} onClick={onNewFolder}>
           <FolderPlus />
           New folder
         </Button>
@@ -55,6 +58,14 @@ export function Sidebar({ user, space, section, onHome, onTrash, onNewFolder, on
         >
           <House />
           My files
+        </Button>
+        <Button
+          variant={section === 'shared' ? 'secondary' : 'ghost'}
+          className="justify-start gap-2"
+          onClick={onShared}
+        >
+          <ShareNetwork />
+          Shared
         </Button>
         <Button
           variant={section === 'trash' ? 'secondary' : 'ghost'}
