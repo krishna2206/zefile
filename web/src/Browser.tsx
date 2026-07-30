@@ -12,7 +12,6 @@ import { toast } from 'sonner'
 import {
   ArrowDown,
   ArrowUp,
-  Cards,
   CaretRight as ChevronRight,
   CaretUp as ChevronUp,
   DownloadSimple as Download,
@@ -89,7 +88,7 @@ const headerHeight = 36
 
 type SortKey = 'name' | 'size' | 'modified'
 type SortDir = 'asc' | 'desc'
-type View = 'list' | 'grid' | 'gallery'
+type View = 'list' | 'grid'
 type GroupBy = 'none' | 'type' | 'date'
 
 /** Grid tile sizes as a fixed set, the way a desktop explorer offers small /
@@ -125,7 +124,7 @@ function loadSettings(): Settings {
     if (!raw) return fallback
     const p = JSON.parse(raw) as Partial<Settings>
     return {
-      view: (['list', 'grid', 'gallery'] as View[]).includes(p.view!) ? p.view! : fallback.view,
+      view: (['list', 'grid'] as View[]).includes(p.view!) ? p.view! : fallback.view,
       gridSize:
         Number.isInteger(p.gridSize) && p.gridSize! >= 0 && p.gridSize! < GRID_SIZES.length
           ? p.gridSize!
@@ -501,13 +500,6 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
             />
           ) : view === 'grid' ? (
             <GridView groups={groups} actions={actions} onClearSelection={clearSelection} size={GRID_SIZES[gridSize]!} />
-          ) : view === 'gallery' ? (
-            <div className="flex h-full min-h-0">
-              <div className="min-w-0 flex-1">
-                <ListView rows={listRows} sort={sort} onSort={toggleSort} actions={actions} onClearSelection={clearSelection} />
-              </div>
-              <PreviewPane entry={onlyOne} count={selected.length} onDownload={download} />
-            </div>
           ) : (
             <ListView rows={listRows} sort={sort} onSort={toggleSort} actions={actions} onClearSelection={clearSelection} />
           )}
@@ -644,7 +636,6 @@ function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => voi
   const options: { value: View; label: string; icon: ReactNode }[] = [
     { value: 'list', label: 'List', icon: <ListIcon /> },
     { value: 'grid', label: 'Icons', icon: <LayoutGrid /> },
-    { value: 'gallery', label: 'Gallery', icon: <Cards /> },
   ]
   return (
     <div className="flex items-center gap-1 rounded-md border p-0.5">
@@ -1040,76 +1031,6 @@ function GridTile({ entry, actions, size }: { entry: Entry; actions: EntryAction
         </div>
       </div>
     </EntryMenu>
-  )
-}
-
-/** PreviewPane is the gallery view's right column: a large preview and the
- *  metadata of the single selected entry. */
-function PreviewPane({
-  entry,
-  count,
-  onDownload,
-}: {
-  entry: Entry | null
-  count: number
-  onDownload: (entry: Entry) => void
-}) {
-  if (count > 1) {
-    return (
-      <aside className="hidden w-80 shrink-0 place-items-center border-l bg-card/30 p-6 text-center text-sm text-muted-foreground lg:grid">
-        {count} items selected
-      </aside>
-    )
-  }
-  if (!entry) {
-    return (
-      <aside className="hidden w-80 shrink-0 place-items-center border-l bg-card/30 p-6 text-center text-sm text-muted-foreground lg:grid">
-        Select a file to see its preview.
-      </aside>
-    )
-  }
-
-  const { icon: Icon, color } = entryKind(entry)
-  const location = parentOf(entry.path)
-  return (
-    <aside className="hidden w-80 shrink-0 flex-col gap-4 overflow-auto border-l bg-card/30 p-4 lg:flex">
-      {isImage(entry) ? (
-        <Thumbnail entry={entry} size={512} className="grid aspect-square w-full place-items-center overflow-hidden rounded-lg border bg-muted/40">
-          <Icon className={`size-20 ${color}`} />
-        </Thumbnail>
-      ) : (
-        <div className="grid aspect-square w-full place-items-center rounded-lg border bg-muted/40">
-          <Icon className={`size-20 ${color}`} />
-        </div>
-      )}
-
-      <p className="break-words font-medium">{entry.name}</p>
-
-      <dl className="space-y-2 text-sm">
-        <Meta label="Type" value={entry.is_dir ? 'Folder' : categoryLabel(entry)} />
-        <Meta label="Size" value={entry.is_dir ? '—' : formatSize(entry.size)} />
-        <Meta label="Modified" value={formatRelativeTime(entry.mod_time)} />
-        <Meta label="Location" value={location === '/' ? 'Home' : location} />
-      </dl>
-
-      {!entry.is_dir && (
-        <Button className="mt-auto" onClick={() => onDownload(entry)}>
-          <Download />
-          Download
-        </Button>
-      )}
-    </aside>
-  )
-}
-
-function Meta({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <dt className="shrink-0 text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 truncate text-right" title={value}>
-        {value}
-      </dd>
-    </div>
   )
 }
 
