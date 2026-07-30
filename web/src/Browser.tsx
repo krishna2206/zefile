@@ -1,21 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
-  AppBar,
-  Button,
-  CircularProgress,
-  Divider,
-  LinearProgress,
-  Text,
-} from '@language-lit/material3-expressive'
+  ChevronRight,
+  ChevronUp,
+  Download,
+  File as FileIcon,
+  Folder as FolderIcon,
+  FolderPlus,
+  Loader2,
+  LogOut,
+  Trash2,
+  Upload,
+} from 'lucide-react'
 
 import { Empty } from './App'
 import { api, ApiError, formatSize, joinPath, parentOf, type Entry, type User } from './api'
 import { uploadFile, type UploadProgress } from './upload'
-import { Center, Fill, Row, Spacer, Stack, truncate } from './ui/Layout'
-import styles from './Browser.module.css'
+import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
 
-/** rowHeight mirrors --row-height in the stylesheet.
+/** rowHeight mirrors the row height used below.
  *
  * The virtualiser multiplies it to place rows without measuring them, so the
  * two have to agree; reading it back from the document at run time would cost a
@@ -114,7 +118,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
 
   return (
     <div
-      className={styles.screen}
+      className="relative flex min-h-dvh flex-col bg-background"
       onDragOver={(e) => {
         e.preventDefault()
         setDragging(true)
@@ -126,40 +130,39 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         if (e.dataTransfer.files.length) void upload(e.dataTransfer.files)
       }}
     >
-      <AppBar
-        title="Zefile"
-        actions={
-          <Row gap={2}>
-            <Text variant="labelLarge">{user.username}</Text>
-            <Button variant="text" onClick={signOut}>
-              Sign out
-            </Button>
-          </Row>
-        }
-      />
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+        <span className="text-lg font-semibold tracking-tight">
+          Ze<span className="text-brand">file</span>
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{user.username}</span>
+          <Button variant="ghost" size="icon" aria-label="Sign out" onClick={signOut}>
+            <LogOut />
+          </Button>
+        </div>
+      </header>
 
       <Breadcrumb path={path} onNavigate={setPath} />
 
-      <Row gap={2} className={styles.toolbar}>
-        <Button variant="tonal" onClick={createFolder}>
+      <div className="flex items-center gap-2 border-b px-4 py-2">
+        <Button variant="secondary" size="sm" onClick={createFolder}>
+          <FolderPlus />
           New folder
         </Button>
         <UploadButton onFiles={upload} />
-      </Row>
-
-      <Divider />
+      </div>
 
       {error && (
-        <Text variant="bodyMedium" role="alert" className={styles.message}>
+        <p role="alert" className="border-b bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {error}
-        </Text>
+        </p>
       )}
 
-      <Fill>
+      <div className="min-h-0 flex-1">
         {loading ? (
-          <Center>
-            <CircularProgress aria-label="Loading" />
-          </Center>
+          <div className="grid h-full place-items-center">
+            <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
+          </div>
         ) : entries.length === 0 ? (
           <Empty title="Nothing here" detail="Drop files anywhere on this page to upload them." />
         ) : (
@@ -170,11 +173,13 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
             onDelete={remove}
           />
         )}
-      </Fill>
+      </div>
 
       {dragging && (
-        <div className={styles.dropTarget}>
-          <Text variant="headlineSmall">Drop to upload</Text>
+        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-primary/10 backdrop-blur-sm">
+          <div className="rounded-xl border-2 border-dashed border-primary bg-card px-8 py-6 text-lg font-medium text-primary">
+            Drop to upload
+          </div>
         </div>
       )}
 
@@ -187,30 +192,34 @@ function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string
   const segments = path === '/' ? [] : path.slice(1).split('/')
 
   return (
-    <nav aria-label="Location" className={styles.breadcrumb}>
-      <Row gap={1} wrap>
-        <Button variant="text" onClick={() => onNavigate('/')}>
+    <nav aria-label="Location" className="flex items-center gap-0.5 px-3 py-1.5">
+      <div className="flex flex-wrap items-center gap-0.5">
+        <Button variant="ghost" size="sm" onClick={() => onNavigate('/')}>
           Home
         </Button>
         {segments.map((segment, index) => {
           const target = '/' + segments.slice(0, index + 1).join('/')
           return (
-            <Row key={target} gap={1}>
-              <span aria-hidden className={styles.separator}>
-                /
-              </span>
-              <Button variant="text" onClick={() => onNavigate(target)}>
+            <div key={target} className="flex items-center gap-0.5">
+              <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+              <Button variant="ghost" size="sm" onClick={() => onNavigate(target)}>
                 {segment}
               </Button>
-            </Row>
+            </div>
           )
         })}
         {path !== '/' && (
-          <Button variant="text" onClick={() => onNavigate(parentOf(path))}>
-            Up
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-1 size-8"
+            aria-label="Up one level"
+            onClick={() => onNavigate(parentOf(path))}
+          >
+            <ChevronUp />
           </Button>
         )}
-      </Row>
+      </div>
     </nav>
   )
 }
@@ -240,15 +249,15 @@ function EntryList({ entries, onOpen, onDownload, onDelete }: ListProps) {
   })
 
   return (
-    <div ref={viewport} className={styles.viewport}>
-      <div className={styles.canvas} style={{ height: `${virtualizer.getTotalSize()}px` }}>
+    <div ref={viewport} className="h-full overflow-auto">
+      <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
         {virtualizer.getVirtualItems().map((item) => {
           const entry = entries[item.index]
           if (!entry) return null
           return (
             <div
               key={entry.path}
-              className={styles.rowSlot}
+              className="absolute inset-x-0 top-0"
               style={{ height: `${item.size}px`, transform: `translateY(${item.start}px)` }}
             >
               <EntryRow entry={entry} onOpen={onOpen} onDownload={onDownload} onDelete={onDelete} />
@@ -262,33 +271,45 @@ function EntryList({ entries, onOpen, onDownload, onDelete }: ListProps) {
 
 function EntryRow({ entry, onOpen, onDownload, onDelete }: { entry: Entry } & Omit<ListProps, 'entries'>) {
   return (
-    <div className={styles.row}>
-      {/* Material Symbols would need the icon font bundled; a minimal interface
-          says it in words instead. Icons arrive with lot 5.3. */}
-      <Text variant="labelSmall" className={styles.kind}>
-        {entry.is_dir ? 'DIR' : 'FILE'}
-      </Text>
+    <div className="group flex h-14 items-center gap-3 border-b px-4 hover:bg-accent/60">
+      <span className={entry.is_dir ? 'text-primary' : 'text-muted-foreground'}>
+        {entry.is_dir ? <FolderIcon className="size-5" /> : <FileIcon className="size-5" />}
+      </span>
 
       <button
         type="button"
-        className={`${styles.name} ${truncate}`}
+        className="min-w-0 flex-1 truncate text-left text-sm outline-none hover:underline focus-visible:underline"
         onClick={() => (entry.is_dir ? onOpen(entry) : onDownload(entry))}
       >
-        <Text variant="bodyLarge">{entry.name}</Text>
+        {entry.name}
       </button>
 
-      <Text variant="bodySmall" className={styles.size}>
+      <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
         {entry.is_dir ? '—' : formatSize(entry.size)}
-      </Text>
+      </span>
 
-      {!entry.is_dir && (
-        <Button variant="text" onClick={() => onDownload(entry)}>
-          Download
+      <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        {!entry.is_dir && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label={`Download ${entry.name}`}
+            onClick={() => onDownload(entry)}
+          >
+            <Download />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 text-muted-foreground hover:text-destructive"
+          aria-label={`Delete ${entry.name}`}
+          onClick={() => onDelete(entry)}
+        >
+          <Trash2 />
         </Button>
-      )}
-      <Button variant="text" onClick={() => onDelete(entry)}>
-        Delete
-      </Button>
+      </div>
     </div>
   )
 }
@@ -297,7 +318,8 @@ function UploadButton({ onFiles }: { onFiles: (files: FileList) => void }) {
   const input = useRef<HTMLInputElement>(null)
   return (
     <>
-      <Button variant="filled" onClick={() => input.current?.click()}>
+      <Button size="sm" onClick={() => input.current?.click()}>
+        <Upload />
         Upload
       </Button>
       <input
@@ -326,39 +348,39 @@ function Transfers({ transfers, onClear }: { transfers: UploadProgress[]; onClea
   const active = transfers.filter((t) => t.status === 'uploading').length
 
   return (
-    <div className={styles.transfers}>
-      <Row>
-        <Text variant="titleSmall">
+    <div className="fixed bottom-4 right-4 z-20 w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-4 shadow-lg">
+      <div className="flex items-center">
+        <p className="text-sm font-medium">
           {active > 0 ? `Uploading ${active} file${active > 1 ? 's' : ''}` : 'Transfers'}
-        </Text>
-        <Spacer />
+        </p>
         {active === 0 && (
-          <Button variant="text" onClick={onClear}>
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>
             Clear
           </Button>
         )}
-      </Row>
+      </div>
 
-      <Stack gap={2} className={styles.transferList}>
+      <div className="mt-2 space-y-2">
         {transfers.map((transfer) => (
-          <Stack gap={1} key={transfer.name}>
-            <Row gap={4}>
-              <Text variant="bodyMedium" className={truncate}>
-                {transfer.name}
-              </Text>
-              <Spacer />
-              <Text variant="bodySmall" className={styles.transferMeta}>
+          <div key={transfer.name} className="space-y-1">
+            <div className="flex items-center gap-4">
+              <span className="min-w-0 flex-1 truncate text-sm">{transfer.name}</span>
+              <span
+                className={`shrink-0 text-xs tabular-nums ${
+                  transfer.status === 'error' ? 'text-destructive' : 'text-muted-foreground'
+                }`}
+              >
                 {transfer.status === 'error'
                   ? (transfer.error ?? 'failed')
                   : `${formatSize(transfer.sent)} / ${formatSize(transfer.total)}`}
-              </Text>
-            </Row>
+              </span>
+            </div>
             {transfer.status === 'uploading' && (
-              <LinearProgress value={transfer.total ? transfer.sent / transfer.total : 0} />
+              <Progress value={transfer.total ? (transfer.sent / transfer.total) * 100 : 0} />
             )}
-          </Stack>
+          </div>
         ))}
-      </Stack>
+      </div>
     </div>
   )
 }

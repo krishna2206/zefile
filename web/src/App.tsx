@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CircularProgress, Text } from '@language-lit/material3-expressive'
+import { Loader2 } from 'lucide-react'
 
 import { api, ApiError, type User } from './api'
 import { SignIn } from './SignIn'
 import { Browser } from './Browser'
- import { Center, Stack } from './ui/Layout'
- import styles from './App.module.css'
 
 type State =
   | { phase: 'loading' }
@@ -44,9 +42,9 @@ export function App() {
   switch (state.phase) {
     case 'loading':
       return (
-        <Center>
-          <CircularProgress aria-label="Loading" />
-        </Center>
+        <div className="grid min-h-dvh place-items-center">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
+        </div>
       )
     case 'setup':
       return <SignIn mode="setup" onDone={resolve} />
@@ -64,13 +62,11 @@ export function App() {
  * blank rectangle. */
 export function Empty({ title, detail }: { title: string; detail?: string }) {
   return (
-    <Stack gap={2} className={styles.empty}>
-      <Text variant="titleMedium">{title}</Text>
-      {detail && (
-        <Text variant="bodyMedium" className={styles.hint}>
-          {detail}
-        </Text>
-      )}
-    </Stack>
+    <div className="grid h-full place-items-center p-8 text-center">
+      <div className="max-w-sm space-y-1">
+        <p className="text-base font-medium">{title}</p>
+        {detail && <p className="text-sm text-muted-foreground">{detail}</p>}
+      </div>
+    </div>
   )
 }

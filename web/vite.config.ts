@@ -1,8 +1,17 @@
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    // The `@` alias is the one shadcn/ui generates against; a component copied
+    // from the registry lands and works unchanged.
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
   build: {
     // Output lands where the Go package that embeds it lives, so the
     // binary needs no build step to copy files around.

@@ -19,7 +19,15 @@ export type User = { id: number; username: string; email?: string; is_admin: boo
 export type Space = { available: number; total: number; reserve: number; read_only: boolean }
 
 /** Problem is the RFC 9457 error body every failure returns. */
-export type Problem = { type: string; title: string; status: number; code: string; detail?: string }
+export type Problem = {
+  type: string
+  title: string
+  status: number
+  code: string
+  detail?: string
+  /** Field name to message, when the failure is about specific input. */
+  errors?: Record<string, string>
+}
 
 /** ApiError carries the machine-readable code, which is what callers branch on. */
 export class ApiError extends Error {

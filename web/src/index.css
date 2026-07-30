@@ -1,15 +1,109 @@
-/* Material 3 first, our own rules after.
- *
- * The library's styles live in m3e.* cascade layers. Ours are unlayered, which
- * beats any layer regardless of specificity — so there is one rule to remember
- * and no order to maintain.
- *
- * This project has no utility framework. One was tried and removed: a utility
- * layer and a component library both want to own the cascade, and every fix on
- * one side broke the other. Layout lives in the primitives under src/ui and in
- * per-component CSS modules instead.
- */
-@import "@language-lit/material3-expressive/styles.css";
+@import "tailwindcss";
+@import "tw-animate-css";
 
-@import "./styles/tokens.css";
-@import "./styles/base.css";
+/* Dark mode is a class on the root element, toggled from the system setting in
+ * main.tsx. Nobody opens a file manager to pick a theme, so there is no switch;
+ * the class exists only so `dark:` utilities and the token block below agree on
+ * one signal. */
+@custom-variant dark (&:is(.dark *));
+
+/* Zefile's palette expressed as shadcn's semantic tokens.
+ *
+ * The brand is a pine green (#2F5D50) with a brass accent (#8E6528). Everything
+ * else is a neutral warmed a few degrees towards the green so the surface does
+ * not read as clinical grey. Values are plain hex on purpose: a colour you can
+ * read is a colour you can correct, and the tonal-ramp generation this replaces
+ * was a whole toolchain to avoid picking sixteen of them by hand. */
+:root {
+  --radius: 0.625rem;
+
+  --background: #fbfbf9;
+  --foreground: #1a1c1b;
+  --card: #ffffff;
+  --card-foreground: #1a1c1b;
+  --popover: #ffffff;
+  --popover-foreground: #1a1c1b;
+  --primary: #2f5d50;
+  --primary-foreground: #ffffff;
+  --secondary: #e6ece8;
+  --secondary-foreground: #223029;
+  --muted: #eef0ee;
+  --muted-foreground: #5b625e;
+  --accent: #e6ece8;
+  --accent-foreground: #223029;
+  --destructive: #b3261e;
+  --destructive-foreground: #ffffff;
+  --border: #dde1de;
+  --input: #dde1de;
+  --ring: #2f5d50;
+
+  --brand: #8e6528;
+}
+
+.dark {
+  --background: #0f1412;
+  --foreground: #e6e9e6;
+  --card: #171d1a;
+  --card-foreground: #e6e9e6;
+  --popover: #171d1a;
+  --popover-foreground: #e6e9e6;
+  --primary: #7fd0bb;
+  --primary-foreground: #06231b;
+  --secondary: #263029;
+  --secondary-foreground: #d6ddd8;
+  --muted: #1f2723;
+  --muted-foreground: #9aa39d;
+  --accent: #263029;
+  --accent-foreground: #e6e9e6;
+  --destructive: #e5484d;
+  --destructive-foreground: #ffffff;
+  --border: #2a322d;
+  --input: #2a322d;
+  --ring: #7fd0bb;
+
+  --brand: #d0a35a;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-brand: var(--brand);
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+}

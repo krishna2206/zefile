@@ -126,9 +126,9 @@
 <div class="shell">
 
   <header class="masthead">
-    <div class="eyebrow">Zefile · conception de l’interface · v1.1</div>
+    <div class="eyebrow">Zefile · conception de l’interface · v2</div>
     <h1>Conception de l’interface</h1>
-    <p class="standfirst">Material 3 Expressive comme socle de composants, ensemencé par le vert du projet. Ce document traite de ce que la bibliothèque ne fournit pas&nbsp;: les composants propres au produit, la densité, les états, et les limites à ne pas franchir.</p>
+    <p class="standfirst">shadcn/ui et Tailwind CSS comme socle&nbsp;: des composants qu’on possède, teintés du vert du projet. Ce document traite de ce que le socle ne fournit pas&nbsp;— les composants propres au produit, la densité, les états, et les limites à ne pas franchir.</p>
   </header>
 
   <div class="layout">
@@ -153,58 +153,58 @@
 
       <section id="direction">
         <h2><span class="num">01</span><span>Direction</span></h2>
-        <p>L’interface est bâtie sur <strong>Material 3 Expressive pour React</strong> (<code>@language-lit/material3-expressive</code>, MIT, 41 composants, sans dépendance d’exécution hors React). La bibliothèque possède les composants, la couleur, la typographie et le mouvement. <strong>On ne se bat pas contre elle.</strong></p>
+        <p>L’interface est bâtie sur <strong>shadcn/ui</strong>&nbsp;: non pas une bibliothèque installée mais des composants copiés dans <code>src/components/ui</code>, dont le dépôt est propriétaire. Ils s’appuient sur les primitives <a class="ext" href="https://www.radix-ui.com">Radix</a> pour le comportement accessible, sur <strong>Tailwind CSS</strong> pour le style, et sur <code>lucide-react</code> pour les icônes. <strong>On possède le socle&nbsp;; il n’y a personne contre qui se battre.</strong></p>
         <div class="note">
           <span class="label">Principe directeur</span>
-          <p>Adopter un système de design, c’est en accepter le vocabulaire entier. Chaque surcharge de jeton est une dette qui se paie à la mise à jour suivante&nbsp;— et un système à moitié respecté produit un résultat moins bon que l’un ou l’autre pleinement assumé.</p>
+          <p>Le premier choix fut Material 3 Expressive, puis son abandon&nbsp;: une bibliothèque de composants qui possède la cascade impose un contournement à chaque écart, et sur un projet aussi jeune le compte n’y était pas. shadcn inverse le rapport&nbsp;— le composant est du code à nous, qu’on édite au lieu de le surcharger. Une couleur, une densité, un état qui ne convient pas&nbsp;: on ouvre le fichier.</p>
         </div>
-        <p>Conséquence assumée&nbsp;: l’application n’aura pas le caractère éditorial de ce document. Elle sera arrondie, élevée, animée, en Roboto. C’est le prix d’un socle accessible, testé et rapide à construire&nbsp;— et un gestionnaire de fichiers en Material est un territoire familier pour l’utilisateur, ce qui n’est pas un défaut.</p>
+        <p>Conséquence assumée&nbsp;: l’application n’aura pas le caractère éditorial de ce document. Elle sera sobre, plate, rapide, en police système. C’est le prix d’un socle accessible qu’on maîtrise de bout en bout&nbsp;— et un gestionnaire de fichiers dépouillé est un territoire familier pour l’utilisateur, ce qui n’est pas un défaut.</p>
         <p class="caption">Cette documentation conserve en revanche son identité propre. Les documents sont des documents&nbsp;; l’application est l’application.</p>
 
-        <div class="note warn">
-          <span class="label">Coût à surveiller</span>
-          <p>82&nbsp;Ko de JavaScript compressé plus 50&nbsp;Ko de CSS. C’est la plus grosse décision de poids du projet&nbsp;— acceptable sur une application auto-hébergée et mise en cache dès la première visite, mais elle interdit de revendiquer l’ultra-légèreté face à un concurrent. Le principe «&nbsp;la légèreté est le produit&nbsp;» du §02 de la conception se reporte donc entièrement sur <em>les dépendances qu’on ajoutera ensuite</em>&nbsp;: à partir d’ici, chaque nouvelle bibliothèque doit se justifier.</p>
+        <div class="note">
+          <span class="label">Coût mesuré</span>
+          <p>Environ 5&nbsp;Ko de CSS compressé et un JavaScript divisé par deux face à Material&nbsp;— Tailwind ne livre que les utilitaires réellement employés, et Radix n’embarque que les primitives des composants utilisés. Le principe «&nbsp;la légèreté est le produit&nbsp;» reste tenu au niveau du framework&nbsp;; il se joue désormais surtout sur <em>les dépendances qu’on ajoutera ensuite</em>&nbsp;: chaque nouvelle bibliothèque doit se justifier.</p>
         </div>
       </section>
 
       <section id="couleur">
         <h2><span class="num">02</span><span>Couleur</span></h2>
-        <p>Material 3 dérive l’intégralité de ses palettes tonales d’une couleur source, avec vérification de contraste intégrée. On fournit les graines, le système produit les rampes et les rôles pour les thèmes clair et sombre.</p>
+        <p>shadcn expose une quinzaine de <strong>jetons sémantiques</strong> — <code>background</code>, <code>foreground</code>, <code>primary</code>, <code>muted</code>, <code>destructive</code>… — définis en propriétés CSS, une fois en clair et une fois en sombre. On les remplit à la main à partir des deux graines du projet. Fini la génération de rampes tonales de treize teintes&nbsp;: on choisit les couleurs qui comptent et on les écrit là où on les lit, dans <code>index.css</code>.</p>
 
         <div class="swatches">
           <div class="sw"><div class="chip" style="background:#2F5D50"></div><span class="n">Primaire</span><span class="h">#2F5D50</span></div>
           <div class="sw"><div class="chip" style="background:#8E6528"></div><span class="n">Tertiaire</span><span class="h">#8E6528</span></div>
           <div class="sw"><div class="chip" style="background:#9E3826"></div><span class="n">Erreur</span><span class="h">#9E3826</span></div>
         </div>
-        <p class="caption">Le vert de sapin et le laiton sont ceux de cette documentation&nbsp;: la palette d’origine survit comme graine, même si la forme change.</p>
+        <p class="caption">Le vert de sapin et le laiton sont ceux de cette documentation&nbsp;: la palette d’origine se retrouve dans le produit, sous une autre forme.</p>
 
         <div class="rows">
           <div class="row">
-            <div class="name">Graine primaire</div>
-            <div class="desc"><code>#2F5D50</code> — vert de sapin. Détermine l’accent, les états actifs, la sélection.</div>
+            <div class="name">Couleur primaire</div>
+            <div class="desc"><code>#2F5D50</code> — vert de sapin. Alimente le jeton <code>primary</code>&nbsp;: accent, boutons pleins, états actifs, sélection.</div>
           </div>
           <div class="row">
-            <div class="name">Graine tertiaire</div>
-            <div class="desc"><code>#8E6528</code> — laiton. Réservé aux accents ponctuels&nbsp;: badges, mises en avant, éléments à signaler sans alarmer.</div>
+            <div class="name">Accent laiton</div>
+            <div class="desc"><code>#8E6528</code> — laiton. Un jeton <code>brand</code> à part, réservé aux accents ponctuels&nbsp;— la marque dans l’en-tête, une mise en avant à signaler sans alarmer.</div>
           </div>
           <div class="row">
             <div class="name">Rôles sémantiques</div>
-            <div class="desc">L’erreur est fournie par M3. <strong>Avertissement et succès ne le sont pas</strong> et doivent être définis explicitement&nbsp;— on en a besoin pour le disque presque plein, le mode lecture seule et la fin d’un transfert. À définir comme rôles à part entière, jamais en couleurs codées en dur.</div>
+            <div class="desc"><code>destructive</code> est fourni par le socle. <strong>Avertissement et succès ne le sont pas</strong> et sont à ajouter comme jetons propres&nbsp;— on en a besoin pour le disque presque plein, le mode lecture seule et la fin d’un transfert. Toujours des jetons, jamais des couleurs codées en dur dans un composant.</div>
           </div>
           <div class="row">
             <div class="name">Thème clair et sombre</div>
-            <div class="desc">Les deux sont générés à partir des mêmes graines et validés en contraste. Le sombre n’est pas une inversion&nbsp;: c’est une seconde dérivation.</div>
+            <div class="desc">Chaque jeton est écrit deux fois&nbsp;: sous <code>:root</code> et sous <code>.dark</code>, cette dernière classe posée depuis la préférence système. Le sombre n’est pas une inversion&nbsp;: c’est un second jeu de valeurs, ajusté pour le contraste (la primaire s’éclaircit sur fond sombre).</div>
           </div>
           <div class="row">
             <div class="name">Une seule source de vérité</div>
-            <div class="desc">La configuration notre CSS lit les propriétés CSS de M3E. Aucune valeur de couleur n’est écrite deux fois, aucune n’est écrite en dur dans un composant.</div>
+            <div class="desc">Les utilitaires Tailwind (<code>bg-primary</code>, <code>text-muted-foreground</code>…) pointent vers ces jetons. Aucune valeur de couleur n’est écrite deux fois, aucune n’est codée en dur dans un composant.</div>
           </div>
         </div>
       </section>
 
       <section id="type">
         <h2><span class="num">03</span><span>Typographie &amp; densité</span></h2>
-        <p>L’échelle typographique de Material est reprise telle quelle. En revanche, <strong>sa densité par défaut est trop aérée pour un gestionnaire de fichiers</strong>&nbsp;: elle est calibrée pour le mobile et pour des listes courtes, pas pour un dossier de dix mille entrées où le nombre de lignes visibles décide de l’utilisabilité.</p>
+        <p>L’échelle typographique de Tailwind est reprise telle quelle, en police système. En revanche, <strong>la densité par défaut de shadcn est trop aérée pour un gestionnaire de fichiers</strong>&nbsp;: elle vise des formulaires et des listes courtes, pas un dossier de dix mille entrées où le nombre de lignes visibles décide de l’utilisabilité. On resserre les composants répétés en éditant directement leur source.</p>
         <div class="note">
           <span class="label">Décision</span>
           <p>Densité compacte sur tout ce qui est répété&nbsp;— lignes de fichiers, tableaux, listes de partages, journal d’audit&nbsp;— et densité par défaut sur tout le reste, formulaires et boîtes de dialogue compris. Deux niveaux, pas trois, et le choix ne se discute pas composant par composant&nbsp;: il découle de la répétition.</p>
@@ -215,26 +215,28 @@
 
       <section id="frontieres">
         <h2><span class="num">04</span><span>Frontières des outils</span></h2>
-        <p>Deux systèmes de style coexistent&nbsp;; sans règle explicite, ils se recouvrent et l’on ne sait plus où un style est défini. La frontière est la suivante, et elle n’admet pas d’exception&nbsp;:</p>
+        <p>Il n’y a plus deux systèmes de style qui se disputent la cascade&nbsp;— c’était la raison de l’abandon de Material. Il reste une répartition claire des rôles, sans exception&nbsp;:</p>
 
-        <div class="block"><pre><b>Material 3 Expressive</b>   composants, couleur, typographie,
-                        élévation, formes, mouvement
+        <div class="block"><pre><b>composants shadcn</b>       comportement accessible (via Radix), style
+   (src/components/ui)      de base d'un bouton, d'un champ, d'une carte
 
-<b>notre CSS</b>                grilles, flex, espacements, positionnement,
-                        cas ponctuels sans composant dédié
+<b>utilitaires Tailwind</b>    disposition, espacements, couleur, densité —
+                        tout le visuel, dans le balisage des écrans
 
-<b>CSS ordinaire</b>           les composants produit du §06, quand la
-                        chaîne d'utilitaires devient illisible</pre></div>
+<b>index.css</b>              les jetons (clair/sombre) et le peu de base
+                        globale ; c'est là que vivent les couleurs
+
+<b>lucide-react</b>           les icônes</pre></div>
 
         <div class="note stop">
           <span class="label">Interdits</span>
-          <p>Aucune couleur codée en dur, jamais&nbsp;— ni en notre CSS, ni en CSS. Aucune surcharge des jetons de forme ou d’élévation de M3E. Aucun composant notre CSS qui réimplémente un composant existant de la bibliothèque. En cas de doute&nbsp;: si M3E le fournit, on l’utilise tel quel.</p>
+          <p>Aucune couleur codée en dur, jamais&nbsp;— on passe par un jeton (<code>bg-primary</code>, <code>text-destructive</code>). Aucun composant maison qui réimplémente un composant shadcn existant&nbsp;: on copie celui du registre et on l’édite. Un composant shadcn ne convient pas&nbsp;? On modifie son fichier, on ne le contourne pas depuis l’extérieur.</p>
         </div>
       </section>
 
       <section id="ecrans">
         <h2><span class="num">05</span><span>Écrans</span></h2>
-        <p>Navigation par rail latéral sur écran large, barre de navigation basse sur mobile&nbsp;— les deux fournis par M3E.</p>
+        <p>Navigation par rail latéral sur écran large, barre basse sur mobile&nbsp;— composés à partir des primitives du socle plutôt que fournis clés en main.</p>
 
         <div class="rows">
           <div class="rowhead">Utilisateur</div>
@@ -285,7 +287,7 @@
 
       <section id="composants">
         <h2><span class="num">06</span><span>Composants produit</span></h2>
-        <p>M3E fournit des boutons et des dialogues&nbsp;; il ne fournit rien de ce qui suit. <strong>C’est ici que se joue la qualité perçue du produit</strong>, et c’est donc ici que l’effort de conception doit aller.</p>
+        <p>shadcn fournit des boutons, des champs et des dialogues&nbsp;; il ne fournit rien de ce qui suit. <strong>C’est ici que se joue la qualité perçue du produit</strong>, et c’est donc ici que l’effort de conception doit aller.</p>
 
         <div class="rows">
           <div class="row">
@@ -351,7 +353,7 @@
           </div>
           <div class="row">
             <div class="name">Aucune transition sur les lignes</div>
-            <div class="desc">Le mouvement expressif de M3 s’applique aux navigations et aux superpositions, pas aux éléments de liste. Une transition multipliée par le nombre de lignes visibles devient un coût, pas un raffinement.</div>
+            <div class="desc">Le peu de mouvement qu’on s’autorise s’applique aux navigations et aux superpositions, pas aux éléments de liste. Une transition multipliée par le nombre de lignes visibles devient un coût, pas un raffinement.</div>
           </div>
           <div class="row">
             <div class="name">Vignettes différées</div>
@@ -366,7 +368,7 @@
 
       <section id="a11y">
         <h2><span class="num">09</span><span>Accessibilité</span></h2>
-        <p>M3E apporte la sémantique native, la navigation clavier, la direction du texte, le respect du mouvement réduit et les couleurs forcées. Ce qui reste à notre charge concerne les composants du §06&nbsp;:</p>
+        <p>Radix, sous les composants shadcn, apporte la sémantique, la navigation clavier, la gestion du focus et le respect du mouvement réduit. Ce qui reste à notre charge concerne les composants du §06&nbsp;:</p>
         <ul>
           <li><strong>Toute opération courante réalisable sans souris</strong> — c’est le critère d’achèvement du lot 5.3 de la roadmap.</li>
           <li>Sélection au clavier avec les conventions attendues&nbsp;: étendue par majuscule, discontinue par touche de commande.</li>
@@ -379,18 +381,18 @@
       <section id="limites">
         <h2><span class="num">10</span><span>Ce qu’on ne fait pas</span></h2>
         <ul>
-          <li><strong>Aucun thème personnalisable par l’utilisateur final</strong> au-delà du choix clair/sombre. L’administrateur peut changer la couleur source de l’instance&nbsp;; c’est tout.</li>
+          <li><strong>Aucun thème personnalisable par l’utilisateur final</strong>&nbsp;: le mode clair/sombre suit le système, sans réglage. L’administrateur peut retoucher les jetons de l’instance&nbsp;; c’est tout.</li>
           <li><strong>Aucune disposition configurable</strong>&nbsp;: pas de panneaux déplaçables, pas de colonnes réordonnables. Une bonne disposition par défaut vaut mieux qu’une préférence à maintenir.</li>
-          <li><strong>Aucune icône personnalisée</strong> quand M3 en fournit une. Le jeu d’icônes de la bibliothèque fait autorité.</li>
+          <li><strong>Aucune icône hors de <code>lucide-react</code></strong> quand le jeu en fournit une. Un seul jeu d’icônes fait autorité.</li>
           <li><strong>Aucune animation décorative.</strong> Le mouvement sert à situer une transition ou à signaler un changement d’état, jamais à impressionner.</li>
-          <li><strong>Aucune bibliothèque d’interface supplémentaire.</strong> Après M3E, le budget de dépendances est consommé&nbsp;; toute addition doit se justifier contre le principe de légèreté.</li>
+          <li><strong>Aucune bibliothèque de composants supplémentaire.</strong> shadcn se copie, il ne s’empile pas&nbsp;; toute vraie dépendance d’interface en plus doit se justifier contre le principe de légèreté.</li>
         </ul>
       </section>
 
       <div class="colophon">
         <span>Zefile — conception de l’interface</span>
-        <span>Version 1</span>
-        <span>29 juillet 2026</span>
+        <span>Version 2 — pivot shadcn/ui</span>
+        <span>30 juillet 2026</span>
         <span>Adossée à la conception rév. 1.3</span>
       </div>
 
