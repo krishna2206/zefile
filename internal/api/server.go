@@ -90,6 +90,7 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("POST /api/v1/fs/move", s.handleMove)
 	authed.HandleFunc("POST /api/v1/fs/copy", s.handleCopy)
 	authed.HandleFunc("GET /api/v1/fs/link", s.handleLink)
+	authed.HandleFunc("GET /api/v1/fs/thumb", s.handleThumb)
 	authed.HandleFunc("GET /api/v1/fs/space", s.handleSpace)
 	authed.HandleFunc("GET /api/v1/config", s.handleConfig)
 

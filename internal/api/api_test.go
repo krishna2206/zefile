@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -296,6 +299,51 @@ func TestDeleteMovesToTrashAndRestores(t *testing.T) {
 	}
 	if _, raw := c.do(http.MethodGet, "/api/v1/trash", nil); len(decode[trashList](t, raw).Items) != 0 {
 		t.Fatalf("trash not empty after restore: %s", raw)
+	}
+}
+
+func TestThumbnailResizesImages(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+
+	// A 800x600 image written straight into the storage tree.
+	img := image.NewRGBA(image.Rect(0, 0, 800, 600))
+	for x := 0; x < 800; x++ {
+		img.Set(x, 0, color.RGBA{R: uint8(x % 256), G: 120, B: 200, A: 255})
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encode png: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(c.root, "pic.png"), buf.Bytes(), 0o644); err != nil {
+		t.Fatalf("write png: %v", err)
+	}
+
+	resp, raw := c.do(http.MethodGet, "/api/v1/fs/thumb?path=/pic.png&s=256", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("thumb = %d: %s", resp.StatusCode, raw)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "image/jpeg" {
+		t.Fatalf("content-type = %q, want image/jpeg", ct)
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("decode thumbnail: %v", err)
+	}
+	// Capped at 256 on the long side; the landscape source scales to 256x192.
+	if cfg.Width != 256 || cfg.Height != 192 {
+		t.Fatalf("thumbnail is %dx%d, want 256x192", cfg.Width, cfg.Height)
+	}
+
+	// A non-image is refused rather than streamed as if it were one.
+	if err := os.WriteFile(filepath.Join(c.root, "notes.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatalf("write txt: %v", err)
+	}
+	resp2, _ := c.do(http.MethodGet, "/api/v1/fs/thumb?path=/notes.txt", nil)
+	if resp2.StatusCode != http.StatusUnsupportedMediaType {
+		t.Fatalf("txt thumb = %d, want 415", resp2.StatusCode)
 	}
 }
 
