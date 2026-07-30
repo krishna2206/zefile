@@ -8,10 +8,13 @@ import type { Entry } from '@/api'
  * Until it arrives, and if it fails, `children` (the coloured file icon) stands
  * in as the placeholder.
  *
- * Loaded state is tracked against the current src rather than as a bare flag, so
- * when the entry changes — the gallery reuses one instance as the selection
- * moves — the placeholder shows immediately instead of the previous image
- * lingering while the new one loads.
+ * The image is layered over the placeholder and revealed with opacity rather
+ * than hidden with `display:none`: a lazily-loaded image that is `display:none`
+ * is never fetched, so `onLoad` would never fire and the picture never appear.
+ *
+ * Loaded state tracks the current src, so when the entry changes — the gallery
+ * reuses one instance as the selection moves — the placeholder shows at once
+ * instead of the previous image lingering.
  */
 export function Thumbnail({
   entry,
@@ -32,8 +35,8 @@ export function Thumbnail({
   const failed = failedSrc === src
 
   return (
-    <div className={className}>
-      {!shown && children}
+    <div className={`relative overflow-hidden ${className ?? ''}`}>
+      {!shown && <div className="absolute inset-0 grid place-items-center">{children}</div>}
       {!failed && (
         <img
           src={src}
@@ -42,7 +45,9 @@ export function Thumbnail({
           decoding="async"
           onLoad={() => setLoadedSrc(src)}
           onError={() => setFailedSrc(src)}
-          className={`h-full w-full object-cover ${shown ? '' : 'hidden'}`}
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity ${
+            shown ? 'opacity-100' : 'opacity-0'
+          }`}
         />
       )}
     </div>
