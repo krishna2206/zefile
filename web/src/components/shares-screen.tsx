@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { CircleNotch } from '@phosphor-icons/react'
+import { CircleNotch, LockSimple } from '@phosphor-icons/react'
 
 import { Empty } from '../App'
 import { api, ApiError, type Entry, type Share } from '@/api'
@@ -75,7 +75,12 @@ function ShareRow({ share, onRevoke }: { share: Share; onRevoke: () => void }) {
     <div className="flex h-14 items-center gap-3 border-b border-border/60 px-4 hover:bg-accent/40">
       <Icon className={`size-5 shrink-0 ${color}`} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm">{share.name}</p>
+        <p className="flex items-center gap-1.5 truncate text-sm">
+          {share.has_password && (
+            <LockSimple className="size-3.5 shrink-0 text-muted-foreground" aria-label="Password-protected" />
+          )}
+          <span className="truncate">{share.name}</span>
+        </p>
         <p className="truncate text-xs text-muted-foreground">
           {expiry} · {downloads}
         </p>

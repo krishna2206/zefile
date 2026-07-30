@@ -29,6 +29,7 @@ const selectClass =
  */
 export function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => void }) {
   const [expiryHours, setExpiryHours] = useState(DEFAULT_EXPIRY_HOURS)
+  const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [created, setCreated] = useState<Share | null>(null)
@@ -41,6 +42,7 @@ export function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => v
     try {
       const share = await api.createShare(entry.path, {
         expires_in_hours: expiryHours || undefined,
+        password: password.trim() || undefined,
       })
       setCreated(share)
     } catch (e) {
@@ -106,6 +108,21 @@ export function ShareDialog({ entry, onClose }: { entry: Entry; onClose: () => v
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="share-password">Password</Label>
+              <Input
+                id="share-password"
+                type="password"
+                placeholder="No password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.currentTarget.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                A protected link opens a password page in the browser (not usable by a download manager).
+              </p>
             </div>
 
             {err && <p className="text-sm text-destructive">{err}</p>}
