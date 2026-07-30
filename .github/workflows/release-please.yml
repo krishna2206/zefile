@@ -1,0 +1,22 @@
+name: release-please
+
+# Reads the Conventional Commits merged into main, works out the next version
+# (feat -> minor, fix -> patch, ! / BREAKING CHANGE -> minor while under 1.0),
+# and keeps a "release PR" open with the pending version and changelog. Merging
+# that PR tags the version and cuts the GitHub release.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
