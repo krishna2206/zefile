@@ -333,8 +333,9 @@ func TestShareLifecycle(t *testing.T) {
 		t.Fatalf("create = %d: %s", resp.StatusCode, raw)
 	}
 	sh := decode[shareItem](t, raw)
-	if !strings.Contains(sh.URL, "/s/zefile_shr_") {
-		t.Fatalf("share url = %q, want a /s/ link with a share token", sh.URL)
+	prefix := "https://content.example/s/"
+	if !strings.HasPrefix(sh.URL, prefix) || len(sh.URL)-len(prefix) < 20 {
+		t.Fatalf("share url = %q, want a /s/<token> link", sh.URL)
 	}
 	if sh.Name != "report.pdf" {
 		t.Fatalf("name = %q", sh.Name)
