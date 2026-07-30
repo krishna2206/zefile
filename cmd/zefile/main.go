@@ -21,6 +21,7 @@ import (
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/db"
 	"github.com/krishna2206/zefile/internal/storage"
+	"github.com/krishna2206/zefile/internal/trash"
 	"github.com/krishna2206/zefile/internal/upload"
 )
 
@@ -90,14 +91,17 @@ func run() error {
 	warnAboutSingleOrigin(cfg)
 
 	uploads := upload.New(database, fs)
+	trashService := trash.New(database, fs)
 
 	appHandler := api.New(api.Options{
 		FS:            fs,
 		Uploads:       uploads,
+		Trash:         trashService,
 		Auth:          authService,
 		ACL:           engine,
 		Signer:        signer,
 		ContentBase:   contentBase(cfg),
+		SingleOrigin:  cfg.SingleOrigin(),
 		SecureCookies: cfg.SecureCookies(),
 	}).Handler()
 

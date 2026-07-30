@@ -8,6 +8,7 @@ import (
 	"github.com/krishna2206/zefile/internal/auth"
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/storage"
+	"github.com/krishna2206/zefile/internal/trash"
 	"github.com/krishna2206/zefile/internal/upload"
 	"github.com/krishna2206/zefile/internal/web"
 )
@@ -21,7 +22,9 @@ type Server struct {
 	acl           *acl.Engine
 	signer        *content.Signer
 	uploads       *upload.Service
+	trash         *trash.Service
 	contentBase   string
+	singleOrigin  bool
 	secureCookies bool
 }
 
@@ -32,10 +35,16 @@ type Options struct {
 	ACL     *acl.Engine
 	Signer  *content.Signer
 	Uploads *upload.Service
+	Trash   *trash.Service
 
 	// ContentBase is the public origin serving files, without a trailing
 	// slash. In single-origin mode it is the application's own address.
 	ContentBase string
+
+	// SingleOrigin reports that files are served from the application origin,
+	// which forces every download to be an attachment — so nothing renders in
+	// place, and the interface must not offer an inline preview it cannot show.
+	SingleOrigin bool
 
 	SecureCookies bool
 }
@@ -48,7 +57,9 @@ func New(opts Options) *Server {
 		acl:           opts.ACL,
 		signer:        opts.Signer,
 		uploads:       opts.Uploads,
+		trash:         opts.Trash,
 		contentBase:   opts.ContentBase,
+		singleOrigin:  opts.SingleOrigin,
 		secureCookies: opts.SecureCookies,
 	}
 }
@@ -80,6 +91,12 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("POST /api/v1/fs/copy", s.handleCopy)
 	authed.HandleFunc("GET /api/v1/fs/link", s.handleLink)
 	authed.HandleFunc("GET /api/v1/fs/space", s.handleSpace)
+	authed.HandleFunc("GET /api/v1/config", s.handleConfig)
+
+	authed.HandleFunc("GET /api/v1/trash", s.handleTrashList)
+	authed.HandleFunc("DELETE /api/v1/trash", s.handleTrashEmpty)
+	authed.HandleFunc("POST /api/v1/trash/{id}/restore", s.handleTrashRestore)
+	authed.HandleFunc("DELETE /api/v1/trash/{id}", s.handleTrashPurge)
 
 	authed.HandleFunc("OPTIONS /api/v1/uploads", s.handleUploadOptions)
 	authed.HandleFunc("POST /api/v1/uploads", s.handleUploadCreate)

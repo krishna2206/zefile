@@ -14,12 +14,14 @@ type Querier interface {
 	CountUsers(ctx context.Context) (int64, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	CreateTrash(ctx context.Context, arg CreateTrashParams) (Trash, error)
 	CreateUpload(ctx context.Context, arg CreateUploadParams) (Upload, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteACL(ctx context.Context, id int64) error
 	DeleteACLForSubject(ctx context.Context, arg DeleteACLForSubjectParams) error
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
 	DeleteFileOwner(ctx context.Context, path string) error
+	DeleteTrash(ctx context.Context, id int64) error
 	DeleteUnusedInvitations(ctx context.Context) error
 	DeleteUpload(ctx context.Context, id int64) error
 	GetFileOwner(ctx context.Context, path string) (FileOwner, error)
@@ -32,6 +34,7 @@ type Querier interface {
 	// are filtered here rather than in Go: a caller that forgets the check must not
 	// be able to resurrect a dead session.
 	GetSessionByTokenHash(ctx context.Context, arg GetSessionByTokenHashParams) (GetSessionByTokenHashRow, error)
+	GetTrash(ctx context.Context, id int64) (Trash, error)
 	// Expiry is filtered here so an abandoned session cannot be revived days later
 	// by a client that kept its token.
 	GetUpload(ctx context.Context, arg GetUploadParams) (Upload, error)
@@ -44,6 +47,9 @@ type Querier interface {
 	ListExpiredUploads(ctx context.Context, expiresAt int64) ([]Upload, error)
 	ListGroupsForUser(ctx context.Context, userID int64) ([]int64, error)
 	ListSessionsForUser(ctx context.Context, arg ListSessionsForUserParams) ([]Session, error)
+	// Most recently deleted first: that is the order someone reaches for the trash
+	// to undo a mistake they just made.
+	ListTrash(ctx context.Context) ([]Trash, error)
 	MarkInvitationUsed(ctx context.Context, arg MarkInvitationUsedParams) error
 	MoveFileOwner(ctx context.Context, arg MoveFileOwnerParams) error
 	RevokeAllSessionsForUser(ctx context.Context, arg RevokeAllSessionsForUserParams) error

@@ -3,12 +3,14 @@ package api_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/krishna2206/zefile/internal/acl"
@@ -16,6 +18,7 @@ import (
 	"github.com/krishna2206/zefile/internal/auth"
 	"github.com/krishna2206/zefile/internal/db"
 	"github.com/krishna2206/zefile/internal/storage"
+	"github.com/krishna2206/zefile/internal/trash"
 )
 
 // The tests here drive the server the way a client does: over HTTP, through the
@@ -54,7 +57,7 @@ func newClient(t *testing.T) *client {
 	}))
 
 	srv := httptest.NewServer(api.New(api.Options{
-		FS: fs, Auth: service, ACL: engine, SecureCookies: false,
+		FS: fs, Auth: service, ACL: engine, Trash: trash.New(database, fs), SecureCookies: false,
 	}).Handler())
 	t.Cleanup(srv.Close)
 
@@ -243,29 +246,80 @@ func TestFullLifecycle(t *testing.T) {
 	}
 }
 
-func TestDeleteIsNotRecursiveByDefault(t *testing.T) {
+type trashItem struct {
+	ID           int64  `json:"id"`
+	OriginalPath string `json:"original_path"`
+	IsDir        bool   `json:"is_dir"`
+}
+
+type trashList struct {
+	Items []trashItem `json:"items"`
+}
+
+func TestDeleteMovesToTrashAndRestores(t *testing.T) {
 	t.Parallel()
 
 	c := newClient(t)
 	c.setUp()
 
+	// A non-empty directory: deleting it moves the whole tree at once, so the
+	// old "recursive" flag no longer means anything.
 	if _, raw := c.do(http.MethodPost, "/api/v1/fs/dirs", map[string]string{"path": "/dossier/sous"}); raw == nil {
 		t.Fatal("mkdir returned nothing")
 	}
 
-	// Without the flag, a non-empty directory is refused. Deleting a tree
-	// because a client forgot a parameter is unrecoverable before the trash.
 	resp, raw := c.do(http.MethodDelete, "/api/v1/fs?path=/dossier", nil)
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("delete = %d, want 409: %s", resp.StatusCode, raw)
-	}
-	if got := decode[problem](t, raw); got.Code != api.CodeNotEmpty {
-		t.Errorf("code = %q, want %q", got.Code, api.CodeNotEmpty)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete = %d: %s", resp.StatusCode, raw)
 	}
 
-	resp, _ = c.do(http.MethodDelete, "/api/v1/fs?path=/dossier&recursive=true", nil)
+	// Gone from the listing...
+	if _, raw := c.do(http.MethodGet, "/api/v1/fs?path=/", nil); strings.Contains(string(raw), "dossier") {
+		t.Fatalf("deleted folder still listed: %s", raw)
+	}
+
+	// ...but sitting in the trash, remembering where it came from.
+	_, raw = c.do(http.MethodGet, "/api/v1/trash", nil)
+	list := decode[trashList](t, raw)
+	if len(list.Items) != 1 || list.Items[0].OriginalPath != "/dossier" || !list.Items[0].IsDir {
+		t.Fatalf("trash = %+v", list.Items)
+	}
+	id := list.Items[0].ID
+
+	// Restoring puts it back where it was and empties the trash.
+	resp, raw = c.do(http.MethodPost, fmt.Sprintf("/api/v1/trash/%d/restore", id), nil)
 	if resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("recursive delete = %d", resp.StatusCode)
+		t.Fatalf("restore = %d: %s", resp.StatusCode, raw)
+	}
+	if _, raw := c.do(http.MethodGet, "/api/v1/fs?path=/", nil); !strings.Contains(string(raw), "dossier") {
+		t.Fatalf("restored folder not listed: %s", raw)
+	}
+	if _, raw := c.do(http.MethodGet, "/api/v1/trash", nil); len(decode[trashList](t, raw).Items) != 0 {
+		t.Fatalf("trash not empty after restore: %s", raw)
+	}
+}
+
+func TestTrashPurgeRemovesForGood(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+
+	c.do(http.MethodPost, "/api/v1/fs/dirs", map[string]string{"path": "/jetable"})
+	c.do(http.MethodDelete, "/api/v1/fs?path=/jetable", nil)
+
+	_, raw := c.do(http.MethodGet, "/api/v1/trash", nil)
+	list := decode[trashList](t, raw)
+	if len(list.Items) != 1 {
+		t.Fatalf("trash = %+v", list.Items)
+	}
+
+	resp, raw := c.do(http.MethodDelete, fmt.Sprintf("/api/v1/trash/%d", list.Items[0].ID), nil)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("purge = %d: %s", resp.StatusCode, raw)
+	}
+	if _, raw := c.do(http.MethodGet, "/api/v1/trash", nil); len(decode[trashList](t, raw).Items) != 0 {
+		t.Fatalf("trash not empty after purge: %s", raw)
 	}
 }
 

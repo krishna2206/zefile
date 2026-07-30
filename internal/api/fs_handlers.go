@@ -171,27 +171,29 @@ func (s *Server) handleCopy(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusCreated, toEntryResponse(info))
 }
 
+// handleDelete moves an entry to the trash rather than erasing it.
+//
+// A directory and everything under it go together in a single rename, so the
+// `recursive` flag the API once required no longer means anything — trashing a
+// tree is atomic, and a client that still sends the flag is simply ignored.
 func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	p, ok := pathParam(w, r)
 	if !ok {
 		return
 	}
-
-	// Recursion is opt-in. Deleting a directory tree because a client forgot a
-	// parameter is not a mistake anyone recovers from before the trash exists.
-	recursive := r.URL.Query().Get("recursive") == "true"
-
-	var err error
-	if recursive {
-		err = s.fs.RemoveAll(r.Context(), p)
-	} else {
-		err = s.fs.Remove(r.Context(), p)
+	c, ok := callerFrom(r.Context())
+	if !ok {
+		writeProblem(w, r, http.StatusUnauthorized, CodeUnauthenticated, "Not signed in", "")
+		return
 	}
-	if err != nil {
+
+	if err := s.trash.Trash(r.Context(), c.user.ID, p); err != nil {
 		writeError(w, r, err)
 		return
 	}
 
+	// Ownership is keyed on the path, which the entry no longer occupies.
+	// Restoring re-establishes it at the destination.
 	if err := s.acl.ClearOwner(r.Context(), p); err != nil {
 		writeError(w, r, err)
 		return
@@ -259,6 +261,17 @@ func (s *Server) handleSpace(w http.ResponseWriter, r *http.Request) {
 		Reserve:   info.Reserve,
 		ReadOnly:  info.ReadOnly,
 	})
+}
+
+type configResponse struct {
+	// InlinePreview reports whether files are served inline, so the interface
+	// can render an image or PDF in place instead of only downloading it.
+	InlinePreview bool `json:"inline_preview"`
+}
+
+// handleConfig reports the instance capabilities the interface has to adapt to.
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, r, http.StatusOK, configResponse{InlinePreview: !s.singleOrigin})
 }
 
 // pathParam reads and validates the path query parameter, defaulting to the
