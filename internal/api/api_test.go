@@ -1059,3 +1059,72 @@ func TestRenamePreservesAccess(t *testing.T) {
 	}
 	c.token = admin
 }
+
+func TestProfilePasswordAndSessions(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp() // session A, kept as c.token
+
+	// A second sign-in opens another session.
+	_, raw := c.do(http.MethodPost, "/api/v1/auth/login", map[string]string{
+		"username": "krishna", "password": "correct horse battery",
+	})
+	tokenB := decode[struct {
+		Token string `json:"token"`
+	}](t, raw).Token
+
+	// Both sessions are listed, exactly one marked current.
+	sessions := decode[struct {
+		Sessions []struct {
+			ID      int64 `json:"id"`
+			Current bool  `json:"current"`
+		} `json:"sessions"`
+	}](t, mustGet(c, "/api/v1/auth/sessions"))
+	current := 0
+	for _, s := range sessions.Sessions {
+		if s.Current {
+			current++
+		}
+	}
+	if len(sessions.Sessions) != 2 || current != 1 {
+		t.Fatalf("sessions = %+v, want 2 with one current", sessions.Sessions)
+	}
+
+	// The wrong current password is refused as a field error.
+	if resp, _ := c.do(http.MethodPost, "/api/v1/auth/password", map[string]string{
+		"current_password": "nope", "new_password": "new correct battery staple",
+	}); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("wrong current = %d, want 400", resp.StatusCode)
+	}
+
+	// Changing it succeeds and ends every other session.
+	if resp, body := c.do(http.MethodPost, "/api/v1/auth/password", map[string]string{
+		"current_password": "correct horse battery", "new_password": "new correct battery staple",
+	}); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("change = %d: %s", resp.StatusCode, body)
+	}
+
+	// The other session is dead; the current one still works.
+	saved := c.token
+	c.token = tokenB
+	if resp, _ := c.do(http.MethodGet, "/api/v1/auth/me", nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("other session after change = %d, want 401", resp.StatusCode)
+	}
+	c.token = saved
+	if resp, _ := c.do(http.MethodGet, "/api/v1/auth/me", nil); resp.StatusCode != http.StatusOK {
+		t.Fatalf("current session after change = %d, want 200", resp.StatusCode)
+	}
+
+	// The new password signs in; the old one does not.
+	if resp, _ := c.do(http.MethodPost, "/api/v1/auth/login", map[string]string{
+		"username": "krishna", "password": "new correct battery staple",
+	}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("new password login = %d, want 200", resp.StatusCode)
+	}
+	if resp, _ := c.do(http.MethodPost, "/api/v1/auth/login", map[string]string{
+		"username": "krishna", "password": "correct horse battery",
+	}); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("old password login = %d, want 401", resp.StatusCode)
+	}
+}

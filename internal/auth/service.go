@@ -643,6 +643,66 @@ func (s *Service) RevokeSession(ctx context.Context, sessionID int64) error {
 	return nil
 }
 
+// ChangePassword replaces an account's password after checking the current one.
+// The caller's other sessions are the responsibility of the handler, which can
+// keep the current one alive while ending the rest.
+func (s *Service) ChangePassword(ctx context.Context, userID int64, current, next string) error {
+	row, err := s.reads.GetUserByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrUserNotFound
+		}
+		return fmt.Errorf("auth: look up account: %w", err)
+	}
+
+	ok, err := VerifyPassword(current, row.PasswordHash)
+	if err != nil || !ok {
+		return ErrInvalidCredentials
+	}
+	if err := ValidatePassword(next, row.Username); err != nil {
+		return err
+	}
+
+	hash, err := HashPassword(next, s.params)
+	if err != nil {
+		return err
+	}
+	return s.writes.UpdateUserPassword(ctx, sqlcgen.UpdateUserPasswordParams{
+		PasswordHash: hash,
+		UpdatedAt:    s.now().Unix(),
+		ID:           userID,
+	})
+}
+
+// RevokeSessionForUser ends one of an account's own sessions, refusing an id
+// that is not theirs.
+func (s *Service) RevokeSessionForUser(ctx context.Context, userID, sessionID int64) error {
+	n, err := s.writes.RevokeSessionForUser(ctx, sqlcgen.RevokeSessionForUserParams{
+		RevokedAt: sql.NullInt64{Int64: s.now().Unix(), Valid: true},
+		ID:        sessionID,
+		UserID:    userID,
+	})
+	if err != nil {
+		return fmt.Errorf("auth: revoke session: %w", err)
+	}
+	if n == 0 {
+		return ErrInvalidSession
+	}
+	return nil
+}
+
+// RevokeOtherSessions signs the account out everywhere but the given session.
+func (s *Service) RevokeOtherSessions(ctx context.Context, userID, keepSessionID int64) error {
+	if err := s.writes.RevokeOtherSessionsForUser(ctx, sqlcgen.RevokeOtherSessionsForUserParams{
+		RevokedAt: sql.NullInt64{Int64: s.now().Unix(), Valid: true},
+		UserID:    userID,
+		ID:        keepSessionID,
+	}); err != nil {
+		return fmt.Errorf("auth: revoke other sessions: %w", err)
+	}
+	return nil
+}
+
 // RevokeAllSessions signs an account out everywhere, the response to a stolen
 // token or a changed password.
 func (s *Service) RevokeAllSessions(ctx context.Context, userID int64) error {

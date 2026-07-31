@@ -95,6 +95,10 @@ func (s *Server) Handler() http.Handler {
 	authed := http.NewServeMux()
 	authed.HandleFunc("POST /api/v1/auth/logout", s.handleLogout)
 	authed.HandleFunc("GET /api/v1/auth/me", s.handleMe)
+	authed.HandleFunc("POST /api/v1/auth/password", s.handleChangePassword)
+	authed.HandleFunc("GET /api/v1/auth/sessions", s.handleListSessions)
+	authed.HandleFunc("POST /api/v1/auth/sessions/revoke-others", s.handleRevokeOtherSessions)
+	authed.HandleFunc("DELETE /api/v1/auth/sessions/{id}", s.handleRevokeSession)
 
 	authed.HandleFunc("GET /api/v1/fs", s.handleList)
 	authed.HandleFunc("GET /api/v1/fs/search", s.handleSearch)

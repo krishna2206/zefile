@@ -167,6 +167,23 @@ func (q *Queries) RevokeAllSessionsForUser(ctx context.Context, arg RevokeAllSes
 	return err
 }
 
+const revokeOtherSessionsForUser = `-- name: RevokeOtherSessionsForUser :exec
+UPDATE sessions SET revoked_at = ?
+WHERE user_id = ? AND id != ? AND revoked_at IS NULL
+`
+
+type RevokeOtherSessionsForUserParams struct {
+	RevokedAt sql.NullInt64
+	UserID    int64
+	ID        int64
+}
+
+// Signs the account out everywhere but the session making the request.
+func (q *Queries) RevokeOtherSessionsForUser(ctx context.Context, arg RevokeOtherSessionsForUserParams) error {
+	_, err := q.db.ExecContext(ctx, revokeOtherSessionsForUser, arg.RevokedAt, arg.UserID, arg.ID)
+	return err
+}
+
 const revokeSession = `-- name: RevokeSession :exec
 UPDATE sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL
 `
@@ -179,6 +196,27 @@ type RevokeSessionParams struct {
 func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) error {
 	_, err := q.db.ExecContext(ctx, revokeSession, arg.RevokedAt, arg.ID)
 	return err
+}
+
+const revokeSessionForUser = `-- name: RevokeSessionForUser :execrows
+UPDATE sessions SET revoked_at = ?
+WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+`
+
+type RevokeSessionForUserParams struct {
+	RevokedAt sql.NullInt64
+	ID        int64
+	UserID    int64
+}
+
+// Scoped to the owner so one account cannot end another's session by guessing
+// an id.
+func (q *Queries) RevokeSessionForUser(ctx context.Context, arg RevokeSessionForUserParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, revokeSessionForUser, arg.RevokedAt, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const touchSession = `-- name: TouchSession :exec

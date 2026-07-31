@@ -1,4 +1,4 @@
-import { House, IconContext, ShareNetwork, SignOut, Trash, UsersThree } from '@phosphor-icons/react'
+import { GearSix, House, IconContext, ShareNetwork, SignOut, Trash, UsersThree } from '@phosphor-icons/react'
 
 import { formatSize, type Space, type User } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { NewButton, type CreateActions } from '@/components/create-menu'
 
-type Section = 'files' | 'trash' | 'shared' | 'members'
+type Section = 'files' | 'trash' | 'shared' | 'members' | 'settings'
 
 type Props = {
   user: User
@@ -18,6 +18,7 @@ type Props = {
   onTrash: () => void
   onShared: () => void
   onMembers: () => void
+  onSettings: () => void
   onSignOut: () => void
 }
 
@@ -25,7 +26,7 @@ type Props = {
  * Sidebar is the app's fixed left column: identity, the "New" action,
  * navigation, and the storage gauge that tells you when to stop uploading.
  */
-export function Sidebar({ user, space, section, create, canCreate, onHome, onTrash, onShared, onMembers, onSignOut }: Props) {
+export function Sidebar({ user, space, section, create, canCreate, onHome, onTrash, onShared, onMembers, onSettings, onSignOut }: Props) {
   const inFiles = section === 'files'
   const used = space ? Math.max(0, space.total - space.available) : 0
   const percent = space && space.total > 0 ? (used / space.total) * 100 : 0
@@ -99,8 +100,26 @@ export function Sidebar({ user, space, section, create, canCreate, onHome, onTra
           <div className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
             {user.username.slice(0, 1).toUpperCase()}
           </div>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{user.username}</span>
+          <button
+            type="button"
+            onClick={onSettings}
+            className={`min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left text-sm font-medium hover:bg-accent ${
+              section === 'settings' ? 'text-foreground' : ''
+            }`}
+            title="Account settings"
+          >
+            {user.username}
+          </button>
           <ThemeToggle className="size-8" />
+          <Button
+            variant={section === 'settings' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="size-8"
+            aria-label="Settings"
+            onClick={onSettings}
+          >
+            <GearSix />
+          </Button>
           <Button variant="ghost" size="icon" className="size-8" aria-label="Sign out" onClick={onSignOut}>
             <SignOut />
           </Button>

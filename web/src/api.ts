@@ -64,6 +64,16 @@ export type AccessRule = {
 /** UserSummary is an account in the admin's user list. */
 export type UserSummary = { id: number; username: string; is_admin: boolean; disabled: boolean }
 
+/** SessionInfo is one of the caller's active sessions. */
+export type SessionInfo = {
+  id: number
+  current: boolean
+  user_agent?: string
+  ip?: string
+  created_at: string
+  last_seen_at: string
+}
+
 /** TrashItem is an entry sitting in the trash, remembering where to restore it. */
 export type TrashItem = {
   id: number
@@ -149,6 +159,18 @@ export const api = {
 
   logout: () => request<void>('/api/v1/auth/logout', { method: 'POST' }),
   me: () => request<User>('/api/v1/auth/me'),
+
+  // Account self-service: change your own password (which signs your other
+  // devices out), and see or end your sessions.
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>('/api/v1/auth/password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+  listSessions: () => request<{ sessions: SessionInfo[] }>('/api/v1/auth/sessions'),
+  revokeSession: (id: number) => request<void>(`/api/v1/auth/sessions/${id}`, { method: 'DELETE' }),
+  revokeOtherSessions: () =>
+    request<void>('/api/v1/auth/sessions/revoke-others', { method: 'POST' }),
 
   // Invitations. Accepting is public (the account does not exist yet); creating,
   // listing and revoking are admin-only and the server enforces it.

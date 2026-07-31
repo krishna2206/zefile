@@ -92,7 +92,12 @@ type Querier interface {
 	// the next start; its own idempotent construction makes the retry safe.
 	RequeueRunningJobs(ctx context.Context) error
 	RevokeAllSessionsForUser(ctx context.Context, arg RevokeAllSessionsForUserParams) error
+	// Signs the account out everywhere but the session making the request.
+	RevokeOtherSessionsForUser(ctx context.Context, arg RevokeOtherSessionsForUserParams) error
 	RevokeSession(ctx context.Context, arg RevokeSessionParams) error
+	// Scoped to the owner so one account cannot end another's session by guessing
+	// an id.
+	RevokeSessionForUser(ctx context.Context, arg RevokeSessionForUserParams) (int64, error)
 	RevokeShare(ctx context.Context, arg RevokeShareParams) (int64, error)
 	SetFileOwner(ctx context.Context, arg SetFileOwnerParams) error
 	SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error
