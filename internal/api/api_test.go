@@ -946,3 +946,58 @@ func mustPatch(c *client, path string, body any) []byte {
 	}
 	return raw
 }
+
+func TestListingTraversesToGrants(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+
+	c.do(http.MethodPost, "/api/v1/fs/dirs", map[string]string{"path": "/partage"})
+	c.do(http.MethodPost, "/api/v1/fs/dirs", map[string]string{"path": "/private"})
+	if err := os.WriteFile(filepath.Join(c.root, "partage", "note.txt"), []byte("hi"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Bring in a non-admin.
+	_, raw := c.do(http.MethodPost, "/api/v1/invitations", map[string]string{})
+	inviteToken := decode[struct {
+		Token string `json:"token"`
+	}](t, raw).Token
+	_, raw = c.do(http.MethodPost, "/api/v1/invitations/accept", map[string]string{
+		"token": inviteToken, "username": "bob", "password": "correct horse battery",
+	})
+	bob := decode[struct {
+		User  userJSON `json:"user"`
+		Token string   `json:"token"`
+	}](t, raw)
+	admin := c.token
+
+	// With no grants, bob's root lists empty rather than failing.
+	c.token = bob.Token
+	if got := decode[listing](t, mustList(c, "/")); len(got.Entries) != 0 {
+		t.Fatalf("no-grant root = %+v, want empty", got.Entries)
+	}
+
+	// Grant bob read on /partage.
+	c.token = admin
+	c.do(http.MethodPost, "/api/v1/access", map[string]any{
+		"subject_id": bob.User.ID, "path": "/partage", "perms": map[string]bool{"read": true}, "recursive": true,
+	})
+
+	// Bob's root now shows the granted folder and nothing else.
+	c.token = bob.Token
+	root := decode[listing](t, mustList(c, "/"))
+	if !hasEntry(root.Entries, "partage") || hasEntry(root.Entries, "private") {
+		t.Fatalf("root = %+v, want partage only", root.Entries)
+	}
+	// He can list inside it,
+	if inside := decode[listing](t, mustList(c, "/partage")); !hasEntry(inside.Entries, "note.txt") {
+		t.Fatalf("/partage = %+v, want note.txt", inside.Entries)
+	}
+	// but a folder he has no path to is denied outright.
+	if resp, _ := c.do(http.MethodGet, "/api/v1/fs?path=/private", nil); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("/private = %d, want 403", resp.StatusCode)
+	}
+	c.token = admin
+}

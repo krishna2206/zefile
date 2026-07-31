@@ -21,7 +21,10 @@ type Engine struct {
 	now      func() time.Time
 }
 
-var _ storage.Guard = (*Engine)(nil)
+var (
+	_ storage.Guard     = (*Engine)(nil)
+	_ storage.ListGuard = (*Engine)(nil)
+)
 
 // New builds an Engine over an open database.
 func New(database *db.DB) *Engine {
@@ -97,6 +100,84 @@ func (e *Engine) Authorize(ctx context.Context, op storage.Op, p storage.Path) e
 		return storage.ErrPermission
 	}
 	return nil
+}
+
+// CanList implements [storage.ListGuard]: a directory may be listed if the
+// subject can read it, or if it leads to something they can read. The root is
+// always listable — its contents are still filtered per entry, so this reveals
+// nothing beyond what CanList's own filtering would.
+func (e *Engine) CanList(ctx context.Context, dir storage.Path) (bool, error) {
+	subject, ok := FromContext(ctx)
+	if !ok {
+		return false, nil
+	}
+	if subject.IsAdmin || dir.IsRoot() {
+		return true, nil
+	}
+	rules, err := e.loadRules(ctx, subject)
+	if err != nil {
+		return false, err
+	}
+	owned, err := e.loadOwnership(ctx, subject, []storage.Path{dir})
+	if err != nil {
+		return false, err
+	}
+	if resolve(rules, dir, owned[dir.String()]).Has(PermRead) {
+		return true, nil
+	}
+	return hasReadUnder(rules, dir), nil
+}
+
+// VisibleChildren implements [storage.ListGuard]: an entry is shown if it is
+// readable, or if it is a directory leading to something readable.
+func (e *Engine) VisibleChildren(ctx context.Context, paths []storage.Path) ([]bool, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	subject, ok := FromContext(ctx)
+	if !ok {
+		return make([]bool, len(paths)), nil
+	}
+	if subject.IsAdmin {
+		return allTrue(len(paths)), nil
+	}
+	rules, err := e.loadRules(ctx, subject)
+	if err != nil {
+		return nil, err
+	}
+	owned, err := e.loadOwnership(ctx, subject, paths)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]bool, len(paths))
+	for i, p := range paths {
+		if resolve(rules, p, owned[p.String()]).Has(PermRead) || hasReadUnder(rules, p) {
+			out[i] = true
+		}
+	}
+	return out, nil
+}
+
+// hasReadUnder reports whether any rule grants read at a path strictly below x —
+// that is, whether x is an ancestor of somewhere the subject can read, and so
+// worth showing as a way to get there. A denial deeper down is not consulted:
+// showing a folder that turns out to hold nothing readable is a harmless quirk,
+// where hiding one that leads to a grant is a bug.
+func hasReadUnder(rules []rule, x storage.Path) bool {
+	xs := x.String()
+	prefix := xs
+	if prefix != "/" {
+		prefix += "/"
+	}
+	for _, r := range rules {
+		if r.deny || !r.perms.Has(PermRead) || r.path == xs {
+			continue
+		}
+		if prefix == "/" || strings.HasPrefix(r.path, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // Permitted implements [storage.Guard].

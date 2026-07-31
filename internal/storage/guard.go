@@ -55,6 +55,26 @@ type Guard interface {
 	Permitted(ctx context.Context, op Op, paths []Path) ([]bool, error)
 }
 
+// ListGuard is an optional refinement of [Guard] for directory listings.
+//
+// A plain Guard answers read/write/delete per path, which is enough for opening
+// a file but too blunt for listing: a user granted access to /projects/site
+// cannot open the root to reach it, because they cannot read the root itself.
+// A ListGuard lets such a user list the directories on the way to what they were
+// granted, seeing only the branch that leads there. Storage uses it when the
+// Guard implements it, and falls back to strict read otherwise.
+type ListGuard interface {
+	// CanList reports whether the caller may list a directory at all — because
+	// they can read it, or because it leads to something they can read. The root
+	// is always listable; its own contents are still filtered per entry.
+	CanList(ctx context.Context, dir Path) (bool, error)
+
+	// VisibleChildren returns, per path, whether it should appear in a listing:
+	// true when the caller can read it, or when it is a directory leading to
+	// something they can read.
+	VisibleChildren(ctx context.Context, paths []Path) ([]bool, error)
+}
+
 // AllowAll permits everything. It is the Guard used by tests and by the
 // single-user phase, before the ACL engine is wired in.
 //
