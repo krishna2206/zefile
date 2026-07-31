@@ -21,18 +21,11 @@ const GRANTABLE: { key: keyof PermSet; label: string }[] = [
 
 const NONE: PermSet = { read: false, write: false, delete: false, share: false, manage: false }
 
-/** permLabel renders a rule's permissions as a short, readable list. */
-function permLabel(perms: PermSet): string {
-  const on = GRANTABLE.filter((g) => perms[g.key]).map((g) => g.label.toLowerCase())
-  if (perms.manage) on.push('manage')
-  return on.length ? on.join(', ') : 'none'
-}
-
 /**
- * AccessDialog manages who can do what at a path. An administrator picks a user,
- * chooses permissions, and grants them; existing rules are listed with a way to
- * remove each. It is the human face of the ACL engine — the same rules the
- * storage layer enforces on every operation.
+ * AccessDialog manages who can do what at a path. Existing rules are listed with
+ * editable permission checkboxes; a picker below adds people who have no rule
+ * here yet. It is the human face of the ACL engine — the same rules the storage
+ * layer enforces on every operation.
  */
 export function AccessDialog({ entry, onClose }: { entry: Entry; onClose: () => void }) {
   const [rules, setRules] = useState<AccessRule[]>([])
@@ -63,36 +56,46 @@ export function AccessDialog({ entry, onClose }: { entry: Entry; onClose: () => 
     void load()
   }, [load])
 
+  // Grant or update a rule. An empty permission set removes the rule instead —
+  // no access is the same as no rule, and it saves a separate delete.
+  async function apply(subjectID: number, next: PermSet, opts: { recursive: boolean; deny: boolean; ruleID?: number }) {
+    const anyLeft = GRANTABLE.some((g) => next[g.key]) || next.manage
+    try {
+      if (anyLeft) {
+        await api.grantAccess({ subject_id: subjectID, path: entry.path, perms: next, recursive: opts.recursive, deny: opts.deny })
+      } else if (opts.ruleID !== undefined) {
+        await api.revokeAccess(opts.ruleID)
+      }
+      await load()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not update access.')
+    }
+  }
+
   async function grant() {
     if (subject === '') return
-    const chosen = GRANTABLE.some((g) => perms[g.key])
-    if (!chosen) {
+    if (!GRANTABLE.some((g) => perms[g.key])) {
       toast.error('Choose at least one permission.')
       return
     }
     setBusy(true)
-    try {
-      await api.grantAccess({ subject_id: subject, path: entry.path, perms, recursive })
-      toast.success('Access granted')
-      setSubject('')
-      setPerms({ ...NONE, read: true })
-      await load()
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Could not grant access.')
-    } finally {
-      setBusy(false)
-    }
+    await apply(subject, perms, { recursive, deny: false })
+    setSubject('')
+    setPerms({ ...NONE, read: true })
+    setBusy(false)
   }
 
   async function revoke(rule: AccessRule) {
     try {
       await api.revokeAccess(rule.id)
-      toast.success('Rule removed')
       await load()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Could not remove the rule.')
     }
   }
+
+  const grantedIds = new Set(rules.filter((r) => r.subject_type === 'user').map((r) => r.subject_id))
+  const available = users.filter((u) => !grantedIds.has(u.id))
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -113,27 +116,18 @@ export function AccessDialog({ entry, onClose }: { entry: Entry; onClose: () => 
             ) : (
               <ul className="divide-y rounded-md border">
                 {rules.map((rule) => (
-                  <li key={rule.id} className="flex items-center gap-3 px-3 py-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm">
-                        {rule.subject_name || `user #${rule.subject_id}`}
-                        {rule.deny && <span className="ml-1 text-destructive">(denied)</span>}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {permLabel(rule.perms)}
-                        {rule.recursive ? ' · applies to contents' : ' · this item only'}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
-                      aria-label="Remove rule"
-                      onClick={() => revoke(rule)}
-                    >
-                      <Trash />
-                    </Button>
-                  </li>
+                  <RuleRow
+                    key={rule.id}
+                    rule={rule}
+                    onToggle={(key, checked) =>
+                      apply(rule.subject_id, { ...rule.perms, [key]: checked }, {
+                        recursive: rule.recursive,
+                        deny: rule.deny,
+                        ruleID: rule.id,
+                      })
+                    }
+                    onRemove={() => revoke(rule)}
+                  />
                 ))}
               </ul>
             )}
@@ -145,6 +139,8 @@ export function AccessDialog({ entry, onClose }: { entry: Entry; onClose: () => 
               <p className="text-sm text-muted-foreground">
                 No accounts to grant to yet. Invite someone from Members first.
               </p>
+            ) : available.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Everyone already has a rule here.</p>
             ) : (
               <>
                 <select
@@ -154,7 +150,7 @@ export function AccessDialog({ entry, onClose }: { entry: Entry; onClose: () => 
                   className={selectClass}
                 >
                   <option value="">Choose a person…</option>
-                  {users.map((u) => (
+                  {available.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.username}
                     </option>
@@ -194,5 +190,50 @@ export function AccessDialog({ entry, onClose }: { entry: Entry; onClose: () => 
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function RuleRow({
+  rule,
+  onToggle,
+  onRemove,
+}: {
+  rule: AccessRule
+  onToggle: (key: keyof PermSet, checked: boolean) => void
+  onRemove: () => void
+}) {
+  return (
+    <li className="px-3 py-2">
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-sm">
+          {rule.subject_name || `user #${rule.subject_id}`}
+          {rule.deny && <span className="ml-1 text-destructive">(denied)</span>}
+        </span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {rule.recursive ? 'incl. contents' : 'this item'}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
+          aria-label="Remove rule"
+          onClick={onRemove}
+        >
+          <Trash />
+        </Button>
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+        {GRANTABLE.map((g) => (
+          <label key={g.key} className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={rule.perms[g.key]}
+              onChange={(e) => onToggle(g.key, e.currentTarget.checked)}
+            />
+            {g.label}
+          </label>
+        ))}
+      </div>
+    </li>
   )
 }
