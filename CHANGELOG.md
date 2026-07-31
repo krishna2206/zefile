@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.0](https://github.com/krishna2206/zefile/compare/v0.4.0...v0.5.0) (2026-07-31)
+
+
+### Features
+
+* copy and move in the selection action bar ([eebbeb5](https://github.com/krishna2206/zefile/commit/eebbeb54623f1a226d2ec04095c5d274428cd778))
+* edit permissions inline in the manage-access dialog ([f16dc97](https://github.com/krishna2206/zefile/commit/f16dc97ba985e7319d2617341892a16399adb35f))
+* grant access and enforce the share permission ([aec2218](https://github.com/krishna2206/zefile/commit/aec221813634131a6c73f6efb9e10286f6464bf2))
+* invite people to create accounts ([e2e7243](https://github.com/krishna2206/zefile/commit/e2e7243d8c57fa3ed3411df5f7007b93d9840010))
+* manage existing accounts from the Members screen ([c1a6c17](https://github.com/krishna2206/zefile/commit/c1a6c17513ad02b47c86c186da8ced86334c377b))
+* show only the actions the caller is allowed to perform ([abef97e](https://github.com/krishna2206/zefile/commit/abef97e31cc81785c54b78c999db7c48253d4180))
+
+
+### Bug Fixes
+
+* let a granted user reach files through folders above them ([be04664](https://github.com/krishna2206/zefile/commit/be04664979afd6f90e60a0ba6d7119fcffb5d322))
+* pasting clears the clipboard so Paste no longer lingers ([22cf970](https://github.com/krishna2206/zefile/commit/22cf9706c60c8f1f24f79da7c0fe64582e338f73))
+* renaming a folder carries its permissions and ownership ([8b5a599](https://github.com/krishna2206/zefile/commit/8b5a599fe6cba9889c1f3f436534c8f2bdc2de1b))
+
 ## [0.4.0](https://github.com/krishna2206/zefile/compare/v0.3.0...v0.4.0) (2026-07-31)
 
 
