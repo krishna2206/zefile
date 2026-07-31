@@ -1,14 +1,38 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
-import { Check, CircleNotch, Copy, EnvelopeSimple, UserPlus } from '@phosphor-icons/react'
+import {
+  Check,
+  CircleNotch,
+  Copy,
+  DotsThree,
+  EnvelopeSimple,
+  UserPlus,
+} from '@phosphor-icons/react'
 
 import { Empty } from '../App'
-import { api, ApiError, type Invitation } from '@/api'
+import { api, ApiError, type Invitation, type User, type UserSummary } from '@/api'
 import { formatRelativeTime } from '@/lib/files'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 /** inviteLink builds the shareable URL from a token and this app's own origin —
  *  the server only ever hands back the token. */
@@ -17,21 +41,25 @@ function inviteLink(token: string): string {
 }
 
 /**
- * MembersScreen is the administrator's view of who can join: the pending invite
- * links, with a way to create and revoke them. Managing existing accounts is a
- * separate, later screen; this one is only about letting people in.
+ * MembersScreen is the administrator's view of who can use the instance: the
+ * accounts that exist and the invitations still open. Accounts can be promoted,
+ * disabled or removed; invitations created and revoked.
  */
-export function MembersScreen() {
+export function MembersScreen({ me }: { me: User }) {
+  const [users, setUsers] = useState<UserSummary[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [loading, setLoading] = useState(true)
   const [inviting, setInviting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<UserSummary | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      setInvitations((await api.listInvitations()).invitations)
+      const [people, invites] = await Promise.all([api.listUsers(), api.listInvitations()])
+      setUsers(people.users)
+      setInvitations(invites.invitations)
     } catch {
-      toast.error('Could not load invitations.')
+      toast.error('Could not load members.')
     } finally {
       setLoading(false)
     }
@@ -40,6 +68,27 @@ export function MembersScreen() {
   useEffect(() => {
     void load()
   }, [load])
+
+  async function update(user: UserSummary, patch: { is_admin?: boolean; disabled?: boolean }) {
+    try {
+      await api.updateUser(user.id, patch)
+      await load()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not update this account.')
+    }
+  }
+
+  async function remove(user: UserSummary) {
+    try {
+      await api.deleteUser(user.id)
+      toast.success(`“${user.username}” removed`)
+      await load()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not remove this account.')
+    } finally {
+      setConfirmDelete(null)
+    }
+  }
 
   async function revoke(invitation: Invitation) {
     try {
@@ -66,20 +115,46 @@ export function MembersScreen() {
           <div className="grid h-full place-items-center">
             <CircleNotch className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
           </div>
-        ) : invitations.length === 0 ? (
-          <Empty
-            title="No pending invitations"
-            detail="Invite someone to create an account with a one-time link."
-          />
         ) : (
-          <div>
-            {invitations.map((invitation) => (
-              <InvitationRow
-                key={invitation.id}
-                invitation={invitation}
-                onRevoke={() => revoke(invitation)}
-              />
-            ))}
+          <div className="mx-auto max-w-3xl p-4">
+            <section>
+              <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Accounts
+              </h2>
+              <div className="overflow-hidden rounded-lg border">
+                {users.map((user) => (
+                  <UserRow
+                    key={user.id}
+                    user={user}
+                    isSelf={user.id === me.id}
+                    onUpdate={(patch) => update(user, patch)}
+                    onDelete={() => setConfirmDelete(user)}
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section className="mt-6">
+              <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Pending invitations
+              </h2>
+              {invitations.length === 0 ? (
+                <Empty
+                  title="No pending invitations"
+                  detail="Invite someone to create an account with a one-time link."
+                />
+              ) : (
+                <div className="overflow-hidden rounded-lg border">
+                  {invitations.map((invitation) => (
+                    <InvitationRow
+                      key={invitation.id}
+                      invitation={invitation}
+                      onRevoke={() => revoke(invitation)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
         )}
       </div>
@@ -92,13 +167,84 @@ export function MembersScreen() {
           }}
         />
       )}
+
+      {confirmDelete && (
+        <AlertDialog open onOpenChange={(open) => !open && setConfirmDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove “{confirmDelete.username}”?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Their account, sessions and permission rules are deleted. Files they uploaded stay, but lose
+                their owner. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => remove(confirmDelete)}>Remove account</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+    </div>
+  )
+}
+
+function UserRow({
+  user,
+  isSelf,
+  onUpdate,
+  onDelete,
+}: {
+  user: UserSummary
+  isSelf: boolean
+  onUpdate: (patch: { is_admin?: boolean; disabled?: boolean }) => void
+  onDelete: () => void
+}) {
+  return (
+    <div className="flex h-14 items-center gap-3 border-b border-border/60 px-4 last:border-b-0 hover:bg-accent/40">
+      <div className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
+        {user.username.slice(0, 1).toUpperCase()}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 truncate text-sm">
+          {user.username}
+          {isSelf && <span className="text-xs text-muted-foreground">(you)</span>}
+        </p>
+        <p className="truncate text-xs text-muted-foreground">
+          {user.is_admin ? 'Administrator' : 'Member'}
+          {user.disabled && ' · disabled'}
+        </p>
+      </div>
+
+      {/* You cannot act on your own account here — the server refuses it too. */}
+      {!isSelf && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Account actions">
+              <DotsThree weight="bold" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onSelect={() => onUpdate({ is_admin: !user.is_admin })}>
+              {user.is_admin ? 'Remove admin' : 'Make admin'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onUpdate({ disabled: !user.disabled })}>
+              {user.disabled ? 'Enable' : 'Disable'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+              Remove account
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   )
 }
 
 function InvitationRow({ invitation, onRevoke }: { invitation: Invitation; onRevoke: () => void }) {
   return (
-    <div className="flex h-14 items-center gap-3 border-b border-border/60 px-4 hover:bg-accent/40">
+    <div className="flex h-14 items-center gap-3 border-b border-border/60 px-4 last:border-b-0 hover:bg-accent/40">
       <EnvelopeSimple className="size-5 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm">{invitation.email || 'Anyone with the link'}</p>

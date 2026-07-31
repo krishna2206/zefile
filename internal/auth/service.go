@@ -71,6 +71,9 @@ var (
 
 	// ErrUsernameTaken means an account already uses the chosen name (or email).
 	ErrUsernameTaken = errors.New("auth: that name is already taken")
+
+	// ErrUserNotFound means no account has the given id.
+	ErrUserNotFound = errors.New("auth: no such user")
 )
 
 // DefaultInviteTTL bounds how long an invite link stays usable — long enough to
@@ -86,6 +89,55 @@ type User struct {
 	IsAdmin   bool
 	Disabled  bool
 	CreatedAt time.Time
+}
+
+// GetUser returns one account by id.
+func (s *Service) GetUser(ctx context.Context, id int64) (User, error) {
+	row, err := s.reads.GetUserByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return User{}, ErrUserNotFound
+		}
+		return User{}, fmt.Errorf("auth: get user: %w", err)
+	}
+	return toUser(row), nil
+}
+
+// SetUserAdmin promotes or demotes an account.
+func (s *Service) SetUserAdmin(ctx context.Context, id int64, isAdmin bool) error {
+	if err := s.writes.SetUserAdmin(ctx, sqlcgen.SetUserAdminParams{
+		IsAdmin:   boolToInt(isAdmin),
+		UpdatedAt: s.now().Unix(),
+		ID:        id,
+	}); err != nil {
+		return fmt.Errorf("auth: set admin: %w", err)
+	}
+	return nil
+}
+
+// SetUserDisabled disables or re-enables an account. Disabling also ends every
+// session it holds, so access is cut immediately rather than at the next expiry.
+func (s *Service) SetUserDisabled(ctx context.Context, id int64, disabled bool) error {
+	if err := s.writes.SetUserDisabled(ctx, sqlcgen.SetUserDisabledParams{
+		Disabled:  boolToInt(disabled),
+		UpdatedAt: s.now().Unix(),
+		ID:        id,
+	}); err != nil {
+		return fmt.Errorf("auth: set disabled: %w", err)
+	}
+	if disabled {
+		return s.RevokeAllSessions(ctx, id)
+	}
+	return nil
+}
+
+// DeleteUser removes an account. Its sessions and file ownership cascade with
+// the row; the caller clears its ACL rules, which carry no foreign key.
+func (s *Service) DeleteUser(ctx context.Context, id int64) error {
+	if err := s.writes.DeleteUser(ctx, id); err != nil {
+		return fmt.Errorf("auth: delete user: %w", err)
+	}
+	return nil
 }
 
 // Users returns every account, for an administrator's management screens.
@@ -651,6 +703,13 @@ func toUser(row sqlcgen.User) User {
 		Disabled:  row.Disabled == 1,
 		CreatedAt: time.Unix(row.CreatedAt, 0).UTC(),
 	}
+}
+
+func boolToInt(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func toSession(row sqlcgen.Session) Session {

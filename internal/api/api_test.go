@@ -869,3 +869,80 @@ func TestPermissionsEnforceSharing(t *testing.T) {
 	}
 	c.token = admin
 }
+
+func TestUserManagement(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp() // admin "krishna"
+	adminID := decode[userJSON](t, mustGet(c, "/api/v1/auth/me")).ID
+
+	// Invite a non-admin.
+	_, raw := c.do(http.MethodPost, "/api/v1/invitations", map[string]string{})
+	inviteToken := decode[struct {
+		Token string `json:"token"`
+	}](t, raw).Token
+	_, raw = c.do(http.MethodPost, "/api/v1/invitations/accept", map[string]string{
+		"token": inviteToken, "username": "bob", "password": "correct horse battery",
+	})
+	bob := decode[struct {
+		User  userJSON `json:"user"`
+		Token string   `json:"token"`
+	}](t, raw)
+
+	// Give bob a rule, so deletion has ACL state to clean up.
+	c.do(http.MethodPost, "/api/v1/access", map[string]any{
+		"subject_id": bob.User.ID, "path": "/", "perms": map[string]bool{"read": true}, "recursive": true,
+	})
+
+	// You cannot change your own account here.
+	if resp, _ := c.do(http.MethodPatch, fmt.Sprintf("/api/v1/users/%d", adminID), map[string]any{"disabled": true}); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("self-disable = %d, want 400", resp.StatusCode)
+	}
+
+	// Promote bob.
+	if got := decode[userJSON](t, mustPatch(c, fmt.Sprintf("/api/v1/users/%d", bob.User.ID), map[string]any{"is_admin": true})); !got.IsAdmin {
+		t.Fatalf("promote: is_admin = %v, want true", got.IsAdmin)
+	}
+
+	// Disabling ends bob's sessions immediately.
+	c.do(http.MethodPatch, fmt.Sprintf("/api/v1/users/%d", bob.User.ID), map[string]any{"disabled": true})
+	saved := c.token
+	c.token = bob.Token
+	if resp, _ := c.do(http.MethodGet, "/api/v1/auth/me", nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("disabled user's session = %d, want 401", resp.StatusCode)
+	}
+	c.token = saved
+
+	// Delete bob: gone from the list, and their rule is cleaned up.
+	if resp, raw := c.do(http.MethodDelete, fmt.Sprintf("/api/v1/users/%d", bob.User.ID), nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete = %d: %s", resp.StatusCode, raw)
+	}
+	users := decode[struct {
+		Users []userJSON `json:"users"`
+	}](t, mustGet(c, "/api/v1/users"))
+	for _, u := range users.Users {
+		if u.ID == bob.User.ID {
+			t.Fatalf("bob still listed after delete")
+		}
+	}
+	rules := decode[struct {
+		Rules []struct {
+			SubjectID int64 `json:"subject_id"`
+		} `json:"rules"`
+	}](t, mustGet(c, "/api/v1/access?path=/"))
+	for _, r := range rules.Rules {
+		if r.SubjectID == bob.User.ID {
+			t.Fatalf("bob's ACL rule survived deletion")
+		}
+	}
+}
+
+func mustPatch(c *client, path string, body any) []byte {
+	c.t.Helper()
+	resp, raw := c.do(http.MethodPatch, path, body)
+	if resp.StatusCode != http.StatusOK {
+		c.t.Fatalf("PATCH %s = %d: %s", path, resp.StatusCode, raw)
+	}
+	return raw
+}

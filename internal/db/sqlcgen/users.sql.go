@@ -62,6 +62,18 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users WHERE id = ?
+`
+
+// Sessions and file ownership cascade with the row; ACL rules are keyed by a
+// subject type as well as an id, so they carry no foreign key and are cleared
+// separately by the caller.
+func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteUser, id)
+	return err
+}
+
 const getUserByID = `-- name: GetUserByID :one
 SELECT id, username, email, password_hash, is_admin, totp_secret, disabled, created_at, updated_at FROM users WHERE id = ?
 `
@@ -139,6 +151,36 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setUserAdmin = `-- name: SetUserAdmin :exec
+UPDATE users SET is_admin = ?, updated_at = ? WHERE id = ?
+`
+
+type SetUserAdminParams struct {
+	IsAdmin   int64
+	UpdatedAt int64
+	ID        int64
+}
+
+func (q *Queries) SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error {
+	_, err := q.db.ExecContext(ctx, setUserAdmin, arg.IsAdmin, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const setUserDisabled = `-- name: SetUserDisabled :exec
+UPDATE users SET disabled = ?, updated_at = ? WHERE id = ?
+`
+
+type SetUserDisabledParams struct {
+	Disabled  int64
+	UpdatedAt int64
+	ID        int64
+}
+
+func (q *Queries) SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) error {
+	_, err := q.db.ExecContext(ctx, setUserDisabled, arg.Disabled, arg.UpdatedAt, arg.ID)
+	return err
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec

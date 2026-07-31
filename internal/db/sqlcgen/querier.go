@@ -35,6 +35,10 @@ type Querier interface {
 	DeleteTrash(ctx context.Context, id int64) error
 	DeleteUnusedInvitations(ctx context.Context) error
 	DeleteUpload(ctx context.Context, id int64) error
+	// Sessions and file ownership cascade with the row; ACL rules are keyed by a
+	// subject type as well as an id, so they carry no foreign key and are cleared
+	// separately by the caller.
+	DeleteUser(ctx context.Context, id int64) error
 	FinishJob(ctx context.Context, arg FinishJobParams) error
 	GetFileOwner(ctx context.Context, path string) (FileOwner, error)
 	// Batched so that listing a directory costs one query rather than one per entry.
@@ -84,6 +88,8 @@ type Querier interface {
 	RevokeSession(ctx context.Context, arg RevokeSessionParams) error
 	RevokeShare(ctx context.Context, arg RevokeShareParams) (int64, error)
 	SetFileOwner(ctx context.Context, arg SetFileOwnerParams) error
+	SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error
+	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	UpdateJobProgress(ctx context.Context, arg UpdateJobProgressParams) error
 	UpdateUploadOffset(ctx context.Context, arg UpdateUploadOffsetParams) error

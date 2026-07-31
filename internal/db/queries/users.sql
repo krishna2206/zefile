@@ -19,3 +19,15 @@ RETURNING *;
 
 -- name: UpdateUserPassword :exec
 UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?;
+
+-- name: SetUserAdmin :exec
+UPDATE users SET is_admin = ?, updated_at = ? WHERE id = ?;
+
+-- name: SetUserDisabled :exec
+UPDATE users SET disabled = ?, updated_at = ? WHERE id = ?;
+
+-- name: DeleteUser :exec
+-- Sessions and file ownership cascade with the row; ACL rules are keyed by a
+-- subject type as well as an id, so they carry no foreign key and are cleared
+-- separately by the caller.
+DELETE FROM users WHERE id = ?;

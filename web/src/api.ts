@@ -220,6 +220,9 @@ export const api = {
   effectivePermissions: (path: string) =>
     request<PermSet>(`/api/v1/permissions?path=${encodeURIComponent(path)}`),
   listUsers: () => request<{ users: UserSummary[] }>('/api/v1/users'),
+  updateUser: (id: number, patch: { is_admin?: boolean; disabled?: boolean }) =>
+    request<UserSummary>(`/api/v1/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteUser: (id: number) => request<void>(`/api/v1/users/${id}`, { method: 'DELETE' }),
   listAccess: (path: string) =>
     request<{ rules: AccessRule[] }>(`/api/v1/access?path=${encodeURIComponent(path)}`),
   grantAccess: (body: {

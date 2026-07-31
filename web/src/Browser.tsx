@@ -737,7 +737,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
       ) : screen === 'shared' ? (
         <SharesScreen />
       ) : screen === 'members' ? (
-        <MembersScreen />
+        <MembersScreen me={user} />
       ) : (
       <div
         className="relative flex min-w-0 flex-1 flex-col"
