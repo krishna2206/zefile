@@ -227,7 +227,7 @@ export const api = {
   downloadLink: (path: string) =>
     request<{ url: string; expires_at: string }>(`/api/v1/fs/link?path=${encodeURIComponent(path)}`),
 
-  config: () => request<{ inline_preview: boolean }>('/api/v1/config'),
+  config: () => request<{ inline_preview: boolean; version: string }>('/api/v1/config'),
 
   createShare: (path: string, opts: { expires_in_hours?: number; password?: string } = {}) =>
     request<Share>('/api/v1/shares', {

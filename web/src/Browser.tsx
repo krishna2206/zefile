@@ -228,6 +228,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const [screen, setScreen] = useState<'files' | 'trash' | 'shared' | 'members' | 'settings'>('files')
   const [preview, setPreview] = useState<Entry | null>(null)
   const [inlinePreview, setInlinePreview] = useState(false)
+  const [version, setVersion] = useState('')
   const [sharedPaths, setSharedPaths] = useState<Set<string>>(() => new Set())
   const [clipboard, setClipboard] = useState<Clipboard | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
@@ -322,7 +323,13 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   useEffect(() => {
     // Whether files render in place depends on the instance serving them
     // inline, which only a separate content origin does.
-    api.config().then((c) => setInlinePreview(c.inline_preview)).catch(() => undefined)
+    api
+      .config()
+      .then((c) => {
+        setInlinePreview(c.inline_preview)
+        setVersion(c.version)
+      })
+      .catch(() => undefined)
   }, [])
 
   // Refresh which files are shared on entering the files view, so a link
@@ -780,6 +787,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         onMembers={() => setScreen('members')}
         onSettings={() => setScreen('settings')}
         onSignOut={signOut}
+        version={version}
       />
 
       {screen === 'trash' ? (

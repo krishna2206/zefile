@@ -315,11 +315,14 @@ type configResponse struct {
 	// InlinePreview reports whether files are served inline, so the interface
 	// can render an image or PDF in place instead of only downloading it.
 	InlinePreview bool `json:"inline_preview"`
+
+	// Version is the running build, shown in the interface.
+	Version string `json:"version"`
 }
 
 // handleConfig reports the instance capabilities the interface has to adapt to.
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, r, http.StatusOK, configResponse{InlinePreview: !s.singleOrigin})
+	writeJSON(w, r, http.StatusOK, configResponse{InlinePreview: !s.singleOrigin, Version: s.version})
 }
 
 // pathParam reads and validates the path query parameter, defaulting to the

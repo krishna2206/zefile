@@ -118,6 +118,7 @@ func run() error {
 		ACL:           engine,
 		Signer:        signer,
 		ContentBase:   contentBase(cfg),
+		Version:       version,
 		SingleOrigin:  cfg.SingleOrigin(),
 		SecureCookies: cfg.SecureCookies(),
 	}).Handler()

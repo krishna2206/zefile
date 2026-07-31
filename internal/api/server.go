@@ -28,6 +28,7 @@ type Server struct {
 	shares        *share.Service
 	jobs          *job.Service
 	contentBase   string
+	version       string
 	singleOrigin  bool
 	secureCookies bool
 }
@@ -46,6 +47,9 @@ type Options struct {
 	// ContentBase is the public origin serving files, without a trailing
 	// slash. In single-origin mode it is the application's own address.
 	ContentBase string
+
+	// Version is the running build, surfaced to the interface.
+	Version string
 
 	// SingleOrigin reports that files are served from the application origin,
 	// which forces every download to be an attachment — so nothing renders in
@@ -67,6 +71,7 @@ func New(opts Options) *Server {
 		shares:        opts.Shares,
 		jobs:          opts.Jobs,
 		contentBase:   opts.ContentBase,
+		version:       opts.Version,
 		singleOrigin:  opts.SingleOrigin,
 		secureCookies: opts.SecureCookies,
 	}

@@ -1,10 +1,17 @@
-import { GearSix, House, IconContext, ShareNetwork, SignOut, Trash, UsersThree } from '@phosphor-icons/react'
+import { CaretUpDown, GearSix, House, IconContext, ShareNetwork, SignOut, Trash, UsersThree } from '@phosphor-icons/react'
 
 import { formatSize, type Space, type User } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { NewButton, type CreateActions } from '@/components/create-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 type Section = 'files' | 'trash' | 'shared' | 'members' | 'settings'
 
@@ -14,6 +21,7 @@ type Props = {
   section: Section
   create: CreateActions
   canCreate: boolean
+  version: string
   onHome: () => void
   onTrash: () => void
   onShared: () => void
@@ -26,7 +34,7 @@ type Props = {
  * Sidebar is the app's fixed left column: identity, the "New" action,
  * navigation, and the storage gauge that tells you when to stop uploading.
  */
-export function Sidebar({ user, space, section, create, canCreate, onHome, onTrash, onShared, onMembers, onSettings, onSignOut }: Props) {
+export function Sidebar({ user, space, section, create, canCreate, version, onHome, onTrash, onShared, onMembers, onSettings, onSignOut }: Props) {
   const inFiles = section === 'files'
   const used = space ? Math.max(0, space.total - space.available) : 0
   const percent = space && space.total > 0 ? (used / space.total) * 100 : 0
@@ -96,33 +104,64 @@ export function Sidebar({ user, space, section, create, canCreate, onHome, onTra
           </div>
         )}
 
-        <div className="flex items-center gap-2">
-          <div className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
-            {user.username.slice(0, 1).toUpperCase()}
-          </div>
-          <button
-            type="button"
-            onClick={onSettings}
-            className={`min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left text-sm font-medium hover:bg-accent ${
-              section === 'settings' ? 'text-foreground' : ''
-            }`}
-            title="Account settings"
-          >
-            {user.username}
-          </button>
-          <ThemeToggle className="size-8" />
-          <Button
-            variant={section === 'settings' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="size-8"
-            aria-label="Settings"
-            onClick={onSettings}
-          >
-            <GearSix />
-          </Button>
-          <Button variant="ghost" size="icon" className="size-8" aria-label="Sign out" onClick={onSignOut}>
-            <SignOut />
-          </Button>
+        <div className="flex flex-col gap-1.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg border bg-background/60 px-2 py-1.5 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <div className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
+                  {user.username.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1 leading-tight">
+                  <p className="truncate text-sm font-medium">{user.username}</p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {user.email || (user.is_admin ? 'Administrator' : 'Member')}
+                  </p>
+                </div>
+                <CaretUpDown className="size-4 shrink-0 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent
+              side="top"
+              align="start"
+              sideOffset={8}
+              className="w-(--radix-dropdown-menu-trigger-width)"
+            >
+              <div className="flex items-center gap-2 px-2 py-1.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{user.username}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {user.email || (user.is_admin ? 'Administrator' : 'Member')}
+                  </p>
+                </div>
+                <ThemeToggle className="size-8 shrink-0" />
+              </div>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onSettings}>
+                <GearSix />
+                Settings
+              </DropdownMenuItem>
+              {user.is_admin && (
+                <DropdownMenuItem onSelect={onMembers}>
+                  <UsersThree />
+                  Members
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onSignOut}>
+                <SignOut />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {version && (
+            <p className="text-center text-xs text-muted-foreground">Version {version}</p>
+          )}
         </div>
       </div>
     </aside>
