@@ -1,0 +1,43 @@
+name: PR title
+
+# A pull request's title becomes the commit on main once it is squash-merged,
+# and release-please reads that commit to decide the changelog and the next
+# version. So the title is what has to be a valid Conventional Commit — not every
+# work-in-progress commit inside the branch. This check enforces exactly that,
+# leaving contributors free to commit however they like while they work.
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint:
+    name: Conventional Commit title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # The types allowed at the start of a title, matching what
+          # release-please understands.
+          types: |
+            feat
+            fix
+            perf
+            refactor
+            docs
+            test
+            build
+            ci
+            chore
+            revert
+          # A scope is optional; when present it must be lower-case kebab.
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The subject "{subject}" should start lower-case, e.g.
+            "feat: add folder sharing" not "feat: Add folder sharing".

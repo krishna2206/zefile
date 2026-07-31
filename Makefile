@@ -1,5 +1,9 @@
 BINARY  := zefile
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+# The version comes from version.txt — the single source of truth release-please
+# maintains — so a local build reports the same version a Docker build does,
+# regardless of which git tags happen to be fetched. The `v` prefix matches the
+# release tags. Override with `make VERSION=… build` when needed.
+VERSION ?= v$(shell cat version.txt 2>/dev/null || echo 0.0.0)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
 .DEFAULT_GOAL := help
