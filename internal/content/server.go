@@ -220,12 +220,12 @@ func withinShare(root, target storage.Path) bool {
 	return strings.HasPrefix(target.String(), root.String()+"/")
 }
 
-// passwordFormHTML is the whole page shown for a protected link: a single form,
+// unlockFormHTML is the whole page shown for a protected link: a single form,
 // no scripts, no external resources, so it renders under a strict policy and
 // works with the browser's own password manager. {{ERR}} is an optional error
 // line, substituted by plain replacement — the CSS holds a "100%", which a
 // printf format string would choke on.
-const passwordFormHTML = `<!doctype html>
+const unlockFormHTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Protected file · Zefile</title>
@@ -270,7 +270,7 @@ func renderPasswordForm(w http.ResponseWriter, message string, status int) {
 	// No scripts, only inline styles and a same-origin form post.
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'")
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte(strings.Replace(passwordFormHTML, "{{ERR}}", errLine, 1)))
+	_, _ = w.Write([]byte(strings.Replace(unlockFormHTML, "{{ERR}}", errLine, 1)))
 }
 
 // browseTmpl renders a shared folder's listing. html/template escapes the names
