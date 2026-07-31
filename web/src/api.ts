@@ -29,6 +29,18 @@ export type Share = {
   expires_at?: string
 }
 
+/** Job is a background operation (currently a large or folder copy). Progress is
+ *  a fraction in [0,1]. */
+export type Job = {
+  id: number
+  type: string
+  status: 'pending' | 'running' | 'done' | 'failed' | 'cancelled'
+  progress: number
+  error?: string
+  created_at: string
+  finished_at?: string
+}
+
 /** TrashItem is an entry sitting in the trash, remembering where to restore it. */
 export type TrashItem = {
   id: number
@@ -122,8 +134,15 @@ export const api = {
   move: (from: string, to: string) =>
     request<Entry>('/api/v1/fs/move', { method: 'POST', body: JSON.stringify({ from, to }) }),
 
+  // copy returns the created entry for a file copied in place, or a job when the
+  // source is a folder or too large to copy inside the request.
   copy: (from: string, to: string) =>
-    request<Entry>('/api/v1/fs/copy', { method: 'POST', body: JSON.stringify({ from, to }) }),
+    request<Entry | { job: Job }>('/api/v1/fs/copy', {
+      method: 'POST',
+      body: JSON.stringify({ from, to }),
+    }),
+
+  getJob: (id: number) => request<Job>(`/api/v1/jobs/${id}`),
 
   remove: (path: string, recursive = false) =>
     request<void>(

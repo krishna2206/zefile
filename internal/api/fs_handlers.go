@@ -1,12 +1,14 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"sort"
 	"time"
 
 	"github.com/krishna2206/zefile/internal/content"
+	"github.com/krishna2206/zefile/internal/job"
 	"github.com/krishna2206/zefile/internal/storage"
 )
 
@@ -149,7 +151,16 @@ func (s *Server) handleCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.fs.Copy(r.Context(), from, to); err != nil {
+	err := s.fs.Copy(r.Context(), from, to)
+
+	// A directory or a very large file cannot be copied inside a request. Rather
+	// than refuse, hand it to the background worker and answer with the job the
+	// interface can follow.
+	if errors.Is(err, storage.ErrIsDir) || errors.Is(err, storage.ErrTooLarge) {
+		s.enqueueCopy(w, r, from, to)
+		return
+	}
+	if err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -169,6 +180,38 @@ func (s *Server) handleCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, r, http.StatusCreated, toEntryResponse(info))
+}
+
+// copyJobResponse wraps the job so the interface can tell an accepted background
+// copy apart from a synchronous one, which returns the created entry instead.
+type copyJobResponse struct {
+	Job jobResponse `json:"job"`
+}
+
+// enqueueCopy records a background copy job and answers 202 with it. The caller
+// is recorded on the job so the worker copies with the same authority.
+func (s *Server) enqueueCopy(w http.ResponseWriter, r *http.Request, from, to storage.Path) {
+	c, found := callerFrom(r.Context())
+	if !found {
+		writeProblem(w, r, http.StatusUnauthorized, CodeUnauthenticated, "Not signed in", "")
+		return
+	}
+	if s.jobs == nil {
+		writeError(w, r, storage.ErrIsDir) // no queue wired: report the original refusal
+		return
+	}
+
+	j, err := s.jobs.Enqueue(r.Context(), job.TypeCopy, job.CopyPayload{
+		From:    from.String(),
+		To:      to.String(),
+		UserID:  c.user.ID,
+		IsAdmin: c.user.IsAdmin,
+	})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, r, http.StatusAccepted, copyJobResponse{Job: toJobResponse(j)})
 }
 
 // handleDelete moves an entry to the trash rather than erasing it.

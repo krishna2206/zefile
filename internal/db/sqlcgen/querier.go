@@ -6,13 +6,18 @@ package sqlcgen
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
+	// Atomically take the oldest pending job and mark it running. The single writer
+	// connection serialises this, so two workers could not claim the same row.
+	ClaimNextJob(ctx context.Context, startedAt sql.NullInt64) (Job, error)
 	// Backs first-run detection: an instance with no account shows the setup link
 	// rather than a sign-in form.
 	CountUsers(ctx context.Context) (int64, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
+	CreateJob(ctx context.Context, arg CreateJobParams) (Job, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	// max_downloads stays in the table but is left NULL: the download-limit feature
 	// was removed, and the column is kept only to avoid a migration.
@@ -27,12 +32,14 @@ type Querier interface {
 	DeleteTrash(ctx context.Context, id int64) error
 	DeleteUnusedInvitations(ctx context.Context) error
 	DeleteUpload(ctx context.Context, id int64) error
+	FinishJob(ctx context.Context, arg FinishJobParams) error
 	GetFileOwner(ctx context.Context, path string) (FileOwner, error)
 	// Batched so that listing a directory costs one query rather than one per entry.
 	GetFileOwnersForPaths(ctx context.Context, paths []string) ([]FileOwner, error)
 	// Single use and expiry are filtered here, so a caller cannot accidentally
 	// accept an invitation twice.
 	GetInvitationByTokenHash(ctx context.Context, arg GetInvitationByTokenHashParams) (Invitation, error)
+	GetJob(ctx context.Context, id int64) (Job, error)
 	// The lookup performed on every authenticated request. Expiry and revocation
 	// are filtered here rather than in Go: a caller that forgets the check must not
 	// be able to resurrect a dead session.
@@ -54,6 +61,7 @@ type Querier interface {
 	ListACLForUser(ctx context.Context, subjectID int64) ([]Acl, error)
 	ListExpiredUploads(ctx context.Context, expiresAt int64) ([]Upload, error)
 	ListGroupsForUser(ctx context.Context, userID int64) ([]int64, error)
+	ListRecentJobs(ctx context.Context, limit int64) ([]Job, error)
 	ListSessionsForUser(ctx context.Context, arg ListSessionsForUserParams) ([]Session, error)
 	ListSharesByOwner(ctx context.Context, ownerID int64) ([]Share, error)
 	// Most recently deleted first: that is the order someone reaches for the trash
@@ -62,11 +70,15 @@ type Querier interface {
 	LogShareAccess(ctx context.Context, arg LogShareAccessParams) error
 	MarkInvitationUsed(ctx context.Context, arg MarkInvitationUsedParams) error
 	MoveFileOwner(ctx context.Context, arg MoveFileOwnerParams) error
+	// A job left 'running' by a crash is reset so the worker picks it up again on
+	// the next start; its own idempotent construction makes the retry safe.
+	RequeueRunningJobs(ctx context.Context) error
 	RevokeAllSessionsForUser(ctx context.Context, arg RevokeAllSessionsForUserParams) error
 	RevokeSession(ctx context.Context, arg RevokeSessionParams) error
 	RevokeShare(ctx context.Context, arg RevokeShareParams) (int64, error)
 	SetFileOwner(ctx context.Context, arg SetFileOwnerParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	UpdateJobProgress(ctx context.Context, arg UpdateJobProgressParams) error
 	UpdateUploadOffset(ctx context.Context, arg UpdateUploadOffsetParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpsertACL(ctx context.Context, arg UpsertACLParams) (Acl, error)

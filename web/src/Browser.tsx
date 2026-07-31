@@ -40,6 +40,7 @@ import {
   joinPath,
   parentOf,
   type Entry,
+  type Job,
   type Space,
   type User,
 } from './api'
@@ -179,6 +180,9 @@ const MOVE_MIME = 'application/x-zefile-move'
 /** Clipboard holds entries cut or copied, waiting to be pasted into a folder. */
 type Clipboard = { mode: 'copy' | 'cut'; entries: Entry[] }
 
+/** TrackedJob follows a background copy the interface is polling. */
+type TrackedJob = { id: number; name: string; status: Job['status']; progress: number }
+
 type Group = { key: string; label: string; entries: Entry[] }
 type ListItem = { type: 'header'; id: string; label: string; count: number } | { type: 'entry'; entry: Entry }
 
@@ -217,6 +221,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const [searching, setSearching] = useState(false)
   const [searchTruncated, setSearchTruncated] = useState(false)
   const searchSeq = useRef(0)
+  const [jobs, setJobs] = useState<TrackedJob[]>([])
 
   const fileInput = useRef<HTMLInputElement>(null)
   const dirInput = useRef<HTMLInputElement>(null)
@@ -555,21 +560,30 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     if (!clipboard) return
     const taken = new Set(entries.map((e) => e.name))
     let done = 0
+    let queued = 0
     for (const entry of clipboard.entries) {
       // Moving an entry into the folder it already sits in is a no-op.
       if (clipboard.mode === 'cut' && parentOf(entry.path) === path) continue
-      // Copying a folder needs a background job queue that does not exist yet;
-      // say so clearly instead of letting the server answer "needs a file".
-      if (clipboard.mode === 'copy' && entry.is_dir) {
-        toast.error(`“${entry.name}” is a folder — folders can't be copied yet (use Cut to move).`)
-        continue
-      }
       const name = freeName(entry.name, taken)
       try {
-        if (clipboard.mode === 'copy') await api.copy(entry.path, joinPath(path, name))
-        else await api.move(entry.path, joinPath(path, name))
+        if (clipboard.mode === 'copy') {
+          const res = await api.copy(entry.path, joinPath(path, name))
+          // A folder or a large file is copied in the background: follow the job
+          // instead of counting it done now.
+          if (res && 'job' in res) {
+            setJobs((cur) => [
+              ...cur.filter((j) => j.id !== res.job.id),
+              { id: res.job.id, name, status: res.job.status, progress: res.job.progress },
+            ])
+            queued++
+          } else {
+            done++
+          }
+        } else {
+          await api.move(entry.path, joinPath(path, name))
+          done++
+        }
         taken.add(name)
-        done++
       } catch (err) {
         toast.error(err instanceof ApiError ? err.message : `Could not paste “${entry.name}”`)
       }
@@ -581,6 +595,9 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     if (done > 0) {
       const verb = clipboard.mode === 'copy' ? 'Copied' : 'Moved'
       toast.success(done > 1 ? `${verb} ${done} items` : `${verb} “${clipboard.entries[0]!.name}”`)
+    }
+    if (queued > 0) {
+      toast(queued > 1 ? `Copying ${queued} items in the background…` : 'Copying in the background…')
     }
   }, [clipboard, entries, path, clearSelection, load, refreshSpace])
 
@@ -609,6 +626,39 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [screen, selected, clipboard, doPaste])
+
+  // Follow background copies: while any job is unfinished, poll each until it
+  // settles, then refresh the listing on success or report the failure. The
+  // effect keys on whether work is outstanding, not on the jobs themselves, so
+  // progress updates do not restart the interval.
+  const hasActiveJobs = jobs.some((j) => j.status === 'pending' || j.status === 'running')
+  const jobsRef = useRef(jobs)
+  jobsRef.current = jobs
+  useEffect(() => {
+    if (!hasActiveJobs) return
+    const timer = window.setInterval(() => {
+      for (const tracked of jobsRef.current.filter((j) => j.status === 'pending' || j.status === 'running')) {
+        api
+          .getJob(tracked.id)
+          .then((fresh) => {
+            setJobs((cur) =>
+              cur.map((j) => (j.id === tracked.id ? { ...j, status: fresh.status, progress: fresh.progress } : j)),
+            )
+            if (fresh.status === 'done') {
+              toast.success(`Copied “${tracked.name}”`)
+              void load(pathRef.current, { silent: true })
+              void refreshSpace()
+            } else if (fresh.status === 'failed') {
+              toast.error(`Could not copy “${tracked.name}”${fresh.error ? `: ${fresh.error}` : ''}`)
+            }
+          })
+          .catch(() => {
+            // A transient poll failure is ignored; the next tick retries.
+          })
+      }
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [hasActiveJobs, load, refreshSpace])
 
   async function createFolder(name: string) {
     await api.mkdir(joinPath(path, name))
@@ -850,7 +900,10 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
           </div>
         )}
 
-        <Transfers transfers={transfers} onClear={() => setTransfers([])} />
+        <div className="fixed bottom-4 right-4 z-20 flex flex-col items-end gap-3">
+          <Transfers transfers={transfers} onClear={() => setTransfers([])} />
+          <JobsPanel jobs={jobs} onClear={() => setJobs([])} />
+        </div>
       </div>
       )}
 
@@ -1630,6 +1683,50 @@ function DeleteDialog({
 }
 
 /**
+ * JobsPanel follows background copies. It sits opposite the transfers panel so
+ * the two never overlap, and clears once nothing is left running.
+ */
+function JobsPanel({ jobs, onClear }: { jobs: TrackedJob[]; onClear: () => void }) {
+  if (jobs.length === 0) return null
+  const running = jobs.filter((j) => j.status === 'pending' || j.status === 'running').length
+
+  return (
+    <div className="w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-4 shadow-lg">
+      <div className="flex items-center">
+        <p className="text-sm font-medium">{running > 0 ? `Copying — ${running} running` : 'Copies'}</p>
+        {running === 0 && (
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>
+            Clear
+          </Button>
+        )}
+      </div>
+
+      <div className="mt-2 max-h-64 space-y-2 overflow-auto">
+        {jobs.map((job) => (
+          <div key={job.id} className="space-y-1">
+            <div className="flex items-center gap-4">
+              <span className="min-w-0 flex-1 truncate text-sm">{job.name}</span>
+              <span
+                className={`shrink-0 text-xs tabular-nums ${
+                  job.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'
+                }`}
+              >
+                {job.status === 'failed'
+                  ? 'Failed'
+                  : job.status === 'done'
+                    ? 'Done'
+                    : `${Math.round(job.progress * 100)}%`}
+              </span>
+            </div>
+            {(job.status === 'running' || job.status === 'pending') && <Progress value={job.progress * 100} />}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
  * Transfers is a persistent panel rather than a toast: an upload is a state,
  * not an event — it outlives navigation.
  */
@@ -1639,7 +1736,7 @@ function Transfers({ transfers, onClear }: { transfers: UploadProgress[]; onClea
   const busy = remaining > 0
 
   return (
-    <div className="fixed bottom-4 right-4 z-20 w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-4 shadow-lg">
+    <div className="w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-4 shadow-lg">
       <div className="flex items-center">
         <p className="text-sm font-medium">
           {busy ? `Uploading — ${remaining} left` : 'Transfers'}

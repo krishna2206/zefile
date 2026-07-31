@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"github.com/krishna2206/zefile/internal/config"
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/db"
+	"github.com/krishna2206/zefile/internal/job"
 	"github.com/krishna2206/zefile/internal/storage"
 	"github.com/krishna2206/zefile/internal/share"
 	"github.com/krishna2206/zefile/internal/trash"
@@ -95,11 +97,21 @@ func run() error {
 	trashService := trash.New(database, fs)
 	shareService := share.New(database, fs)
 
+	// The background worker runs until shutdown. It is started here rather than
+	// inside serve so that a job in flight is cancelled when the process is
+	// asked to stop, and requeued on the next start.
+	jobs := job.New(database)
+	jobs.Register(job.TypeCopy, copyJobHandler(fs, engine))
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
+	go jobs.Run(workerCtx)
+
 	appHandler := api.New(api.Options{
 		FS:            fs,
 		Uploads:       uploads,
 		Trash:         trashService,
 		Shares:        shareService,
+		Jobs:          jobs,
 		Auth:          authService,
 		ACL:           engine,
 		Signer:        signer,
@@ -126,6 +138,39 @@ func run() error {
 	}
 
 	return serve(server, cfg)
+}
+
+// copyJobHandler runs a background copy: it recreates the caller's authority
+// from the payload, copies the tree, and records ownership of the result. It is
+// safe to retry — CopyTree refuses to overwrite an existing destination, so a
+// job that already finished before a crash simply fails the second time and is
+// marked failed rather than duplicating anything.
+func copyJobHandler(fs *storage.Local, engine *acl.Engine) job.Handler {
+	return func(ctx context.Context, payload string, report func(float64)) error {
+		var p job.CopyPayload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			return fmt.Errorf("copy job: decode payload: %w", err)
+		}
+
+		subject, err := engine.LoadSubject(ctx, p.UserID, p.IsAdmin)
+		if err != nil {
+			return fmt.Errorf("copy job: load subject: %w", err)
+		}
+		ctx = acl.NewContext(ctx, subject)
+
+		from, err := storage.ParsePath(p.From)
+		if err != nil {
+			return err
+		}
+		to, err := storage.ParsePath(p.To)
+		if err != nil {
+			return err
+		}
+		if err := fs.CopyTree(ctx, from, to, report); err != nil {
+			return err
+		}
+		return engine.SetOwner(ctx, to, p.UserID)
+	}
 }
 
 // announceSetup prints the first-run link when no account exists yet.

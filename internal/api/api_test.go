@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -15,11 +16,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/krishna2206/zefile/internal/acl"
 	"github.com/krishna2206/zefile/internal/api"
 	"github.com/krishna2206/zefile/internal/auth"
 	"github.com/krishna2206/zefile/internal/db"
+	"github.com/krishna2206/zefile/internal/job"
 	"github.com/krishna2206/zefile/internal/share"
 	"github.com/krishna2206/zefile/internal/storage"
 	"github.com/krishna2206/zefile/internal/trash"
@@ -60,10 +63,40 @@ func newClient(t *testing.T) *client {
 		Memory: 8, Iterations: 1, Parallelism: 1, SaltLength: 16, KeyLength: 32,
 	}))
 
+	// A running worker, so a background copy actually completes in tests.
+	jobs := job.New(database, job.WithPollInterval(20*time.Millisecond))
+	jobs.Register(job.TypeCopy, func(ctx context.Context, payload string, report func(float64)) error {
+		var p job.CopyPayload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			return err
+		}
+		subject, err := engine.LoadSubject(ctx, p.UserID, p.IsAdmin)
+		if err != nil {
+			return err
+		}
+		ctx = acl.NewContext(ctx, subject)
+		from, err := storage.ParsePath(p.From)
+		if err != nil {
+			return err
+		}
+		to, err := storage.ParsePath(p.To)
+		if err != nil {
+			return err
+		}
+		if err := fs.CopyTree(ctx, from, to, report); err != nil {
+			return err
+		}
+		return engine.SetOwner(ctx, to, p.UserID)
+	})
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	t.Cleanup(stopWorker)
+	go jobs.Run(workerCtx)
+
 	srv := httptest.NewServer(api.New(api.Options{
 		FS: fs, Auth: service, ACL: engine,
 		Trash:         trash.New(database, fs),
 		Shares:        share.New(database, fs),
+		Jobs:          jobs,
 		ContentBase:   "https://content.example",
 		SecureCookies: false,
 	}).Handler())
@@ -595,4 +628,81 @@ func TestSearchWalksTheTree(t *testing.T) {
 	if got := search("q="); len(got.Results) != 0 {
 		t.Fatalf("empty query = %+v, want no results", got.Results)
 	}
+}
+
+func TestCopyFolderRunsAsBackgroundJob(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+
+	c.do(http.MethodPost, "/api/v1/fs/dirs", map[string]string{"path": "/src/inner"})
+	if err := os.WriteFile(filepath.Join(c.root, "src", "a.txt"), []byte("aaa"), 0o644); err != nil {
+		t.Fatalf("seed a: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(c.root, "src", "inner", "b.txt"), []byte("bbbb"), 0o644); err != nil {
+		t.Fatalf("seed b: %v", err)
+	}
+
+	// Copying a directory is accepted as a background job, not refused.
+	resp, raw := c.do(http.MethodPost, "/api/v1/fs/copy", map[string]string{"from": "/src", "to": "/dst"})
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("copy folder = %d, want 202: %s", resp.StatusCode, raw)
+	}
+	wrap := decode[struct {
+		Job struct {
+			ID     int64  `json:"id"`
+			Status string `json:"status"`
+		} `json:"job"`
+	}](t, raw)
+	if wrap.Job.ID == 0 {
+		t.Fatalf("no job id in %s", raw)
+	}
+
+	// Poll the job until it finishes.
+	var status string
+	for i := 0; i < 200; i++ {
+		r, body := c.do(http.MethodGet, fmt.Sprintf("/api/v1/jobs/%d", wrap.Job.ID), nil)
+		if r.StatusCode != http.StatusOK {
+			t.Fatalf("job get = %d: %s", r.StatusCode, body)
+		}
+		status = decode[struct {
+			Status string `json:"status"`
+		}](t, body).Status
+		if status == "done" || status == "failed" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if status != "done" {
+		t.Fatalf("job status = %q, want done", status)
+	}
+
+	// The tree is reproduced under the destination.
+	top := decode[listing](t, mustList(c, "/dst"))
+	if !hasEntry(top.Entries, "a.txt") || !hasEntry(top.Entries, "inner") {
+		t.Fatalf("/dst = %+v, want a.txt and inner", top.Entries)
+	}
+	inner := decode[listing](t, mustList(c, "/dst/inner"))
+	if !hasEntry(inner.Entries, "b.txt") {
+		t.Fatalf("/dst/inner = %+v, want b.txt", inner.Entries)
+	}
+}
+
+func mustList(c *client, path string) []byte {
+	c.t.Helper()
+	resp, raw := c.do(http.MethodGet, "/api/v1/fs?path="+url.QueryEscape(path), nil)
+	if resp.StatusCode != http.StatusOK {
+		c.t.Fatalf("list %s = %d: %s", path, resp.StatusCode, raw)
+	}
+	return raw
+}
+
+func hasEntry(entries []entry, name string) bool {
+	for _, e := range entries {
+		if e.Name == name {
+			return true
+		}
+	}
+	return false
 }

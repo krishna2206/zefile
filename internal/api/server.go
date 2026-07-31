@@ -7,6 +7,7 @@ import (
 	"github.com/krishna2206/zefile/internal/acl"
 	"github.com/krishna2206/zefile/internal/auth"
 	"github.com/krishna2206/zefile/internal/content"
+	"github.com/krishna2206/zefile/internal/job"
 	"github.com/krishna2206/zefile/internal/share"
 	"github.com/krishna2206/zefile/internal/storage"
 	"github.com/krishna2206/zefile/internal/trash"
@@ -25,6 +26,7 @@ type Server struct {
 	uploads       *upload.Service
 	trash         *trash.Service
 	shares        *share.Service
+	jobs          *job.Service
 	contentBase   string
 	singleOrigin  bool
 	secureCookies bool
@@ -39,6 +41,7 @@ type Options struct {
 	Uploads *upload.Service
 	Trash   *trash.Service
 	Shares  *share.Service
+	Jobs    *job.Service
 
 	// ContentBase is the public origin serving files, without a trailing
 	// slash. In single-origin mode it is the application's own address.
@@ -62,6 +65,7 @@ func New(opts Options) *Server {
 		uploads:       opts.Uploads,
 		trash:         opts.Trash,
 		shares:        opts.Shares,
+		jobs:          opts.Jobs,
 		contentBase:   opts.ContentBase,
 		singleOrigin:  opts.SingleOrigin,
 		secureCookies: opts.SecureCookies,
@@ -107,6 +111,9 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("POST /api/v1/shares", s.handleShareCreate)
 	authed.HandleFunc("GET /api/v1/shares", s.handleShareList)
 	authed.HandleFunc("DELETE /api/v1/shares/{id}", s.handleShareRevoke)
+
+	authed.HandleFunc("GET /api/v1/jobs", s.handleJobList)
+	authed.HandleFunc("GET /api/v1/jobs/{id}", s.handleJobGet)
 
 	authed.HandleFunc("OPTIONS /api/v1/uploads", s.handleUploadOptions)
 	authed.HandleFunc("POST /api/v1/uploads", s.handleUploadCreate)

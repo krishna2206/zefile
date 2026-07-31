@@ -88,6 +88,167 @@ func (l *Local) Copy(ctx context.Context, from, to Path) error {
 	return mapErr(l.root.Rename(tmpRel, toRel))
 }
 
+// CopyTree copies a file or an entire directory tree, with no size limit.
+//
+// It is the background counterpart to [Copy]: a tree or a very large file may
+// take minutes, so this runs in the job worker rather than a request. progress,
+// if set, is called with the fraction of bytes copied so far.
+//
+// The whole tree is assembled under the reserved uploads directory and renamed
+// into place only once complete, so an interrupted copy never leaves a partial
+// tree where callers can see it, and an existing destination is never
+// overwritten.
+func (l *Local) CopyTree(ctx context.Context, from, to Path, progress func(fraction float64)) error {
+	if from.IsRoot() || to.IsRoot() {
+		return fmt.Errorf("%w: cannot copy the root", ErrInvalidPath)
+	}
+	if err := l.access(ctx, OpRead, from); err != nil {
+		return err
+	}
+	if err := l.access(ctx, OpWrite, to); err != nil {
+		return err
+	}
+	if err := l.checkWritable(); err != nil {
+		return err
+	}
+
+	fromRel, info, err := l.resolveExisting(from)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() && !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: only regular files and directories can be copied", ErrInvalidPath)
+	}
+
+	toRel, err := l.resolveForCreate(to)
+	if err != nil {
+		return err
+	}
+	if _, err := l.root.Lstat(toRel); err == nil {
+		return ErrExist
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return mapErr(err)
+	}
+
+	total := l.treeBytes(fromRel, info)
+	var copied int64
+	report := func(n int64) {
+		copied += n
+		if progress == nil {
+			return
+		}
+		if total <= 0 {
+			progress(1)
+			return
+		}
+		progress(float64(copied) / float64(total))
+	}
+
+	tmpRel, err := l.newTempPath()
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = l.root.RemoveAll(tmpRel)
+		}
+	}()
+
+	if info.IsDir() {
+		if err := l.copyDirInto(ctx, fromRel, tmpRel, report); err != nil {
+			return err
+		}
+	} else {
+		if err := l.copyInto(ctx, fromRel, tmpRel); err != nil {
+			return err
+		}
+		report(info.Size())
+	}
+
+	if err := l.root.Rename(tmpRel, toRel); err != nil {
+		return mapErr(err)
+	}
+	committed = true
+	return nil
+}
+
+// treeBytes sums the regular-file bytes under a resolved path. It is
+// best-effort: an entry that vanishes mid-walk is skipped, since the total only
+// scales a progress fraction.
+func (l *Local) treeBytes(rel string, info os.FileInfo) int64 {
+	if !info.IsDir() {
+		if info.Mode().IsRegular() {
+			return info.Size()
+		}
+		return 0
+	}
+	dir, err := l.root.Open(rel)
+	if err != nil {
+		return 0
+	}
+	entries, err := dir.ReadDir(-1)
+	_ = dir.Close()
+	if err != nil {
+		return 0
+	}
+	var total int64
+	for _, e := range entries {
+		child := rel + "/" + e.Name()
+		ci, err := l.root.Lstat(child)
+		if err != nil {
+			continue
+		}
+		total += l.treeBytes(child, ci)
+	}
+	return total
+}
+
+// copyDirInto creates dstRel and copies the contents of srcRel into it,
+// descending recursively. Only directories and regular files are reproduced;
+// symlinks, devices and the like are skipped, as single-file [Copy] refuses
+// them too. Reserved directories exist only at the root, so a nested walk never
+// meets them.
+func (l *Local) copyDirInto(ctx context.Context, srcRel, dstRel string, report func(int64)) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := l.root.Mkdir(dstRel, 0o755); err != nil && !errors.Is(err, os.ErrExist) {
+		return mapErr(err)
+	}
+
+	dir, err := l.root.Open(srcRel)
+	if err != nil {
+		return mapErr(err)
+	}
+	entries, err := dir.ReadDir(-1)
+	_ = dir.Close()
+	if err != nil {
+		return mapErr(err)
+	}
+
+	for _, e := range entries {
+		src := srcRel + "/" + e.Name()
+		dst := dstRel + "/" + e.Name()
+		ci, err := l.root.Lstat(src)
+		if err != nil {
+			continue
+		}
+		switch {
+		case ci.IsDir():
+			if err := l.copyDirInto(ctx, src, dst, report); err != nil {
+				return err
+			}
+		case ci.Mode().IsRegular():
+			if err := l.copyInto(ctx, src, dst); err != nil {
+				return err
+			}
+			report(ci.Size())
+		}
+	}
+	return nil
+}
+
 // copyInto streams one file onto another, leaving the destination durable.
 func (l *Local) copyInto(ctx context.Context, fromRel, tmpRel string) error {
 	src, err := l.root.Open(fromRel)
