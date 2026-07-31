@@ -8,8 +8,14 @@ import { Browser } from './Browser'
 type State =
   | { phase: 'loading' }
   | { phase: 'setup' }
+  | { phase: 'accept' }
   | { phase: 'signed-out' }
   | { phase: 'ready'; user: User }
+
+/** onInviteRoute reports whether the page was opened from an invite link. */
+function onInviteRoute() {
+  return location.pathname === '/invite'
+}
 
 export function App() {
   const [state, setState] = useState<State>({ phase: 'loading' })
@@ -18,6 +24,12 @@ export function App() {
   // account at all, and are we already signed in. Asking the second first
   // would show a sign-in form on an instance nobody can sign in to yet.
   const resolve = useCallback(async () => {
+    // An invite link is its own entry point: it creates an account, so it comes
+    // before the is-there-an-account and are-we-signed-in questions.
+    if (onInviteRoute()) {
+      setState({ phase: 'accept' })
+      return
+    }
     try {
       const { needs_setup } = await api.setupStatus()
       if (needs_setup) {
@@ -39,6 +51,13 @@ export function App() {
     void resolve()
   }, [resolve])
 
+  // After accepting an invite the account exists and is signed in; drop the
+  // invite path from the URL so a refresh lands on the normal app.
+  const leaveInvite = useCallback(() => {
+    if (onInviteRoute()) history.replaceState(null, '', '/')
+    void resolve()
+  }, [resolve])
+
   switch (state.phase) {
     case 'loading':
       return (
@@ -48,6 +67,8 @@ export function App() {
       )
     case 'setup':
       return <SignIn mode="setup" onDone={resolve} />
+    case 'accept':
+      return <SignIn mode="accept" onDone={leaveInvite} />
     case 'signed-out':
       return <SignIn mode="login" onDone={resolve} />
     case 'ready':

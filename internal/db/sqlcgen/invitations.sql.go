@@ -45,6 +45,20 @@ func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationPara
 	return i, err
 }
 
+const deleteInvitationByID = `-- name: DeleteInvitationByID :execrows
+DELETE FROM invitations WHERE id = ? AND used_at IS NULL AND inviter_id IS NOT NULL
+`
+
+// Only an unused, real invitation can be revoked; a used one has already become
+// an account, and a setup token is not an admin's to cancel.
+func (q *Queries) DeleteInvitationByID(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteInvitationByID, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteUnusedInvitations = `-- name: DeleteUnusedInvitations :exec
 DELETE FROM invitations WHERE used_at IS NULL AND inviter_id IS NULL
 `
@@ -79,6 +93,45 @@ func (q *Queries) GetInvitationByTokenHash(ctx context.Context, arg GetInvitatio
 		&i.UsedAt,
 	)
 	return i, err
+}
+
+const listPendingInvitations = `-- name: ListPendingInvitations :many
+SELECT id, token_hash, email, inviter_id, created_at, expires_at, used_at FROM invitations
+WHERE used_at IS NULL AND inviter_id IS NOT NULL AND expires_at > ?
+ORDER BY created_at DESC
+`
+
+// Real invitations (those with an inviter) that are still open, newest first.
+// Setup tokens have no inviter and are excluded.
+func (q *Queries) ListPendingInvitations(ctx context.Context, expiresAt int64) ([]Invitation, error) {
+	rows, err := q.db.QueryContext(ctx, listPendingInvitations, expiresAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Invitation{}
+	for rows.Next() {
+		var i Invitation
+		if err := rows.Scan(
+			&i.ID,
+			&i.TokenHash,
+			&i.Email,
+			&i.InviterID,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.UsedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const markInvitationUsed = `-- name: MarkInvitationUsed :exec

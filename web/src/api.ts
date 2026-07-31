@@ -51,6 +51,16 @@ export type TrashItem = {
   deleted_at: string
 }
 export type User = { id: number; username: string; email?: string; is_admin: boolean }
+
+/** Invitation is a pending invite as an admin sees it. `token` is present only
+ *  at creation — the interface builds the link from it and its own origin. */
+export type Invitation = {
+  id: number
+  email?: string
+  created_at: string
+  expires_at: string
+  token?: string
+}
 export type Space = { available: number; total: number; reserve: number; read_only: boolean }
 
 /** Problem is the RFC 9457 error body every failure returns. */
@@ -116,6 +126,25 @@ export const api = {
 
   logout: () => request<void>('/api/v1/auth/logout', { method: 'POST' }),
   me: () => request<User>('/api/v1/auth/me'),
+
+  // Invitations. Accepting is public (the account does not exist yet); creating,
+  // listing and revoking are admin-only and the server enforces it.
+  checkInvitation: (token: string) =>
+    request<{ valid: boolean; email?: string }>(
+      `/api/v1/invitations/check?token=${encodeURIComponent(token)}`,
+    ),
+  acceptInvitation: (token: string, username: string, password: string) =>
+    request<{ user: User }>('/api/v1/invitations/accept', {
+      method: 'POST',
+      body: JSON.stringify({ token, username, password }),
+    }),
+  createInvitation: (email: string) =>
+    request<Invitation>('/api/v1/invitations', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  listInvitations: () => request<{ invitations: Invitation[] }>('/api/v1/invitations'),
+  revokeInvitation: (id: number) => request<void>(`/api/v1/invitations/${id}`, { method: 'DELETE' }),
 
   list: (path: string) => request<Listing>(`/api/v1/fs?path=${encodeURIComponent(path)}`),
 

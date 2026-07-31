@@ -56,6 +56,7 @@ const (
 	CodeRateLimited        = "rate_limited"
 	CodeSetupClosed        = "setup_closed"
 	CodeInvalidSetupToken  = "invalid_setup_token"
+	CodeInvalidInvitation  = "invalid_invitation"
 	CodeAmbiguous          = "ambiguous_name"
 	CodeInternal           = "internal_error"
 	CodeValidation         = "validation_failed"
@@ -191,6 +192,14 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, auth.ErrInvalidSetupToken):
 		writeProblem(w, r, http.StatusForbidden, CodeInvalidSetupToken,
 			"Invalid setup token", "This setup link is unknown, already used, or expired.")
+
+	case errors.Is(err, auth.ErrInvalidInvitation):
+		writeProblem(w, r, http.StatusForbidden, CodeInvalidInvitation,
+			"Invalid invitation", "This invite link is unknown, already used, or expired.")
+
+	case errors.Is(err, auth.ErrUsernameTaken):
+		writeProblem(w, r, http.StatusConflict, CodeConflict,
+			"Name taken", "That username is already in use.")
 
 	default:
 		// Nothing internal reaches the client. The detail goes to the log,

@@ -86,6 +86,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/setup", s.handleSetupComplete)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
 
+	// Accepting an invitation happens before the account exists, so these two are
+	// open; creating and managing invitations is an admin action, below.
+	mux.HandleFunc("GET /api/v1/invitations/check", s.handleInvitationCheck)
+	mux.HandleFunc("POST /api/v1/invitations/accept", s.handleInvitationAccept)
+
 	// Everything else needs a caller.
 	authed := http.NewServeMux()
 	authed.HandleFunc("POST /api/v1/auth/logout", s.handleLogout)
@@ -114,6 +119,10 @@ func (s *Server) Handler() http.Handler {
 
 	authed.HandleFunc("GET /api/v1/jobs", s.handleJobList)
 	authed.HandleFunc("GET /api/v1/jobs/{id}", s.handleJobGet)
+
+	authed.HandleFunc("POST /api/v1/invitations", s.handleInvitationCreate)
+	authed.HandleFunc("GET /api/v1/invitations", s.handleInvitationList)
+	authed.HandleFunc("DELETE /api/v1/invitations/{id}", s.handleInvitationRevoke)
 
 	authed.HandleFunc("OPTIONS /api/v1/uploads", s.handleUploadOptions)
 	authed.HandleFunc("POST /api/v1/uploads", s.handleUploadCreate)

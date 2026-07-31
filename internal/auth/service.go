@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,7 +64,19 @@ var (
 	// ErrAlreadySetUp means an account already exists, so first-run setup is
 	// closed. It stays closed even if every account is later deleted.
 	ErrAlreadySetUp = errors.New("auth: instance is already set up")
+
+	// ErrInvalidInvitation means the invite token is unknown, used or expired,
+	// or is a setup token rather than a real invitation.
+	ErrInvalidInvitation = errors.New("auth: invalid or expired invitation")
+
+	// ErrUsernameTaken means an account already uses the chosen name (or email).
+	ErrUsernameTaken = errors.New("auth: that name is already taken")
 )
+
+// DefaultInviteTTL bounds how long an invite link stays usable — long enough to
+// reach someone by email and have them get to it, short enough that a leaked
+// link does not stay open indefinitely.
+const DefaultInviteTTL = 7 * 24 * time.Hour
 
 // User is an account, without its secrets.
 type User struct {
@@ -251,6 +264,170 @@ func (s *Service) CompleteSetup(ctx context.Context, token, username, password s
 	}
 
 	return toUser(created), nil
+}
+
+// -------------------------------------------------------------- invitations
+
+// Invitation is a pending invite as an admin sees it. The token is never part
+// of it: it is shown once at creation and only its hash is stored.
+type Invitation struct {
+	ID        int64
+	Email     string
+	InviterID int64
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+// Invite creates an invitation and returns the token once. email is optional —
+// a hint for the admin's own records; the invitee still chooses their username.
+func (s *Service) Invite(ctx context.Context, inviterID int64, email string) (string, Invitation, error) {
+	token, hash, err := NewToken(InvitePrefix)
+	if err != nil {
+		return "", Invitation{}, err
+	}
+
+	var em sql.NullString
+	if email != "" {
+		em = sql.NullString{String: email, Valid: true}
+	}
+
+	now := s.now()
+	row, err := s.writes.CreateInvitation(ctx, sqlcgen.CreateInvitationParams{
+		TokenHash: hash,
+		Email:     em,
+		InviterID: sql.NullInt64{Int64: inviterID, Valid: true},
+		CreatedAt: now.Unix(),
+		ExpiresAt: now.Add(DefaultInviteTTL).Unix(),
+	})
+	if err != nil {
+		return "", Invitation{}, fmt.Errorf("auth: create invitation: %w", err)
+	}
+	return token, toInvitation(row), nil
+}
+
+// CheckInvitation reports whether a token is a valid, unused, unexpired invite,
+// so the accept page can refuse a dead link before asking for a password.
+func (s *Service) CheckInvitation(ctx context.Context, token string) (Invitation, error) {
+	row, err := s.lookupInvitation(ctx, token)
+	if err != nil {
+		return Invitation{}, err
+	}
+	return toInvitation(row), nil
+}
+
+// AcceptInvitation consumes an invite and creates a standard, non-admin account.
+//
+// Like CompleteSetup it runs in one transaction, so a crash cannot create the
+// account while leaving the invite usable, or the reverse.
+func (s *Service) AcceptInvitation(ctx context.Context, token, username, password string) (User, error) {
+	normalised, err := ValidateUsername(username)
+	if err != nil {
+		return User{}, err
+	}
+	if err := ValidatePassword(password, normalised); err != nil {
+		return User{}, err
+	}
+	username = normalised
+
+	invitation, err := s.lookupInvitation(ctx, token)
+	if err != nil {
+		return User{}, err
+	}
+
+	hash, err := HashPassword(password, s.params)
+	if err != nil {
+		return User{}, err
+	}
+
+	now := s.now()
+	tx, err := s.database.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return User{}, fmt.Errorf("auth: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	q := s.writes.WithTx(tx)
+	created, err := q.CreateUser(ctx, sqlcgen.CreateUserParams{
+		Username:     username,
+		Email:        invitation.Email,
+		PasswordHash: hash,
+		IsAdmin:      0,
+		CreatedAt:    now.Unix(),
+		UpdatedAt:    now.Unix(),
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return User{}, ErrUsernameTaken
+		}
+		return User{}, fmt.Errorf("auth: create account: %w", err)
+	}
+	if err := q.MarkInvitationUsed(ctx, sqlcgen.MarkInvitationUsedParams{
+		UsedAt: sql.NullInt64{Int64: now.Unix(), Valid: true},
+		ID:     invitation.ID,
+	}); err != nil {
+		return User{}, fmt.Errorf("auth: consume invitation: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return User{}, fmt.Errorf("auth: commit: %w", err)
+	}
+	return toUser(created), nil
+}
+
+// ListInvitations returns the open invitations, newest first.
+func (s *Service) ListInvitations(ctx context.Context) ([]Invitation, error) {
+	rows, err := s.reads.ListPendingInvitations(ctx, s.now().Unix())
+	if err != nil {
+		return nil, fmt.Errorf("auth: list invitations: %w", err)
+	}
+	out := make([]Invitation, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toInvitation(r))
+	}
+	return out, nil
+}
+
+// RevokeInvitation cancels an unused invitation.
+func (s *Service) RevokeInvitation(ctx context.Context, id int64) error {
+	n, err := s.writes.DeleteInvitationByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("auth: revoke invitation: %w", err)
+	}
+	if n == 0 {
+		return ErrInvalidInvitation
+	}
+	return nil
+}
+
+// lookupInvitation resolves a token to an open, real invitation. A setup token
+// (no inviter) is refused here so it cannot be used to mint a non-admin account.
+func (s *Service) lookupInvitation(ctx context.Context, token string) (sqlcgen.Invitation, error) {
+	row, err := s.reads.GetInvitationByTokenHash(ctx, sqlcgen.GetInvitationByTokenHashParams{
+		TokenHash: HashToken(token),
+		ExpiresAt: s.now().Unix(),
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sqlcgen.Invitation{}, ErrInvalidInvitation
+		}
+		return sqlcgen.Invitation{}, fmt.Errorf("auth: look up invitation: %w", err)
+	}
+	if !row.InviterID.Valid {
+		return sqlcgen.Invitation{}, ErrInvalidInvitation
+	}
+	return row, nil
+}
+
+func toInvitation(r sqlcgen.Invitation) Invitation {
+	inv := Invitation{
+		ID:        r.ID,
+		Email:     r.Email.String,
+		CreatedAt: time.Unix(r.CreatedAt, 0).UTC(),
+		ExpiresAt: time.Unix(r.ExpiresAt, 0).UTC(),
+	}
+	if r.InviterID.Valid {
+		inv.InviterID = r.InviterID.Int64
+	}
+	return inv
 }
 
 // -------------------------------------------------------------------- login

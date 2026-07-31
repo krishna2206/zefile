@@ -57,6 +57,7 @@ import { Sidebar } from '@/components/app-sidebar'
 import { CreateContextItems, type CreateActions } from '@/components/create-menu'
 import { TrashScreen } from '@/components/trash-screen'
 import { SharesScreen } from '@/components/shares-screen'
+import { MembersScreen } from '@/components/members-screen'
 import { ShareDialog } from '@/components/share-dialog'
 import {
   Dialog,
@@ -211,7 +212,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const [selection, setSelection] = useState<Set<string>>(() => new Set())
   const [anchor, setAnchor] = useState<string | null>(null)
-  const [screen, setScreen] = useState<'files' | 'trash' | 'shared'>('files')
+  const [screen, setScreen] = useState<'files' | 'trash' | 'shared' | 'members'>('files')
   const [preview, setPreview] = useState<Entry | null>(null)
   const [inlinePreview, setInlinePreview] = useState(false)
   const [sharedPaths, setSharedPaths] = useState<Set<string>>(() => new Set())
@@ -720,6 +721,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         }}
         onTrash={() => setScreen('trash')}
         onShared={() => setScreen('shared')}
+        onMembers={() => setScreen('members')}
         onSignOut={signOut}
       />
 
@@ -727,6 +729,8 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         <TrashScreen onChanged={refreshSpace} />
       ) : screen === 'shared' ? (
         <SharesScreen />
+      ) : screen === 'members' ? (
+        <MembersScreen />
       ) : (
       <div
         className="relative flex min-w-0 flex-1 flex-col"

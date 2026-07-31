@@ -1,4 +1,4 @@
-import { House, IconContext, ShareNetwork, SignOut, Trash } from '@phosphor-icons/react'
+import { House, IconContext, ShareNetwork, SignOut, Trash, UsersThree } from '@phosphor-icons/react'
 
 import { formatSize, type Space, type User } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { NewButton, type CreateActions } from '@/components/create-menu'
 
-type Section = 'files' | 'trash' | 'shared'
+type Section = 'files' | 'trash' | 'shared' | 'members'
 
 type Props = {
   user: User
@@ -16,6 +16,7 @@ type Props = {
   onHome: () => void
   onTrash: () => void
   onShared: () => void
+  onMembers: () => void
   onSignOut: () => void
 }
 
@@ -23,7 +24,7 @@ type Props = {
  * Sidebar is the app's fixed left column: identity, the "New" action,
  * navigation, and the storage gauge that tells you when to stop uploading.
  */
-export function Sidebar({ user, space, section, create, onHome, onTrash, onShared, onSignOut }: Props) {
+export function Sidebar({ user, space, section, create, onHome, onTrash, onShared, onMembers, onSignOut }: Props) {
   const inFiles = section === 'files'
   const used = space ? Math.max(0, space.total - space.available) : 0
   const percent = space && space.total > 0 ? (used / space.total) * 100 : 0
@@ -68,6 +69,16 @@ export function Sidebar({ user, space, section, create, onHome, onTrash, onShare
           <Trash />
           Trash
         </Button>
+        {user.is_admin && (
+          <Button
+            variant={section === 'members' ? 'secondary' : 'ghost'}
+            className="justify-start gap-2"
+            onClick={onMembers}
+          >
+            <UsersThree />
+            Members
+          </Button>
+        )}
       </nav>
 
       <div className="mt-auto flex flex-col gap-3 p-3">

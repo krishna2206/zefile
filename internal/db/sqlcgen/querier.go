@@ -29,6 +29,9 @@ type Querier interface {
 	DeleteACLForSubject(ctx context.Context, arg DeleteACLForSubjectParams) error
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
 	DeleteFileOwner(ctx context.Context, path string) error
+	// Only an unused, real invitation can be revoked; a used one has already become
+	// an account, and a setup token is not an admin's to cancel.
+	DeleteInvitationByID(ctx context.Context, id int64) (int64, error)
 	DeleteTrash(ctx context.Context, id int64) error
 	DeleteUnusedInvitations(ctx context.Context) error
 	DeleteUpload(ctx context.Context, id int64) error
@@ -61,6 +64,9 @@ type Querier interface {
 	ListACLForUser(ctx context.Context, subjectID int64) ([]Acl, error)
 	ListExpiredUploads(ctx context.Context, expiresAt int64) ([]Upload, error)
 	ListGroupsForUser(ctx context.Context, userID int64) ([]int64, error)
+	// Real invitations (those with an inviter) that are still open, newest first.
+	// Setup tokens have no inviter and are excluded.
+	ListPendingInvitations(ctx context.Context, expiresAt int64) ([]Invitation, error)
 	ListRecentJobs(ctx context.Context, limit int64) ([]Job, error)
 	ListSessionsForUser(ctx context.Context, arg ListSessionsForUserParams) ([]Session, error)
 	ListSharesByOwner(ctx context.Context, ownerID int64) ([]Share, error)

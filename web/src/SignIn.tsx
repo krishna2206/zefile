@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 
 import { api, ApiError } from './api'
 import { Button } from '@/components/ui/button'
@@ -7,26 +7,27 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ThemeToggle } from '@/components/theme-toggle'
 
-type Props = { mode: 'login' | 'setup'; onDone: () => void }
+type Props = { mode: 'login' | 'setup' | 'accept'; onDone: () => void }
 
 /** Field-level messages, keyed the way the API reports them. */
 type FieldErrors = Partial<Record<'token' | 'username' | 'password' | 'confirm', string>>
 
 /**
- * SignIn covers both signing in and creating the first account.
- *
- * They are one screen because they are the same shape and never both apply: an
- * instance either has an account or it does not.
+ * SignIn covers signing in, creating the first account, and accepting an
+ * invitation. They are one screen because they share a shape: setup and accept
+ * both create an account, and only differ in where the token comes from — the
+ * server log for setup, the invite link for accept.
  *
  * Validation happens in three places, deliberately. The server is the authority
  * and always checks. This form checks the same rules on leaving a field, so a
- * mistake is reported next to the input while the person is still looking at it
- * rather than after a round trip. And the server's own messages are shown when
- * they arrive, since it knows things the browser cannot — that a name is taken,
- * that a token has expired.
+ * mistake is reported next to the input while the person is still looking at it.
+ * And the server's own messages are shown when they arrive, since it knows
+ * things the browser cannot — that a name is taken, that a token has expired.
  */
 export function SignIn({ mode, onDone }: Props) {
   const setup = mode === 'setup'
+  const accept = mode === 'accept'
+  const creating = setup || accept
 
   const [token, setToken] = useState(() => new URLSearchParams(location.search).get('token') ?? '')
   const [username, setUsername] = useState('')
@@ -35,6 +36,24 @@ export function SignIn({ mode, onDone }: Props) {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // For an invite, confirm the link is usable before asking for a password, so a
+  // dead link says so plainly rather than after the form is filled in.
+  const [invite, setInvite] = useState<{ checking: boolean; valid: boolean; email?: string }>({
+    checking: accept,
+    valid: false,
+  })
+  useEffect(() => {
+    if (!accept) return
+    let live = true
+    api
+      .checkInvitation(token)
+      .then((res) => live && setInvite({ checking: false, valid: res.valid, email: res.email }))
+      .catch(() => live && setInvite({ checking: false, valid: false }))
+    return () => {
+      live = false
+    }
+  }, [accept, token])
 
   function validate(): FieldErrors {
     const found: FieldErrors = {}
@@ -60,7 +79,7 @@ export function SignIn({ mode, onDone }: Props) {
       found.username = 'Use letters, digits, and . - or _ only.'
     }
 
-    if (setup) {
+    if (creating) {
       const length = [...password].length
       if (length === 0) {
         found.password = 'Choose a password.'
@@ -101,6 +120,8 @@ export function SignIn({ mode, onDone }: Props) {
     try {
       if (setup) {
         await api.completeSetup(token.trim(), username.trim(), password)
+      } else if (accept) {
+        await api.acceptInvitation(token.trim(), username.trim(), password)
       } else {
         await api.login(username.trim(), password)
       }
@@ -116,96 +137,121 @@ export function SignIn({ mode, onDone }: Props) {
     }
   }
 
+  const subtitle = setup
+    ? 'Let’s create your account.'
+    : accept
+      ? 'You’ve been invited — create your account.'
+      : 'Your files, on your own server.'
+
   return (
     <div className="relative grid min-h-dvh place-items-center bg-background p-6">
       <ThemeToggle className="absolute right-4 top-4" />
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-1 text-center">
           <h1 className="font-serif text-4xl font-semibold tracking-tight">Zefile</h1>
-          <p className="text-sm text-muted-foreground">
-            {setup ? 'Let’s create your account.' : 'Your files, on your own server.'}
-          </p>
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
         </div>
 
         <Card>
           <CardContent>
-            <form onSubmit={submit} noValidate className="space-y-4">
-              {setup && (
-                <>
+            {accept && invite.checking ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">Checking your invitation…</p>
+            ) : accept && !invite.valid ? (
+              <div className="space-y-3 py-2 text-center">
+                <p className="text-sm font-medium">This invite link is not valid.</p>
+                <p className="text-sm text-muted-foreground">
+                  It may have expired or already been used. Ask whoever invited you for a fresh link.
+                </p>
+                <Button variant="outline" className="w-full" onClick={() => (location.href = '/')}>
+                  Go to sign in
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={submit} noValidate className="space-y-4">
+                {setup && (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Zefile printed a setup link in its log when it started. Paste its token below.
+                    </p>
+                    <Field label="Setup token" error={errors.token}>
+                      {(id) => (
+                        <Input
+                          id={id}
+                          value={token}
+                          aria-invalid={!!errors.token}
+                          onChange={(e) => setToken(e.currentTarget.value)}
+                          onBlur={() => checkField('token')}
+                        />
+                      )}
+                    </Field>
+                  </>
+                )}
+
+                {accept && invite.email && (
                   <p className="text-sm text-muted-foreground">
-                    Zefile printed a setup link in its log when it started. Paste its token below.
+                    Invited as <span className="font-medium text-foreground">{invite.email}</span>. Choose a
+                    username and password.
                   </p>
-                  <Field label="Setup token" error={errors.token}>
-                    {(id) => (
-                      <Input
-                        id={id}
-                        value={token}
-                        aria-invalid={!!errors.token}
-                        onChange={(e) => setToken(e.currentTarget.value)}
-                        onBlur={() => checkField('token')}
-                      />
-                    )}
-                  </Field>
-                </>
-              )}
-
-              <Field label="Username" error={errors.username}>
-                {(id) => (
-                  <Input
-                    id={id}
-                    value={username}
-                    autoComplete="username"
-                    aria-invalid={!!errors.username}
-                    onChange={(e) => setUsername(e.currentTarget.value)}
-                    onBlur={() => checkField('username')}
-                  />
                 )}
-              </Field>
 
-              <Field
-                label="Password"
-                error={errors.password}
-                hint={setup ? 'At least 12 characters. A few ordinary words beat a short, clever one.' : undefined}
-              >
-                {(id) => (
-                  <Input
-                    id={id}
-                    type="password"
-                    value={password}
-                    autoComplete={setup ? 'new-password' : 'current-password'}
-                    aria-invalid={!!errors.password}
-                    onChange={(e) => setPassword(e.currentTarget.value)}
-                    onBlur={() => checkField('password')}
-                  />
-                )}
-              </Field>
+                <Field label="Username" error={errors.username}>
+                  {(id) => (
+                    <Input
+                      id={id}
+                      value={username}
+                      autoComplete="username"
+                      aria-invalid={!!errors.username}
+                      onChange={(e) => setUsername(e.currentTarget.value)}
+                      onBlur={() => checkField('username')}
+                    />
+                  )}
+                </Field>
 
-              {setup && (
-                <Field label="Confirm password" error={errors.confirm}>
+                <Field
+                  label="Password"
+                  error={errors.password}
+                  hint={creating ? 'At least 12 characters. A few ordinary words beat a short, clever one.' : undefined}
+                >
                   {(id) => (
                     <Input
                       id={id}
                       type="password"
-                      value={confirm}
-                      autoComplete="new-password"
-                      aria-invalid={!!errors.confirm}
-                      onChange={(e) => setConfirm(e.currentTarget.value)}
-                      onBlur={() => checkField('confirm')}
+                      value={password}
+                      autoComplete={creating ? 'new-password' : 'current-password'}
+                      aria-invalid={!!errors.password}
+                      onChange={(e) => setPassword(e.currentTarget.value)}
+                      onBlur={() => checkField('password')}
                     />
                   )}
                 </Field>
-              )}
 
-              {formError && (
-                <p role="alert" className="text-sm text-destructive">
-                  {formError}
-                </p>
-              )}
+                {creating && (
+                  <Field label="Confirm password" error={errors.confirm}>
+                    {(id) => (
+                      <Input
+                        id={id}
+                        type="password"
+                        value={confirm}
+                        autoComplete="new-password"
+                        aria-invalid={!!errors.confirm}
+                        onChange={(e) => setConfirm(e.currentTarget.value)}
+                        onBlur={() => checkField('confirm')}
+                      />
+                    )}
+                  </Field>
+                )}
 
-              <Button type="submit" className="w-full" disabled={busy}>
-                {busy ? 'Working…' : setup ? 'Create account' : 'Sign in'}
-              </Button>
-            </form>
+                {formError && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {formError}
+                  </p>
+                )}
+
+                <Button type="submit" className="w-full" disabled={busy}>
+                  {busy ? 'Working…' : creating ? 'Create account' : 'Sign in'}
+                </Button>
+              </form>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -241,7 +287,7 @@ function Field({
         role={error ? 'alert' : undefined}
         className={`min-h-4 text-xs ${error ? 'text-destructive' : 'text-muted-foreground'}`}
       >
-        {error ?? hint ?? ' '}
+        {error ?? hint ?? ' '}
       </p>
     </div>
   )

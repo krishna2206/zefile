@@ -706,3 +706,97 @@ func hasEntry(entries []entry, name string) bool {
 	}
 	return false
 }
+
+func TestInvitationLifecycle(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp() // creates the admin and keeps its token
+
+	// The admin mints an invite.
+	resp, raw := c.do(http.MethodPost, "/api/v1/invitations", map[string]string{"email": "bob@example.com"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create invite = %d: %s", resp.StatusCode, raw)
+	}
+	invite := decode[struct {
+		ID    int64  `json:"id"`
+		Email string `json:"email"`
+		Token string `json:"token"`
+	}](t, raw)
+	if invite.Token == "" || invite.Email != "bob@example.com" {
+		t.Fatalf("invite = %+v, want a token and the email", invite)
+	}
+
+	// The public check says it is usable.
+	_, raw = c.do(http.MethodGet, "/api/v1/invitations/check?token="+url.QueryEscape(invite.Token), nil)
+	if chk := decode[struct {
+		Valid bool   `json:"valid"`
+		Email string `json:"email"`
+	}](t, raw); !chk.Valid || chk.Email != "bob@example.com" {
+		t.Fatalf("check = %+v, want valid with the email", chk)
+	}
+
+	// Accepting it creates a standard, non-admin account and signs it in.
+	resp, raw = c.do(http.MethodPost, "/api/v1/invitations/accept", map[string]string{
+		"token": invite.Token, "username": "bob", "password": "correct horse battery",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("accept = %d: %s", resp.StatusCode, raw)
+	}
+	accepted := decode[struct {
+		User  userJSON `json:"user"`
+		Token string   `json:"token"`
+	}](t, raw)
+	if accepted.User.Username != "bob" || accepted.User.IsAdmin {
+		t.Fatalf("accepted user = %+v, want a non-admin bob", accepted.User)
+	}
+	bobToken := accepted.Token
+
+	// The same token cannot be used twice.
+	_, raw = c.do(http.MethodGet, "/api/v1/invitations/check?token="+url.QueryEscape(invite.Token), nil)
+	if chk := decode[struct {
+		Valid bool `json:"valid"`
+	}](t, raw); chk.Valid {
+		t.Fatalf("used token still reports valid")
+	}
+
+	// A second invite can be listed and revoked.
+	_, raw = c.do(http.MethodPost, "/api/v1/invitations", map[string]string{})
+	second := decode[struct {
+		ID int64 `json:"id"`
+	}](t, raw)
+	if list := decode[struct {
+		Invitations []struct {
+			ID int64 `json:"id"`
+		} `json:"invitations"`
+	}](t, mustGet(c, "/api/v1/invitations")); len(list.Invitations) != 1 || list.Invitations[0].ID != second.ID {
+		t.Fatalf("pending list = %+v, want only the second invite", list.Invitations)
+	}
+	if resp, raw = c.do(http.MethodDelete, fmt.Sprintf("/api/v1/invitations/%d", second.ID), nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("revoke = %d: %s", resp.StatusCode, raw)
+	}
+
+	// A non-admin cannot invite.
+	admin := c.token
+	c.token = bobToken
+	resp, raw = c.do(http.MethodPost, "/api/v1/invitations", map[string]string{})
+	c.token = admin
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-admin invite = %d, want 403: %s", resp.StatusCode, raw)
+	}
+}
+
+type userJSON struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	IsAdmin  bool   `json:"is_admin"`
+}
+
+func mustGet(c *client, path string) []byte {
+	c.t.Helper()
+	resp, raw := c.do(http.MethodGet, path, nil)
+	if resp.StatusCode != http.StatusOK {
+		c.t.Fatalf("GET %s = %d: %s", path, resp.StatusCode, raw)
+	}
+	return raw
+}
