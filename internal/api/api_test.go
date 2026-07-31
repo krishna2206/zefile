@@ -545,3 +545,54 @@ func TestMalformedBodyIsRejected(t *testing.T) {
 		t.Fatalf("unknown field = %d, want 400: %s", resp.StatusCode, raw)
 	}
 }
+
+func TestSearchWalksTheTree(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+
+	c.do(http.MethodPost, "/api/v1/fs/dirs", map[string]string{"path": "/photos/2024"})
+	for _, f := range []struct{ rel, data string }{
+		{"photos/2024/beach-sunset.jpg", "x"},
+		{"photos/vacation-notes.txt", "y"},
+		{"report.pdf", "z"},
+	} {
+		if err := os.WriteFile(filepath.Join(c.root, filepath.FromSlash(f.rel)), []byte(f.data), 0o644); err != nil {
+			t.Fatalf("seed %s: %v", f.rel, err)
+		}
+	}
+
+	type searchResp struct {
+		Query     string  `json:"query"`
+		Results   []entry `json:"results"`
+		Truncated bool    `json:"truncated"`
+	}
+	search := func(q string) searchResp {
+		resp, raw := c.do(http.MethodGet, "/api/v1/fs/search?"+q, nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("search %q: %d %s", q, resp.StatusCode, raw)
+		}
+		return decode[searchResp](t, raw)
+	}
+
+	// A nested file is found from the root by a substring of its name.
+	if got := search("q=beach"); len(got.Results) != 1 || got.Results[0].Path != "/photos/2024/beach-sunset.jpg" {
+		t.Fatalf("beach = %+v, want the nested jpg", got.Results)
+	}
+
+	// A directory whose own name matches is a result too.
+	if got := search("q=photos"); len(got.Results) != 1 || got.Results[0].Path != "/photos" || !got.Results[0].IsDir {
+		t.Fatalf("photos = %+v, want the /photos folder", got.Results)
+	}
+
+	// A scoped search does not reach outside its root.
+	if got := search("q=report&path=/photos"); len(got.Results) != 0 {
+		t.Fatalf("scoped report = %+v, want nothing under /photos", got.Results)
+	}
+
+	// An empty query is a well-formed no-op, not an error.
+	if got := search("q="); len(got.Results) != 0 {
+		t.Fatalf("empty query = %+v, want no results", got.Results)
+	}
+}

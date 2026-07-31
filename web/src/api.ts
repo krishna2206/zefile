@@ -106,6 +106,14 @@ export const api = {
   me: () => request<User>('/api/v1/auth/me'),
 
   list: (path: string) => request<Listing>(`/api/v1/fs?path=${encodeURIComponent(path)}`),
+
+  // search finds entries by name under a root folder (recursively). `truncated`
+  // says the walk hit its limit and more matches may exist.
+  search: (query: string, path = '/') =>
+    request<{ query: string; results: Entry[]; truncated: boolean }>(
+      `/api/v1/fs/search?q=${encodeURIComponent(query)}&path=${encodeURIComponent(path)}`,
+    ),
+
   space: () => request<Space>('/api/v1/fs/space'),
 
   mkdir: (path: string) =>

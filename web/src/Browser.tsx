@@ -213,6 +213,10 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const [sharedPaths, setSharedPaths] = useState<Set<string>>(() => new Set())
   const [clipboard, setClipboard] = useState<Clipboard | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const [searchResults, setSearchResults] = useState<Entry[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [searchTruncated, setSearchTruncated] = useState(false)
+  const searchSeq = useRef(0)
 
   const fileInput = useRef<HTMLInputElement>(null)
   const dirInput = useRef<HTMLInputElement>(null)
@@ -289,6 +293,37 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   useEffect(() => {
     if (screen === 'files') void refreshShares()
   }, [screen, refreshShares])
+
+  // The search box runs a recursive, server-side search from the current folder,
+  // debounced. An empty query returns to the ordinary listing; a stale request's
+  // result is dropped by comparing the sequence it was issued under.
+  useEffect(() => {
+    const trimmed = query.trim()
+    if (!trimmed) {
+      setSearchResults(null)
+      setSearching(false)
+      return
+    }
+    setSearching(true)
+    const seq = ++searchSeq.current
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await api.search(trimmed, path)
+        if (searchSeq.current === seq) {
+          setSearchResults(res.results)
+          setSearchTruncated(res.truncated)
+        }
+      } catch {
+        if (searchSeq.current === seq) {
+          setSearchResults([])
+          setSearchTruncated(false)
+        }
+      } finally {
+        if (searchSeq.current === seq) setSearching(false)
+      }
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [query, path])
 
   // runUpload sends a batch to target/<name>, where a name may be a bare file
   // name or a nested path. One queue and one progress path serve a plain import,
@@ -401,10 +436,13 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     importFolder: () => dirInput.current?.click(),
   }
 
-  const matched = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    return needle ? entries.filter((e) => e.name.toLowerCase().includes(needle)) : entries
-  }, [entries, query])
+  // In search mode the listing is the server's results (which span folders);
+  // otherwise it is the current folder's entries.
+  const inSearch = query.trim().length > 0
+  const matched = useMemo(
+    () => (inSearch ? (searchResults ?? []) : entries),
+    [inSearch, searchResults, entries],
+  )
 
   const groups = useMemo(() => buildGroups(matched, group, sort), [matched, group, sort])
   const ordered = useMemo(() => groups.flatMap((g) => g.entries), [groups])
@@ -478,8 +516,10 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const actions: EntryActions = {
     select: selectEntry,
     open: (entry) => {
-      if (entry.is_dir) setPath(entry.path)
-      else if (isPreviewable(entry)) setPreview(entry)
+      if (entry.is_dir) {
+        setPath(entry.path)
+        setQuery('') // opening a folder leaves search and shows that folder
+      } else if (isPreviewable(entry)) setPreview(entry)
       else void download(entry)
     },
     download,
@@ -626,6 +666,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         onHome={() => {
           setScreen('files')
           setPath('/')
+          setQuery('')
         }}
         onTrash={() => setScreen('trash')}
         onShared={() => setScreen('shared')}
@@ -697,13 +738,27 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         ) : (
           <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
             <div className="relative w-full max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              {searching ? (
+                <Loader2 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+              ) : (
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              )}
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.currentTarget.value)}
-                placeholder="Search this folder…"
-                className="pl-9"
+                placeholder={path === '/' ? 'Search all files…' : 'Search from this folder…'}
+                className="pl-9 pr-9"
               />
+              {query && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => setQuery('')}
+                  className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
             </div>
 
             <div className="ml-auto flex items-center gap-2">
@@ -733,7 +788,13 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
           </header>
         )}
 
-        <Breadcrumb path={path} onNavigate={setPath} />
+        <Breadcrumb
+          path={path}
+          onNavigate={(p) => {
+            setPath(p)
+            setQuery('')
+          }}
+        />
 
         {error && (
           <p role="alert" className="border-b bg-destructive/10 px-4 py-2 text-sm text-destructive">
@@ -741,22 +802,28 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
           </p>
         )}
 
+        {inSearch && searchTruncated && ordered.length > 0 && (
+          <p className="border-b bg-amber-500/10 px-4 py-1.5 text-xs text-muted-foreground">
+            Showing the first {ordered.length} matches — refine your search to narrow it down.
+          </p>
+        )}
+
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div className="min-h-0 flex-1">
-              {loading ? (
+              {loading || (inSearch && searchResults === null) ? (
                 <div className="grid h-full place-items-center">
                   <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
                 </div>
               ) : ordered.length === 0 ? (
                 <Empty
-                  title={query ? 'No matches' : 'Nothing here'}
-                  detail={query ? 'No file in this folder matches your search.' : 'Drop files or folders anywhere on this page to upload them.'}
+                  title={inSearch ? 'No matches' : 'Nothing here'}
+                  detail={inSearch ? 'No file matches your search.' : 'Drop files or folders anywhere on this page to upload them.'}
                 />
               ) : view === 'grid' ? (
-                <GridView groups={groups} actions={actions} onClearSelection={clearSelection} size={GRID_SIZES[gridSize]!} />
+                <GridView groups={groups} actions={actions} onClearSelection={clearSelection} size={GRID_SIZES[gridSize]!} showLocation={inSearch} />
               ) : (
-                <ListView rows={listRows} sort={sort} onSort={toggleSort} actions={actions} onClearSelection={clearSelection} />
+                <ListView rows={listRows} sort={sort} onSort={toggleSort} actions={actions} onClearSelection={clearSelection} showLocation={inSearch} />
               )}
             </div>
           </ContextMenuTrigger>
@@ -1159,12 +1226,21 @@ type ListProps = {
   onSort: (key: SortKey) => void
   actions: EntryActions
   onClearSelection: () => void
+  // showLocation reveals each entry's folder under its name — used in search
+  // results, which span folders.
+  showLocation: boolean
 }
 
 // One grid template shared by the column header and every row so they line up.
 const listGrid = 'grid grid-cols-[1.5rem_1fr_6rem_9rem_5rem] items-center gap-3'
 
-function ListView({ rows, sort, onSort, actions, onClearSelection }: ListProps) {
+/** locationLabel names the folder an entry lives in, for search results. */
+function locationLabel(path: string): string {
+  const parent = parentOf(path)
+  return parent === '/' ? 'Home' : parent.slice(1)
+}
+
+function ListView({ rows, sort, onSort, actions, onClearSelection, showLocation }: ListProps) {
   const viewport = useRef<HTMLDivElement>(null)
 
   const virtualizer = useVirtualizer({
@@ -1208,7 +1284,7 @@ function ListView({ rows, sort, onSort, actions, onClearSelection }: ListProps) 
                   <span className="text-muted-foreground/60">{row.count}</span>
                 </div>
               ) : (
-                <ListRow entry={row.entry} actions={actions} />
+                <ListRow entry={row.entry} actions={actions} showLocation={showLocation} />
               )}
             </div>
           )
@@ -1245,7 +1321,7 @@ function SortHeader({
   )
 }
 
-function ListRow({ entry, actions }: { entry: Entry; actions: EntryActions }) {
+function ListRow({ entry, actions, showLocation }: { entry: Entry; actions: EntryActions; showLocation: boolean }) {
   const { icon: Icon, color } = entryKind(entry)
   const selected = actions.isSelected(entry)
   const shared = actions.isShared(entry)
@@ -1282,10 +1358,17 @@ function ListRow({ entry, actions }: { entry: Entry; actions: EntryActions }) {
           <Icon className={`size-5 ${color}`} />
         )}
 
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-sm">{entry.name}</span>
-          {shared && (
-            <LinkSimple className="size-3.5 shrink-0 text-muted-foreground" aria-label="Shared" />
+        <span className="flex min-w-0 flex-col justify-center">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-sm">{entry.name}</span>
+            {shared && (
+              <LinkSimple className="size-3.5 shrink-0 text-muted-foreground" aria-label="Shared" />
+            )}
+          </span>
+          {showLocation && (
+            <span className="truncate text-xs text-muted-foreground" title={locationLabel(entry.path)}>
+              {locationLabel(entry.path)}
+            </span>
           )}
         </span>
 
@@ -1339,11 +1422,13 @@ function GridView({
   actions,
   onClearSelection,
   size,
+  showLocation,
 }: {
   groups: Group[]
   actions: EntryActions
   onClearSelection: () => void
   size: GridSize
+  showLocation: boolean
 }) {
   return (
     <div
@@ -1363,7 +1448,7 @@ function GridView({
             style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${size.min}, 1fr))` }}
           >
             {g.entries.map((entry) => (
-              <GridTile key={entry.path} entry={entry} actions={actions} size={size} />
+              <GridTile key={entry.path} entry={entry} actions={actions} size={size} showLocation={showLocation} />
             ))}
           </div>
         </section>
@@ -1372,7 +1457,7 @@ function GridView({
   )
 }
 
-function GridTile({ entry, actions, size }: { entry: Entry; actions: EntryActions; size: GridSize }) {
+function GridTile({ entry, actions, size, showLocation }: { entry: Entry; actions: EntryActions; size: GridSize; showLocation: boolean }) {
   const { icon: Icon, color } = entryKind(entry)
   const selected = actions.isSelected(entry)
   const shared = actions.isShared(entry)
@@ -1422,9 +1507,15 @@ function GridTile({ entry, actions, size }: { entry: Entry; actions: EntryAction
         </div>
         <div className="min-w-0 px-1">
           <p className="line-clamp-2 break-words text-sm">{entry.name}</p>
-          <p className="text-xs tabular-nums text-muted-foreground">
-            {entry.is_dir ? '—' : formatSize(entry.size)}
-          </p>
+          {showLocation ? (
+            <p className="truncate text-xs text-muted-foreground" title={locationLabel(entry.path)}>
+              {locationLabel(entry.path)}
+            </p>
+          ) : (
+            <p className="text-xs tabular-nums text-muted-foreground">
+              {entry.is_dir ? '—' : formatSize(entry.size)}
+            </p>
+          )}
         </div>
       </div>
     </EntryMenu>
