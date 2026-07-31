@@ -13,6 +13,7 @@ type Props = {
   space: Space | null
   section: Section
   create: CreateActions
+  canCreate: boolean
   onHome: () => void
   onTrash: () => void
   onShared: () => void
@@ -24,7 +25,7 @@ type Props = {
  * Sidebar is the app's fixed left column: identity, the "New" action,
  * navigation, and the storage gauge that tells you when to stop uploading.
  */
-export function Sidebar({ user, space, section, create, onHome, onTrash, onShared, onMembers, onSignOut }: Props) {
+export function Sidebar({ user, space, section, create, canCreate, onHome, onTrash, onShared, onMembers, onSignOut }: Props) {
   const inFiles = section === 'files'
   const used = space ? Math.max(0, space.total - space.available) : 0
   const percent = space && space.total > 0 ? (used / space.total) * 100 : 0
@@ -39,7 +40,7 @@ export function Sidebar({ user, space, section, create, onHome, onTrash, onShare
       </div>
 
       <div className="flex flex-col gap-1.5 px-3 pb-2">
-        <NewButton actions={create} disabled={!inFiles} />
+        <NewButton actions={create} disabled={!inFiles || !canCreate} />
       </div>
 
       <div className="mx-3 my-4 h-px bg-border" />

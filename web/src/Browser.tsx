@@ -42,6 +42,7 @@ import {
   parentOf,
   type Entry,
   type Job,
+  type PermSet,
   type Space,
   type User,
 } from './api'
@@ -170,6 +171,9 @@ type EntryActions = {
   isSelected: (entry: Entry) => boolean
   isShared: (entry: Entry) => boolean
   canPaste: boolean
+  // Permissions in the current folder, applied to its entries so the menus offer
+  // only what the caller can actually do.
+  perms: PermSet
   // Drag-to-move: dragPaths is what a drag starting on an entry carries (the
   // selection, or just that entry); moveInto drops those paths into a folder.
   dragPaths: (entry: Entry) => string[]
@@ -184,6 +188,9 @@ const MOVE_MIME = 'application/x-zefile-move'
 
 /** Clipboard holds entries cut or copied, waiting to be pasted into a folder. */
 type Clipboard = { mode: 'copy' | 'cut'; entries: Entry[] }
+
+const ALL_PERMS: PermSet = { read: true, write: true, delete: true, share: true, manage: true }
+const NO_PERMS: PermSet = { read: false, write: false, delete: false, share: false, manage: false }
 
 /** TrackedJob follows a background copy the interface is polling. */
 type TrackedJob = { id: number; name: string; status: Job['status']; progress: number }
@@ -228,6 +235,9 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const [searchTruncated, setSearchTruncated] = useState(false)
   const searchSeq = useRef(0)
   const [jobs, setJobs] = useState<TrackedJob[]>([])
+  // What the caller may do in the current folder, used to show only the actions
+  // they can perform. An admin holds everything; the server stays the authority.
+  const [perms, setPerms] = useState<PermSet>(user.is_admin ? ALL_PERMS : NO_PERMS)
 
   const fileInput = useRef<HTMLInputElement>(null)
   const dirInput = useRef<HTMLInputElement>(null)
@@ -292,6 +302,21 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   useEffect(() => {
     void refreshSpace()
   }, [refreshSpace])
+
+  // Load the caller's permissions for the folder being browsed. Admins hold
+  // everything, so they skip the round trip entirely.
+  useEffect(() => {
+    if (user.is_admin) return
+    if (screen !== 'files') return
+    let live = true
+    api
+      .effectivePermissions(path)
+      .then((p) => live && setPerms(p))
+      .catch(() => live && setPerms(NO_PERMS))
+    return () => {
+      live = false
+    }
+  }, [path, screen, user.is_admin])
 
   useEffect(() => {
     // Whether files render in place depends on the instance serving them
@@ -548,6 +573,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     isSelected: (entry) => selection.has(entry.path),
     isShared: (entry) => sharedPaths.has(entry.path),
     canPaste: clipboard !== null,
+    perms,
     dragPaths: (entry) =>
       selection.has(entry.path) && selected.length > 0 ? selected.map((e) => e.path) : [entry.path],
     moveInto,
@@ -714,6 +740,27 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
 
   const onlyOne = selected.length === 1 ? selected[0]! : null
 
+  // The scrollable list/grid, extracted so it can be shown with or without the
+  // empty-area create menu depending on whether the caller can write here.
+  const browseArea = (
+    <div className="min-h-0 flex-1">
+      {loading || (inSearch && searchResults === null) ? (
+        <div className="grid h-full place-items-center">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
+        </div>
+      ) : ordered.length === 0 ? (
+        <Empty
+          title={inSearch ? 'No matches' : 'Nothing here'}
+          detail={inSearch ? 'No file matches your search.' : 'Drop files or folders anywhere on this page to upload them.'}
+        />
+      ) : view === 'grid' ? (
+        <GridView groups={groups} actions={actions} onClearSelection={clearSelection} size={GRID_SIZES[gridSize]!} showLocation={inSearch} />
+      ) : (
+        <ListView rows={listRows} sort={sort} onSort={toggleSort} actions={actions} onClearSelection={clearSelection} showLocation={inSearch} />
+      )}
+    </div>
+  )
+
   return (
     <div className="flex h-dvh bg-background">
       <Sidebar
@@ -721,6 +768,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         space={space}
         section={screen}
         create={createActions}
+        canCreate={perms.write}
         onHome={() => {
           setScreen('files')
           setPath('/')
@@ -779,43 +827,49 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
                   Download
                 </Button>
               )}
-              {onlyOne && (
+              {onlyOne && perms.write && perms.delete && (
                 <Button variant="ghost" size="sm" onClick={() => actions.rename(onlyOne)}>
                   <Pencil />
                   Rename
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setClipboard({ mode: 'copy', entries: selected })
-                  clearSelection()
-                }}
-              >
-                <CopyIcon />
-                Copy
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setClipboard({ mode: 'cut', entries: selected })
-                  clearSelection()
-                }}
-              >
-                <Scissors />
-                Move
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={() => setDialog({ kind: 'delete', entries: selected })}
-              >
-                <Trash2 />
-                Delete
-              </Button>
+              {perms.read && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setClipboard({ mode: 'copy', entries: selected })
+                    clearSelection()
+                  }}
+                >
+                  <CopyIcon />
+                  Copy
+                </Button>
+              )}
+              {perms.delete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setClipboard({ mode: 'cut', entries: selected })
+                    clearSelection()
+                  }}
+                >
+                  <Scissors />
+                  Move
+                </Button>
+              )}
+              {perms.delete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setDialog({ kind: 'delete', entries: selected })}
+                >
+                  <Trash2 />
+                  Delete
+                </Button>
+              )}
             </div>
           </header>
         ) : (
@@ -845,7 +899,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-              {clipboard && (
+              {clipboard && perms.write && (
                 <button
                   type="button"
                   onClick={() => void doPaste()}
@@ -891,39 +945,26 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
           </p>
         )}
 
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <div className="min-h-0 flex-1">
-              {loading || (inSearch && searchResults === null) ? (
-                <div className="grid h-full place-items-center">
-                  <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
-                </div>
-              ) : ordered.length === 0 ? (
-                <Empty
-                  title={inSearch ? 'No matches' : 'Nothing here'}
-                  detail={inSearch ? 'No file matches your search.' : 'Drop files or folders anywhere on this page to upload them.'}
-                />
-              ) : view === 'grid' ? (
-                <GridView groups={groups} actions={actions} onClearSelection={clearSelection} size={GRID_SIZES[gridSize]!} showLocation={inSearch} />
-              ) : (
-                <ListView rows={listRows} sort={sort} onSort={toggleSort} actions={actions} onClearSelection={clearSelection} showLocation={inSearch} />
+        {perms.write ? (
+          <ContextMenu>
+            <ContextMenuTrigger asChild>{browseArea}</ContextMenuTrigger>
+            <ContextMenuContent className="w-52">
+              <CreateContextItems actions={createActions} />
+              {clipboard && (
+                <>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onSelect={() => void doPaste()}>
+                    <ClipboardText />
+                    Paste ({clipboard.entries.length})
+                    <ContextMenuShortcut>⌘V</ContextMenuShortcut>
+                  </ContextMenuItem>
+                </>
               )}
-            </div>
-          </ContextMenuTrigger>
-          <ContextMenuContent className="w-52">
-            <CreateContextItems actions={createActions} />
-            {clipboard && (
-              <>
-                <ContextMenuSeparator />
-                <ContextMenuItem onSelect={() => void doPaste()}>
-                  <ClipboardText />
-                  Paste ({clipboard.entries.length})
-                  <ContextMenuShortcut>⌘V</ContextMenuShortcut>
-                </ContextMenuItem>
-              </>
-            )}
-          </ContextMenuContent>
-        </ContextMenu>
+            </ContextMenuContent>
+          </ContextMenu>
+        ) : (
+          browseArea
+        )}
 
         {dragging && (
           <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-primary/10 backdrop-blur-sm">
@@ -1254,8 +1295,17 @@ function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string
   )
 }
 
-/** EntryMenu wraps any element in the right-click menu for one entry. */
+/** EntryMenu wraps any element in the right-click menu for one entry. Items are
+ *  shown only for the permissions the caller holds in this folder. */
 function EntryMenu({ entry, actions, children }: { entry: Entry; actions: EntryActions; children: ReactNode }) {
+  const p = actions.perms
+  const share = p.share
+  const manage = actions.canManageAccess
+  const copy = p.read
+  const cut = p.delete
+  const paste = actions.canPaste && p.write
+  const rename = p.write && p.delete
+  const remove = p.delete
   return (
     <ContextMenu>
       <ContextMenuTrigger
@@ -1274,43 +1324,57 @@ function EntryMenu({ entry, actions, children }: { entry: Entry; actions: EntryA
           {entry.is_dir ? <FolderOpen /> : <Download />}
           {entry.is_dir ? 'Open' : 'Download'}
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => actions.share(entry)}>
-          <ShareNetwork />
-          Share…
-        </ContextMenuItem>
-        {actions.canManageAccess && (
+
+        {(share || manage) && <ContextMenuSeparator />}
+        {share && (
+          <ContextMenuItem onSelect={() => actions.share(entry)}>
+            <ShareNetwork />
+            Share…
+          </ContextMenuItem>
+        )}
+        {manage && (
           <ContextMenuItem onSelect={() => actions.manageAccess(entry)}>
             <Key />
             Manage access…
           </ContextMenuItem>
         )}
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => actions.copy(entry)}>
-          <CopyIcon />
-          Copy
-          <ContextMenuShortcut>⌘C</ContextMenuShortcut>
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={() => actions.cut(entry)}>
-          <Scissors />
-          Cut
-          <ContextMenuShortcut>⌘X</ContextMenuShortcut>
-        </ContextMenuItem>
-        {actions.canPaste && (
+
+        {(copy || cut || paste) && <ContextMenuSeparator />}
+        {copy && (
+          <ContextMenuItem onSelect={() => actions.copy(entry)}>
+            <CopyIcon />
+            Copy
+            <ContextMenuShortcut>⌘C</ContextMenuShortcut>
+          </ContextMenuItem>
+        )}
+        {cut && (
+          <ContextMenuItem onSelect={() => actions.cut(entry)}>
+            <Scissors />
+            Cut
+            <ContextMenuShortcut>⌘X</ContextMenuShortcut>
+          </ContextMenuItem>
+        )}
+        {paste && (
           <ContextMenuItem onSelect={() => actions.paste()}>
             <ClipboardText />
             Paste
             <ContextMenuShortcut>⌘V</ContextMenuShortcut>
           </ContextMenuItem>
         )}
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => actions.rename(entry)}>
-          <Pencil />
-          Rename
-        </ContextMenuItem>
-        <ContextMenuItem variant="destructive" onSelect={() => actions.remove(entry)}>
-          <Trash2 />
-          Delete
-        </ContextMenuItem>
+
+        {(rename || remove) && <ContextMenuSeparator />}
+        {rename && (
+          <ContextMenuItem onSelect={() => actions.rename(entry)}>
+            <Pencil />
+            Rename
+          </ContextMenuItem>
+        )}
+        {remove && (
+          <ContextMenuItem variant="destructive" onSelect={() => actions.remove(entry)}>
+            <Trash2 />
+            Delete
+          </ContextMenuItem>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   )
@@ -1491,18 +1555,20 @@ function ListRow({ entry, actions, showLocation }: { entry: Entry; actions: Entr
               <Download />
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 text-muted-foreground hover:text-destructive"
-            aria-label={`Delete ${entry.name}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              actions.remove(entry)
-            }}
-          >
-            <Trash2 />
-          </Button>
+          {actions.perms.delete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 text-muted-foreground hover:text-destructive"
+              aria-label={`Delete ${entry.name}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                actions.remove(entry)
+              }}
+            >
+              <Trash2 />
+            </Button>
+          )}
         </div>
       </div>
     </EntryMenu>
