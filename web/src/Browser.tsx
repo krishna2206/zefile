@@ -788,6 +788,28 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
               <Button
                 variant="ghost"
                 size="sm"
+                onClick={() => {
+                  setClipboard({ mode: 'copy', entries: selected })
+                  clearSelection()
+                }}
+              >
+                <CopyIcon />
+                Copy
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setClipboard({ mode: 'cut', entries: selected })
+                  clearSelection()
+                }}
+              >
+                <Scissors />
+                Move
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 className="text-destructive hover:text-destructive"
                 onClick={() => setDialog({ kind: 'delete', entries: selected })}
               >
