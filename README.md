@@ -7,10 +7,11 @@ on your own server, with a security model and an API designed in from the start.
 
 ---
 
-> [!WARNING]
-> **Zefile is not usable yet.** Design is complete, implementation has just begun.
-> There is no working server, no release, and no upgrade path. Watch the repository
-> if you want to know when that changes.
+> [!NOTE]
+> **Zefile is young (0.x) but working.** A live instance serves the author's files
+> in production. The data model is stable; expect the occasional rough edge and
+> watch the releases for breaking changes, which land only on a minor bump while
+> 0.x.
 
 ---
 
@@ -23,17 +24,43 @@ model or API design, it would need a rewrite. Known vulnerabilities remain publi
 Zefile is that rewrite — a new project, not a fork. Nothing is inherited from the original
 codebase except the lessons it documented.
 
-## What it is
+## What it does
 
-- **One binary.** Embedded web UI, no runtime dependencies, no database server.
-- **Sessions that actually end.** Opaque server-side tokens, never JWT. Logging out revokes
-  the token immediately.
-- **Content served from a separate origin**, so an uploaded file can never reach a session.
-- **Share links that work with download managers** — no JavaScript, no cookies, correct
-  `Range` support, parallel connections.
-- **Granular permissions** per path, for users and groups.
-- **Resumable uploads**, because a 40 GB transfer that fails at 90% must not start over.
-- **No telemetry.** No usage metrics, no update checks, no outbound request you did not ask for.
+**Files**
+
+- Browse as a list or a grid, sorted and grouped, with image thumbnails and a
+  recursive search that only shows what you are allowed to see.
+- **Resumable uploads** (tus), because a 40 GB transfer that fails at 90% must not
+  start over. Drag in files or a whole folder tree.
+- Copy, move, rename, and a **trash** you can restore from. Copying a folder or a
+  very large file runs as a background job with a progress bar.
+- Download through short-lived signed links that work with download managers.
+
+**Sharing**
+
+- Unique, revocable **share links** for a file or a folder, with an expiry and an
+  optional password.
+- Links work with download managers — no JavaScript, no cookies, correct `Range`
+  support, parallel connections. Served from a separate origin so a shared file
+  can never reach a session.
+
+**Multiple people**
+
+- Invite users with a one-time link; they create their own account.
+- **Granular permissions per path**, granted to a user or a **group**. A folder
+  granted to a group reaches everyone in it, and a folder you were granted is
+  reachable through the directories above it without exposing their contents.
+- Admins manage accounts (promote, disable, remove) and groups; everyone manages
+  their own password and active sessions.
+
+**Throughout**
+
+- **One binary.** Embedded web UI, pure-Go SQLite, no runtime dependencies and no
+  database server.
+- **Sessions that actually end.** Opaque server-side tokens, never JWT. Logging
+  out revokes the token immediately.
+- **No telemetry.** No usage metrics, no update checks, no outbound request you
+  did not ask for.
 
 ## What it is not
 
@@ -46,30 +73,30 @@ Stated plainly so nobody has to ask:
 
 Zefile aims to be the File Browser that should have existed, not a Nextcloud alternative.
 
+## Stack
+
+Go 1.25 · SQLite ([`modernc.org/sqlite`](https://pkg.go.dev/modernc.org/sqlite), pure Go) ·
+React 19 + Vite · [shadcn/ui](https://ui.shadcn.com/) (Radix + Tailwind CSS 4) ·
+[Phosphor Icons](https://phosphoricons.com/)
+
 ## Design documents
 
-The design is written down before the code, and kept current.
+The design was written down before the code, and is kept alongside it.
 
 | Document | Contents |
 | --- | --- |
 | [`docs/conception.html`](docs/conception.html) | Scope, architecture, data model, security, API, deployment |
-| [`docs/roadmap.html`](docs/roadmap.html) | 36 work items across 5 phases, with completion criteria |
+| [`docs/roadmap.html`](docs/roadmap.html) | The work plan and what has shipped |
 | [`docs/ui.html`](docs/ui.html) | Interface design, component inventory, states |
-
-## Stack
-
-Go 1.25+ · SQLite (`modernc.org/sqlite`, pure Go) · React + Vite ·
-[Material 3 Expressive](https://m3e.language-lit.com/) · Tailwind CSS 4
 
 ## Deploying
 
-> [!NOTE]
-> There is no release yet. These steps describe how it will work; the image
-> referenced below is not published until the first tag.
+Zefile ships as a container image. The compose file builds it from source, which
+is what a self-hosted instance usually wants:
 
 ```sh
-docker compose -f deploy/docker-compose.yml up -d
-docker compose logs zefile
+docker compose -f deploy/docker-compose.build.yml up -d
+docker compose -f deploy/docker-compose.build.yml logs zefile
 ```
 
 The log prints a one-time setup link. Open it to create the administrator.
@@ -92,11 +119,20 @@ Three things decide whether a deployment works:
 ## Building
 
 ```sh
-make build
+make dist    # build the interface and a binary embedding it
+make check   # what CI runs: fmt, vet, test, govulncheck
 ```
 
-Requires Go 1.25 or newer. The web interface is not versioned in the repository — building it
-requires Node and pnpm. See `make help` for the available targets.
+Requires Go 1.25+, and Node with pnpm for the interface. The version is read from
+[`version.txt`](version.txt), the single source of truth kept by release-please, so
+a local build reports the same version as a release. See `make help` for targets.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: work however you like on your
+branch, open a pull request whose **title** is a
+[Conventional Commit](https://www.conventionalcommits.org/) — it is squash-merged
+and becomes the release note.
 
 ## Licence
 

@@ -169,8 +169,8 @@
     </div>
 
     <div class="rule warn">
-      <span class="label">La phase 1 est longue</span>
-      <p>Elle contient toute la fondation et ne produit rien de visible avant son dernier tiers. C’est normal et c’est le bon investissement&nbsp;— mais il faut le savoir pour ne pas se décourager au milieu. Le premier jalon réellement gratifiant est le <b>1.10</b>&nbsp;: l’instance qui tourne sur le VPS.</p>
+      <span class="label">État — juillet 2026</span>
+      <p>La fondation, le multi-utilisateur (comptes, invitations, permissions par chemin, <b>groupes</b>), les partages, la corbeille, la file de tâches, la recherche et les aperçus sont <b>livrés</b>. L’instance tourne en production (<b>v0.5.0</b>). Les lots encore ouverts&nbsp;— journal d’audit, double facteur, jetons d’API, extraction d’archives, sauvegarde, migration&nbsp;— sont marqués comme tels ci-dessous.</p>
     </div>
   </div>
 
@@ -248,7 +248,7 @@
 
       <div class="item pivot">
         <span class="id">1.10</span>
-        <div class="title">Empaquetage et bascule</div>
+        <div class="title">Empaquetage et bascule<span class="status">Fait</span></div>
         <div class="body">Dockerfile multi-architecture, composition de référence, <code>PUID</code> / <code>PGID</code>, sonde de santé, GoReleaser. Puis déploiement réel sur le VPS et migration des fichiers.</div>
         <div class="done"><b>Terminé quand</b> l’instance File Browser est éteinte. C’est le premier jalon qui compte&nbsp;: tout ce qui suit se construit sur un outil déjà utilisé pour de vrai.</div>
       </div>
@@ -265,30 +265,30 @@
     </div>
     <div class="items">
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">2.1</span>
-        <div class="title">Comptes et groupes</div>
+        <div class="title">Comptes et groupes<span class="status">Fait</span></div>
         <div class="body">Création, modification, désactivation, suppression avec transfert de propriété à l’administrateur. Groupes et appartenances.</div>
         <div class="done"><b>Terminé quand</b> supprimer un compte ne laisse ni fichier orphelin, ni session, ni jeton, ni partage actif.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">2.2</span>
-        <div class="title">Invitations par lien</div>
+        <div class="title">Invitations par lien<span class="status">Fait</span></div>
         <div class="body">Jeton haché, expiration, usage unique. L’invité choisit son mot de passe à l’acceptation&nbsp;; aucun mot de passe n’est jamais transmis.</div>
         <div class="done"><b>Terminé quand</b> un invité peut rejoindre l’instance sans qu’un secret ait circulé.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">2.3</span>
-        <div class="title">Interface de permissions</div>
+        <div class="title">Interface de permissions<span class="status">Fait</span></div>
         <div class="body">Attribution par chemin, héritage lisible, refus explicites visibles. La difficulté est ici entièrement d’ergonomie&nbsp;: rendre compréhensible <em>pourquoi</em> quelqu’un a ou n’a pas accès.</div>
         <div class="done"><b>Terminé quand</b> l’interface sait expliquer une permission effective en désignant la règle qui l’a produite.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">2.4</span>
-        <div class="title">Corbeille</div>
+        <div class="title">Corbeille<span class="status">Fait</span></div>
         <div class="body">Suppression par déplacement, restauration à l’emplacement d’origine, purge manuelle, purge automatique programmée. Répertoire caché sur le même système de fichiers.</div>
         <div class="done"><b>Terminé quand</b> supprimer 40&nbsp;Go est instantané — preuve qu’il s’agit bien d’un renommage et non d’une copie.</div>
       </div>
@@ -319,16 +319,16 @@
     </div>
     <div class="items">
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">3.1</span>
-        <div class="title">Liens et cycle de vie</div>
+        <div class="title">Liens et cycle de vie<span class="status">Fait</span></div>
         <div class="body">Création, expiration paramétrable dont «&nbsp;n’expire jamais&nbsp;», révocation immédiate, écran des partages actifs avec date de dernier accès. Interdiction de partager plus de droits qu’on n’en détient.</div>
         <div class="done"><b>Terminé quand</b> révoquer un lien coupe un téléchargement déjà en cours.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">3.2</span>
-        <div class="title">Point d’accès public</div>
+        <div class="title">Point d’accès public<span class="status">Fait</span></div>
         <div class="body"><code>/s/{jeton}/{nom}</code> sur l’origine contenu, sans état, sans redirection, sans JavaScript. Support <code>Range</code> et connexions parallèles sans limite ni verrou.</div>
         <div class="done"><b>Terminé quand</b> un gestionnaire de téléchargement en seize connexions additionne bien ses débits — la contrainte fondatrice du projet.</div>
       </div>
@@ -340,9 +340,9 @@
         <div class="done"><b>Terminé quand</b> un téléchargement en seize connexions compte pour un, et non pour seize.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">3.4</span>
-        <div class="title">Liens protégés</div>
+        <div class="title">Liens protégés<span class="status">Fait</span></div>
         <div class="body">Variante avec mot de passe&nbsp;: passage par l’interface web, qui délivre ensuite une URL directe temporaire. Les deux natures de liens sont clairement distinguées à la création.</div>
         <div class="done"><b>Terminé quand</b> l’interface explique laquelle des deux formes convient à un gestionnaire de téléchargement.</div>
       </div>
@@ -354,9 +354,9 @@
         <div class="done"><b>Terminé quand</b> un jeton en lecture seule se voit refuser toute écriture, y compris par un chemin détourné.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">3.6</span>
-        <div class="title">Mode origine unique</div>
+        <div class="title">Mode origine unique<span class="status">Fait</span></div>
         <div class="body">Durcissement automatique quand une seule origine est configurée&nbsp;: <code>attachment</code> systématique, <code>CSP: sandbox</code>, affichage en ligne restreint, SVG exclu, avertissement au démarrage.</div>
         <div class="done"><b>Terminé quand</b> un fichier HTML hostile déposé puis ouvert ne peut atteindre aucune session.</div>
       </div>
@@ -373,9 +373,9 @@
     </div>
     <div class="items">
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">4.1</span>
-        <div class="title">File de tâches</div>
+        <div class="title">File de tâches<span class="status">Fait</span></div>
         <div class="body">Table <code>jobs</code>, pool de goroutines borné, reprise après redémarrage, annulation, diffusion de progression par SSE.</div>
         <div class="done"><b>Terminé quand</b> redémarrer le binaire pendant une tâche longue ne la perd pas.</div>
       </div>
@@ -401,23 +401,23 @@
         <div class="done"><b>Terminé quand</b> l’empreinte d’un fichier de 40&nbsp;Go se calcule sans bloquer le service.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">4.5</span>
-        <div class="title">Aperçus</div>
+        <div class="title">Aperçus<span class="status">Fait</span></div>
         <div class="body">Images, vidéo avec navigation temporelle, audio, texte et code, Markdown, PDF. Rendu intégralement côté client dans une iframe cloisonnée&nbsp;: <strong>aucun analyseur de document côté serveur</strong>.</div>
         <div class="done"><b>Terminé quand</b> les formats prévus s’affichent et que le backend n’a acquis aucune dépendance de parsing.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">4.6</span>
-        <div class="title">Vignettes</div>
+        <div class="title">Vignettes<span class="status">Fait</span></div>
         <div class="body">Génération asynchrone par processus séparé, sans privilèges, avec limites de ressources. Cache sur disque. Vue grille.</div>
         <div class="done"><b>Terminé quand</b> une image malformée fait échouer la vignette sans affecter le service.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">4.7</span>
-        <div class="title">Recherche</div>
+        <div class="title">Recherche<span class="status">Fait</span></div>
         <div class="body">Index FTS5 alimenté en tâche de fond, réconciliation périodique avec le disque puisque celui-ci fait foi. Noms normalisés en forme composée.</div>
         <div class="done"><b>Terminé quand</b> un fichier déposé en SSH devient trouvable, et qu’un nom accentué se trouve quelle que soit la forme saisie.</div>
       </div>
