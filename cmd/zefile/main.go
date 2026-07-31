@@ -220,6 +220,7 @@ func route(cfg config.Config, app, files http.Handler) http.Handler {
 	if cfg.SingleOrigin() {
 		mux := http.NewServeMux()
 		mux.Handle("/d/", files)
+		mux.Handle("/z/", files)
 		mux.Handle("/s/", files)
 		mux.Handle("/", app)
 		return mux

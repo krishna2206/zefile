@@ -1,6 +1,7 @@
 package content_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"errors"
@@ -682,5 +683,84 @@ func TestNoCompressionOnAlreadyCompressedTypes(t *testing.T) {
 	}
 	if resp.ContentLength <= 0 {
 		t.Error("Content-Length is absent, so a client cannot show progress")
+	}
+}
+
+func TestZipBundleStreamsSelectionAndFolder(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+
+	if err := os.MkdirAll(filepath.Join(f.root, "photos", "sub"), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(f.root, "photos", "a.txt"), []byte("aaa"), 0o600); err != nil {
+		t.Fatalf("write a: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(f.root, "photos", "sub", "b.txt"), []byte("bbbb"), 0o600); err != nil {
+		t.Fatalf("write b: %v", err)
+	}
+	f.write(t, "note.txt", []byte("note"))
+
+	token := f.signer.SignBundle([]storage.Path{
+		storage.MustParsePath("/photos"),
+		storage.MustParsePath("/note.txt"),
+	}, 1)
+	resp := f.get(t, f.server.URL+"/z/"+token+"/bundle.zip", nil)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "application/zip" {
+		t.Fatalf("content-type = %q, want application/zip", ct)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatalf("open zip: %v", err)
+	}
+
+	got := map[string]string{}
+	for _, zf := range zr.File {
+		// Store, never Deflate: the whole point is not to compress on the fly.
+		if zf.Method != zip.Store {
+			t.Errorf("%s uses method %d, want Store (0)", zf.Name, zf.Method)
+		}
+		rc, err := zf.Open()
+		if err != nil {
+			t.Fatalf("open entry %s: %v", zf.Name, err)
+		}
+		data, _ := io.ReadAll(rc)
+		rc.Close()
+		got[zf.Name] = string(data)
+	}
+
+	want := map[string]string{
+		"photos/a.txt":     "aaa",
+		"photos/sub/b.txt": "bbbb",
+		"note.txt":         "note",
+	}
+	for name, content := range want {
+		if got[name] != content {
+			t.Errorf("entry %q = %q, want %q", name, got[name], content)
+		}
+	}
+}
+
+func TestForgedBundleTokenIsRefused(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.write(t, "a.txt", []byte("x"))
+
+	valid := f.signer.SignBundle([]storage.Path{storage.MustParsePath("/a.txt")}, 1)
+	forged := valid[:len(valid)-1] + "0"
+	resp := f.get(t, f.server.URL+"/z/"+forged+"/x.zip", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("forged bundle = %d, want 403", resp.StatusCode)
 	}
 }

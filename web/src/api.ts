@@ -230,6 +230,13 @@ export const api = {
   downloadLink: (path: string) =>
     request<{ url: string; expires_at: string }>(`/api/v1/fs/link?path=${encodeURIComponent(path)}`),
 
+  // bundleLink mints a link to a streamed zip of several items or a folder.
+  bundleLink: (paths: string[]) =>
+    request<{ url: string; expires_at: string }>('/api/v1/fs/bundle', {
+      method: 'POST',
+      body: JSON.stringify({ paths }),
+    }),
+
   config: () => request<{ inline_preview: boolean; version: string }>('/api/v1/config'),
 
   createShare: (path: string, opts: { expires_in_hours?: number; password?: string } = {}) =>

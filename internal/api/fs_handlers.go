@@ -290,6 +290,70 @@ func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// maxBundlePaths bounds a single zip request. A larger selection should download
+// its containing folder instead, which is one path and walks the same tree.
+const maxBundlePaths = 1000
+
+type bundleRequest struct {
+	Paths []string `json:"paths"`
+}
+
+// handleBundleLink mints a short-lived link to a zip of several items or a
+// folder. The archive is streamed by the content origin; this only signs which
+// paths it may contain, for which account.
+func (s *Server) handleBundleLink(w http.ResponseWriter, r *http.Request) {
+	c, found := callerFrom(r.Context())
+	if !found {
+		writeProblem(w, r, http.StatusUnauthorized, CodeUnauthenticated, "Not signed in", "")
+		return
+	}
+
+	var body bundleRequest
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if len(body.Paths) == 0 {
+		writeProblem(w, r, http.StatusBadRequest, CodeBadRequest, "Nothing selected", "Choose at least one item to download.")
+		return
+	}
+	if len(body.Paths) > maxBundlePaths {
+		writeProblem(w, r, http.StatusRequestEntityTooLarge, CodeTooLarge,
+			"Too many items", "Select fewer items, or download the folder that contains them.")
+		return
+	}
+
+	paths := make([]storage.Path, 0, len(body.Paths))
+	for _, raw := range body.Paths {
+		p, ok := parsePath(w, r, raw)
+		if !ok {
+			return
+		}
+		// Authorise read now so an unreadable selection fails fast with a clean
+		// status, rather than producing a zip with holes. Stat also confirms the
+		// path exists.
+		if _, err := s.fs.Stat(r.Context(), p); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		paths = append(paths, p)
+	}
+
+	token := s.signer.SignBundle(paths, c.user.ID)
+	writeJSON(w, r, http.StatusOK, linkResponse{
+		URL:       s.contentBase + "/z/" + token + "/" + url.PathEscape(bundleName(paths)),
+		ExpiresAt: time.Now().Add(content.DefaultTTL).UTC(),
+	})
+}
+
+// bundleName is the archive's filename: the single item's name when there is one,
+// otherwise a generic name.
+func bundleName(paths []storage.Path) string {
+	if len(paths) == 1 {
+		return paths[0].Name() + ".zip"
+	}
+	return "zefile.zip"
+}
+
 type spaceResponse struct {
 	Available uint64 `json:"available"`
 	Total     uint64 `json:"total"`

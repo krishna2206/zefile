@@ -135,6 +135,90 @@ func (s *Signer) Verify(token string) (storage.Path, int64, error) {
 	return p, userID, nil
 }
 
+// SignBundle signs a set of paths for one account, for a limited time. It is the
+// token behind a multi-item zip download; each path is authorised again per
+// entry when the archive is streamed.
+func (s *Signer) SignBundle(paths []storage.Path, userID int64) string {
+	expires := s.now().Add(s.ttl).Unix()
+	encodedPaths := make([]string, len(paths))
+	for i, p := range paths {
+		// base64url the paths so the ':' and ',' separators can never appear
+		// inside one, whatever a filename contains.
+		encodedPaths[i] = base64.RawURLEncoding.EncodeToString([]byte(p.String()))
+	}
+	payload := "z:" + strconv.FormatInt(expires, 10) + ":" +
+		strconv.FormatInt(userID, 10) + ":" + strings.Join(encodedPaths, ",")
+
+	encoded := base64.RawURLEncoding.EncodeToString([]byte(payload))
+	return encoded + "." + base64.RawURLEncoding.EncodeToString(s.mac(encoded))
+}
+
+// VerifyBundle checks a bundle token and returns its paths and the account it
+// was minted for. The "z:" marker keeps a bundle token from being read as a
+// single-file one, and vice versa.
+func (s *Signer) VerifyBundle(token string) ([]storage.Path, int64, error) {
+	encoded, signature, found := strings.Cut(token, ".")
+	if !found {
+		return nil, 0, ErrInvalidSignature
+	}
+	provided, err := base64.RawURLEncoding.DecodeString(signature)
+	if err != nil {
+		return nil, 0, ErrInvalidSignature
+	}
+	if subtle.ConstantTimeCompare(provided, s.mac(encoded)) != 1 {
+		return nil, 0, ErrInvalidSignature
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, 0, ErrInvalidSignature
+	}
+	marker, rest, found := strings.Cut(string(payload), ":")
+	if !found || marker != "z" {
+		return nil, 0, ErrInvalidSignature
+	}
+	rawExpiry, rest, found := strings.Cut(rest, ":")
+	if !found {
+		return nil, 0, ErrInvalidSignature
+	}
+	rawUser, rawPaths, found := strings.Cut(rest, ":")
+	if !found {
+		return nil, 0, ErrInvalidSignature
+	}
+	expires, err := strconv.ParseInt(rawExpiry, 10, 64)
+	if err != nil {
+		return nil, 0, ErrInvalidSignature
+	}
+	userID, err := strconv.ParseInt(rawUser, 10, 64)
+	if err != nil {
+		return nil, 0, ErrInvalidSignature
+	}
+	if s.now().Unix() > expires {
+		return nil, 0, ErrExpired
+	}
+
+	parts := strings.Split(rawPaths, ",")
+	paths := make([]storage.Path, 0, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		raw, err := base64.RawURLEncoding.DecodeString(part)
+		if err != nil {
+			return nil, 0, ErrInvalidSignature
+		}
+		p, err := storage.ParsePath(string(raw))
+		if err != nil {
+			return nil, 0, ErrInvalidSignature
+		}
+		paths = append(paths, p)
+	}
+	if len(paths) == 0 {
+		return nil, 0, ErrInvalidSignature
+	}
+	return paths, userID, nil
+}
+
 func (s *Signer) mac(encoded string) []byte {
 	sum := hmac.New(sha256.New, s.key)
 	sum.Write([]byte(encoded))

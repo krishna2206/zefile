@@ -160,6 +160,7 @@ type EntryActions = {
   select: (entry: Entry, intent: ClickIntent) => void
   open: (entry: Entry) => void
   download: (entry: Entry) => void
+  downloadZip: (entry: Entry) => void
   share: (entry: Entry) => void
   manageAccess: (entry: Entry) => void
   canManageAccess: boolean
@@ -503,6 +504,17 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     }
   }, [])
 
+  // downloadZip streams several items or a folder as a single archive.
+  const downloadZip = useCallback(async (entries: Entry[]) => {
+    if (entries.length === 0) return
+    try {
+      const { url } = await api.bundleLink(entries.map((e) => e.path))
+      window.location.href = url
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not build the download.')
+    }
+  }, [])
+
   const selectEntry = useCallback(
     (entry: Entry, intent: ClickIntent) => {
       setSelection((current) => {
@@ -567,6 +579,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
       else void download(entry)
     },
     download,
+    downloadZip: (entry) => void downloadZip([entry]),
     share: (entry) => setDialog({ kind: 'share', entry }),
     manageAccess: (entry) => setDialog({ kind: 'access', entry }),
     canManageAccess: user.is_admin,
@@ -833,8 +846,17 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
             </Button>
             <span className="text-sm font-medium">{selected.length} selected</span>
             <div className="ml-auto flex items-center gap-1">
-              {onlyOne && !onlyOne.is_dir && (
-                <Button variant="ghost" size="sm" onClick={() => download(onlyOne)}>
+              {perms.read && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    // A lone file downloads directly; anything else — several
+                    // items, or a folder — is streamed as a zip.
+                    if (onlyOne && !onlyOne.is_dir) download(onlyOne)
+                    else void downloadZip(selected)
+                  }}
+                >
                   <Download />
                   Download
                 </Button>
@@ -1336,6 +1358,12 @@ function EntryMenu({ entry, actions, children }: { entry: Entry; actions: EntryA
           {entry.is_dir ? <FolderOpen /> : <Download />}
           {entry.is_dir ? 'Open' : 'Download'}
         </ContextMenuItem>
+        {entry.is_dir && p.read && (
+          <ContextMenuItem onSelect={() => actions.downloadZip(entry)}>
+            <Download />
+            Download (.zip)
+          </ContextMenuItem>
+        )}
 
         {(share || manage) && <ContextMenuSeparator />}
         {share && (

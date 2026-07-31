@@ -1,10 +1,12 @@
 package content
 
 import (
+	"archive/zip"
 	"context"
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log/slog"
 	"mime"
 	"net"
@@ -67,6 +69,9 @@ func (s *Server) Handler() http.Handler {
 	// manager uses to name the file on disk. Only the token is authoritative.
 	mux.HandleFunc("GET /d/{token}/{name}", s.handleDownload)
 	mux.HandleFunc("HEAD /d/{token}/{name}", s.handleDownload)
+	// A zip of several items, or of a folder, streamed on the fly.
+	mux.HandleFunc("GET /z/{token}/{name}", s.handleZip)
+	mux.HandleFunc("HEAD /z/{token}/{name}", s.handleZip)
 	// A share link carries only its token: the filename would just make the URL
 	// long and awkward to paste, and the download's name comes from the
 	// Content-Disposition header, not the path. The /{name} form is kept so
@@ -115,6 +120,122 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	// It also streams: memory stays flat whether the file is one kilobyte or
 	// forty gigabytes, and on Linux the copy goes through the kernel.
 	http.ServeContent(w, r.WithContext(ctx), p.Name(), info.ModTime, file)
+}
+
+// handleZip streams a zip of the bundle a token names — several files, a folder,
+// or a mix. It is generated on the fly: nothing is written to disk and memory
+// stays flat whatever the total size.
+//
+// Compression is off (Store). The content of a file server is mostly
+// already-compressed media, where Deflate spends a CPU core to save nothing and
+// caps the download at compression speed instead of disk speed — which is what
+// makes on-the-fly zips feel broken elsewhere. As a container rather than a
+// compressor, the archive streams at the speed the disk and the link allow.
+func (s *Server) handleZip(w http.ResponseWriter, r *http.Request) {
+	paths, userID, err := s.signer.VerifyBundle(r.PathValue("token"))
+	if err != nil {
+		http.Error(w, "link is invalid or has expired", http.StatusForbidden)
+		return
+	}
+
+	ctx, err := s.subject.ContextFor(r.Context(), userID)
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+
+	name := r.PathValue("name")
+	if name == "" {
+		name = "zefile.zip"
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "private, max-age=0, must-revalidate")
+	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+encodeFilename(name))
+	if s.singleOrigin {
+		w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	}
+
+	// A zip made on the fly has no length to declare and cannot be ranged into,
+	// so a HEAD gets the headers and nothing else.
+	if r.Method == http.MethodHead {
+		return
+	}
+
+	zw := zip.NewWriter(w)
+	for _, p := range paths {
+		if err := s.addToZip(ctx, zw, p); err != nil {
+			// The response has already begun, so the status cannot change. Stop
+			// and let the client retry rather than pretend the archive is whole.
+			slog.ErrorContext(ctx, "zip: aborted", "path", p.String(), "error", err)
+			break
+		}
+	}
+	if err := zw.Close(); err != nil {
+		slog.ErrorContext(ctx, "zip: close failed", "error", err)
+	}
+}
+
+// addToZip writes one selected path into the archive. A file keeps its own name;
+// a directory keeps its name as the prefix of everything inside it, so the tree
+// unpacks with the same shape it was downloaded from.
+func (s *Server) addToZip(ctx context.Context, zw *zip.Writer, sel storage.Path) error {
+	info, err := s.fs.Stat(ctx, sel)
+	if err != nil {
+		return err
+	}
+	if info.IsDir {
+		return s.zipDir(ctx, zw, sel, sel.Name())
+	}
+	return s.zipFile(ctx, zw, sel, sel.Name(), info)
+}
+
+func (s *Server) zipDir(ctx context.Context, zw *zip.Writer, dir storage.Path, prefix string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	entries, err := s.fs.List(ctx, dir) // filtered to what the account may read
+	if err != nil {
+		return err
+	}
+	if len(entries) == 0 {
+		// Record the empty directory so it is not silently dropped.
+		_, err := zw.CreateHeader(&zip.FileHeader{Name: prefix + "/", Method: zip.Store})
+		return err
+	}
+	for _, e := range entries {
+		name := prefix + "/" + e.Name
+		if e.IsDir {
+			if err := s.zipDir(ctx, zw, e.Path, name); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := s.zipFile(ctx, zw, e.Path, name, e); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Server) zipFile(ctx context.Context, zw *zip.Writer, p storage.Path, name string, info storage.FileInfo) error {
+	file, err := s.fs.Open(ctx, p)
+	if err != nil {
+		// A file that vanished or turned unreadable between listing and now is
+		// skipped rather than failing the whole archive.
+		if errors.Is(err, storage.ErrNotExist) || errors.Is(err, storage.ErrPermission) {
+			return nil
+		}
+		return err
+	}
+	defer file.Close()
+
+	part, err := zw.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Store, Modified: info.ModTime})
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(part, file)
+	return err
 }
 
 // handleShare serves a public share link. Unlike a signed download it needs no
