@@ -1,0 +1,218 @@
+package api
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/krishna2206/zefile/internal/acl"
+)
+
+// permSet is the JSON shape of a permission bitmask: one boolean per bit, so a
+// client never has to know the numeric values.
+type permSet struct {
+	Read   bool `json:"read"`
+	Write  bool `json:"write"`
+	Delete bool `json:"delete"`
+	Share  bool `json:"share"`
+	Manage bool `json:"manage"`
+}
+
+func toPermSet(p acl.Perm) permSet {
+	return permSet{
+		Read:   p.Has(acl.PermRead),
+		Write:  p.Has(acl.PermWrite),
+		Delete: p.Has(acl.PermDelete),
+		Share:  p.Has(acl.PermShare),
+		Manage: p.Has(acl.PermManage),
+	}
+}
+
+func (ps permSet) toPerm() acl.Perm {
+	var p acl.Perm
+	if ps.Read {
+		p |= acl.PermRead
+	}
+	if ps.Write {
+		p |= acl.PermWrite
+	}
+	if ps.Delete {
+		p |= acl.PermDelete
+	}
+	if ps.Share {
+		p |= acl.PermShare
+	}
+	if ps.Manage {
+		p |= acl.PermManage
+	}
+	return p
+}
+
+// handleEffectivePermissions reports what the caller can do at a path. Any
+// signed-in user may ask about their own permissions — it is how the interface
+// decides which actions to offer.
+func (s *Server) handleEffectivePermissions(w http.ResponseWriter, r *http.Request) {
+	p, ok := pathParam(w, r)
+	if !ok {
+		return
+	}
+	perms, err := s.acl.EffectivePerms(r.Context(), p)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, r, http.StatusOK, toPermSet(perms))
+}
+
+type userSummary struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	IsAdmin  bool   `json:"is_admin"`
+	Disabled bool   `json:"disabled"`
+}
+
+type userListResponse struct {
+	Users []userSummary `json:"users"`
+}
+
+// handleListUsers lists accounts so an admin can pick who to grant access to.
+func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	users, err := s.auth.Users(r.Context())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	out := make([]userSummary, 0, len(users))
+	for _, u := range users {
+		out = append(out, userSummary{ID: u.ID, Username: u.Username, IsAdmin: u.IsAdmin, Disabled: u.Disabled})
+	}
+	writeJSON(w, r, http.StatusOK, userListResponse{Users: out})
+}
+
+type accessRuleResponse struct {
+	ID          int64   `json:"id"`
+	SubjectType string  `json:"subject_type"`
+	SubjectID   int64   `json:"subject_id"`
+	SubjectName string  `json:"subject_name"`
+	Perms       permSet `json:"perms"`
+	Recursive   bool    `json:"recursive"`
+	Deny        bool    `json:"deny"`
+}
+
+type accessListResponse struct {
+	Rules []accessRuleResponse `json:"rules"`
+}
+
+// handleListAccess returns the rules attached to one path, with subject names
+// resolved for display. Admin only: seeing who has access is management.
+func (s *Server) handleListAccess(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	p, ok := pathParam(w, r)
+	if !ok {
+		return
+	}
+
+	rules, err := s.acl.RulesAt(r.Context(), p)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	// Resolve user names in one pass rather than a query per rule.
+	names := map[int64]string{}
+	if users, err := s.auth.Users(r.Context()); err == nil {
+		for _, u := range users {
+			names[u.ID] = u.Username
+		}
+	}
+
+	out := make([]accessRuleResponse, 0, len(rules))
+	for _, rule := range rules {
+		name := ""
+		if rule.SubjectType == acl.SubjectUser {
+			name = names[rule.SubjectID]
+		}
+		out = append(out, accessRuleResponse{
+			ID:          rule.ID,
+			SubjectType: string(rule.SubjectType),
+			SubjectID:   rule.SubjectID,
+			SubjectName: name,
+			Perms:       toPermSet(rule.Perms),
+			Recursive:   rule.Recursive,
+			Deny:        rule.Deny,
+		})
+	}
+	writeJSON(w, r, http.StatusOK, accessListResponse{Rules: out})
+}
+
+type grantAccessRequest struct {
+	SubjectID int64   `json:"subject_id"`
+	Path      string  `json:"path"`
+	Perms     permSet `json:"perms"`
+	Recursive bool    `json:"recursive"`
+	Deny      bool    `json:"deny"`
+}
+
+// handleGrantAccess creates or replaces a user's rule at a path. Admin only.
+func (s *Server) handleGrantAccess(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+
+	var body grantAccessRequest
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	p, ok := parsePath(w, r, body.Path)
+	if !ok {
+		return
+	}
+	perms := body.Perms.toPerm()
+	if perms == acl.PermNone {
+		writeProblem(w, r, http.StatusBadRequest, CodeBadRequest,
+			"No permissions", "Choose at least one permission to grant.")
+		return
+	}
+
+	rule, err := s.acl.Grant(r.Context(), acl.Rule{
+		SubjectType: acl.SubjectUser,
+		SubjectID:   body.SubjectID,
+		Path:        p,
+		Perms:       perms,
+		Recursive:   body.Recursive,
+		Deny:        body.Deny,
+	})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, r, http.StatusCreated, accessRuleResponse{
+		ID:          rule.ID,
+		SubjectType: string(rule.SubjectType),
+		SubjectID:   rule.SubjectID,
+		Perms:       toPermSet(rule.Perms),
+		Recursive:   rule.Recursive,
+		Deny:        rule.Deny,
+	})
+}
+
+// handleRevokeAccess deletes a rule by id. Admin only.
+func (s *Server) handleRevokeAccess(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, CodeBadRequest, "Bad id", "The rule id must be a number.")
+		return
+	}
+	if err := s.acl.Revoke(r.Context(), id); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, r, http.StatusNoContent, nil)
+}

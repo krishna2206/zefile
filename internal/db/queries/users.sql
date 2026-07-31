@@ -9,6 +9,9 @@ SELECT * FROM users WHERE username = ? AND disabled = 0;
 -- name: GetUserByID :one
 SELECT * FROM users WHERE id = ?;
 
+-- name: ListUsers :many
+SELECT * FROM users ORDER BY username;
+
 -- name: CreateUser :one
 INSERT INTO users (username, email, password_hash, is_admin, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?)

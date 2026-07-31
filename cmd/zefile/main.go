@@ -95,7 +95,9 @@ func run() error {
 
 	uploads := upload.New(database, fs)
 	trashService := trash.New(database, fs)
-	shareService := share.New(database, fs)
+	shareService := share.New(database, fs, share.GuardFunc(func(ctx context.Context, p storage.Path) (bool, error) {
+		return engine.Allows(ctx, acl.PermShare, p)
+	}))
 
 	// The background worker runs until shutdown. It is started here rather than
 	// inside serve so that a job in flight is cancelled when the process is

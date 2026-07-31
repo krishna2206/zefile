@@ -41,6 +41,29 @@ export type Job = {
   finished_at?: string
 }
 
+/** PermSet is a permission bitmask as booleans, matching the API. */
+export type PermSet = {
+  read: boolean
+  write: boolean
+  delete: boolean
+  share: boolean
+  manage: boolean
+}
+
+/** AccessRule is one ACL rule at a path, as the manage-access screen shows it. */
+export type AccessRule = {
+  id: number
+  subject_type: string
+  subject_id: number
+  subject_name: string
+  perms: PermSet
+  recursive: boolean
+  deny: boolean
+}
+
+/** UserSummary is an account in the admin's user list. */
+export type UserSummary = { id: number; username: string; is_admin: boolean; disabled: boolean }
+
 /** TrashItem is an entry sitting in the trash, remembering where to restore it. */
 export type TrashItem = {
   id: number
@@ -191,6 +214,22 @@ export const api = {
     }),
   listShares: () => request<{ shares: Share[] }>('/api/v1/shares'),
   revokeShare: (id: number) => request<void>(`/api/v1/shares/${id}`, { method: 'DELETE' }),
+
+  // Permissions. Effective perms tell the interface which actions to offer;
+  // listing/granting/revoking rules is admin-only and the server enforces it.
+  effectivePermissions: (path: string) =>
+    request<PermSet>(`/api/v1/permissions?path=${encodeURIComponent(path)}`),
+  listUsers: () => request<{ users: UserSummary[] }>('/api/v1/users'),
+  listAccess: (path: string) =>
+    request<{ rules: AccessRule[] }>(`/api/v1/access?path=${encodeURIComponent(path)}`),
+  grantAccess: (body: {
+    subject_id: number
+    path: string
+    perms: PermSet
+    recursive: boolean
+    deny?: boolean
+  }) => request<AccessRule>('/api/v1/access', { method: 'POST', body: JSON.stringify(body) }),
+  revokeAccess: (id: number) => request<void>(`/api/v1/access/${id}`, { method: 'DELETE' }),
 
   listTrash: () => request<{ items: TrashItem[] }>('/api/v1/trash'),
   restoreTrash: (id: number) => request<void>(`/api/v1/trash/${id}/restore`, { method: 'POST' }),

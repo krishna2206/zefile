@@ -31,7 +31,26 @@ var (
 	ErrRevoked          = errors.New("share: link was revoked")
 	ErrPasswordRequired = errors.New("share: a password is required")
 	ErrPasswordOnFolder = errors.New("share: folders cannot be password-protected yet")
+	ErrNotPermitted     = errors.New("share: not permitted to share this path")
 )
+
+// Guard reports whether the caller may share a path. Handing a file to the whole
+// internet is its own permission, distinct from being able to read it, so the
+// share service checks it rather than trusting that a readable file is shareable.
+//
+// It is an interface taking only a path, not the ACL's permission type, so this
+// package stays free of a dependency on acl — which would otherwise close an
+// import cycle through content.
+type Guard interface {
+	CanShare(ctx context.Context, p storage.Path) (bool, error)
+}
+
+// GuardFunc adapts a function to a [Guard], so the wiring can pass a closure
+// over the ACL engine without a named type.
+type GuardFunc func(ctx context.Context, p storage.Path) (bool, error)
+
+// CanShare implements [Guard].
+func (f GuardFunc) CanShare(ctx context.Context, p storage.Path) (bool, error) { return f(ctx, p) }
 
 // Share is a link as its owner sees it.
 type Share struct {
@@ -71,6 +90,7 @@ type Resolver interface {
 // Service manages shares.
 type Service struct {
 	fs     storage.FS
+	guard  Guard
 	reads  *sqlcgen.Queries
 	writes *sqlcgen.Queries
 	now    func() time.Time
@@ -78,10 +98,12 @@ type Service struct {
 
 var _ Resolver = (*Service)(nil)
 
-// New builds a Service over the given database and storage.
-func New(database *db.DB, fs storage.FS) *Service {
+// New builds a Service over the given database and storage. guard decides who
+// may create a link.
+func New(database *db.DB, fs storage.FS, guard Guard) *Service {
 	return &Service{
 		fs:     fs,
+		guard:  guard,
 		reads:  sqlcgen.New(database.Read),
 		writes: sqlcgen.New(database.Write),
 		now:    time.Now,
@@ -95,6 +117,14 @@ func (s *Service) Create(ctx context.Context, ownerID int64, p storage.Path, opt
 	info, err := s.fs.Stat(ctx, p) // authorises read for the caller
 	if err != nil {
 		return "", Share{}, err
+	}
+	// Reading a file is not the same as being allowed to publish it. Checked
+	// after the stat so an unreadable path answers "not found" rather than
+	// revealing, through a different error, that it exists.
+	if ok, err := s.guard.CanShare(ctx, p); err != nil {
+		return "", Share{}, err
+	} else if !ok {
+		return "", Share{}, ErrNotPermitted
 	}
 	// A password on a folder share is refused for now: unlocking one page does
 	// not carry to the next without a cookie or a signed unlock token, and a

@@ -84,7 +84,21 @@ type User struct {
 	Username  string
 	Email     string
 	IsAdmin   bool
+	Disabled  bool
 	CreatedAt time.Time
+}
+
+// Users returns every account, for an administrator's management screens.
+func (s *Service) Users(ctx context.Context) ([]User, error) {
+	rows, err := s.reads.ListUsers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("auth: list users: %w", err)
+	}
+	users := make([]User, 0, len(rows))
+	for _, row := range rows {
+		users = append(users, toUser(row))
+	}
+	return users, nil
 }
 
 // Session is an active sign-in.
@@ -634,6 +648,7 @@ func toUser(row sqlcgen.User) User {
 		Username:  row.Username,
 		Email:     row.Email.String,
 		IsAdmin:   row.IsAdmin == 1,
+		Disabled:  row.Disabled == 1,
 		CreatedAt: time.Unix(row.CreatedAt, 0).UTC(),
 	}
 }

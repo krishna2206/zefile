@@ -53,6 +53,40 @@ func (e *Engine) Effective(ctx context.Context, s Subject, p storage.Path) (Perm
 	return perms[0], nil
 }
 
+// Allows reports whether the context's subject holds every bit in want at a
+// path. It is the check for capabilities that are not filesystem operations —
+// sharing, managing permissions — so they cannot go through the storage Guard.
+// An admin always passes; an anonymous context never does.
+func (e *Engine) Allows(ctx context.Context, want Perm, p storage.Path) (bool, error) {
+	subject, ok := FromContext(ctx)
+	if !ok {
+		return false, nil
+	}
+	if subject.IsAdmin {
+		return true, nil
+	}
+	held, err := e.Effective(ctx, subject, p)
+	if err != nil {
+		return false, err
+	}
+	return held.Has(want), nil
+}
+
+// EffectivePerms returns what the context's subject can do at a path, with the
+// admin override applied — what the interface should show and gate actions on.
+// Unlike [Engine.Effective], which resolves only written rules, this answers
+// PermAll for an administrator, who holds no rules but may do anything.
+func (e *Engine) EffectivePerms(ctx context.Context, p storage.Path) (Perm, error) {
+	subject, ok := FromContext(ctx)
+	if !ok {
+		return PermNone, nil
+	}
+	if subject.IsAdmin {
+		return PermAll, nil
+	}
+	return e.Effective(ctx, subject, p)
+}
+
 // Authorize implements [storage.Guard].
 func (e *Engine) Authorize(ctx context.Context, op storage.Op, p storage.Path) error {
 	verdicts, err := e.Permitted(ctx, op, []storage.Path{p})

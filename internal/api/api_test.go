@@ -94,8 +94,10 @@ func newClient(t *testing.T) *client {
 
 	srv := httptest.NewServer(api.New(api.Options{
 		FS: fs, Auth: service, ACL: engine,
-		Trash:         trash.New(database, fs),
-		Shares:        share.New(database, fs),
+		Trash: trash.New(database, fs),
+		Shares: share.New(database, fs, share.GuardFunc(func(ctx context.Context, p storage.Path) (bool, error) {
+			return engine.Allows(ctx, acl.PermShare, p)
+		})),
 		Jobs:          jobs,
 		ContentBase:   "https://content.example",
 		SecureCookies: false,
@@ -799,4 +801,71 @@ func mustGet(c *client, path string) []byte {
 		c.t.Fatalf("GET %s = %d: %s", path, resp.StatusCode, raw)
 	}
 	return raw
+}
+
+func TestPermissionsEnforceSharing(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp() // admin
+
+	if err := os.WriteFile(filepath.Join(c.root, "doc.txt"), []byte("hi"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Bring in a non-admin through an invite.
+	_, raw := c.do(http.MethodPost, "/api/v1/invitations", map[string]string{})
+	inviteToken := decode[struct {
+		Token string `json:"token"`
+	}](t, raw).Token
+	_, raw = c.do(http.MethodPost, "/api/v1/invitations/accept", map[string]string{
+		"token": inviteToken, "username": "bob", "password": "correct horse battery",
+	})
+	bob := decode[struct {
+		User  userJSON `json:"user"`
+		Token string   `json:"token"`
+	}](t, raw)
+	admin := c.token
+
+	// A fresh non-admin holds nothing, and admin-only endpoints refuse them.
+	c.token = bob.Token
+	if ps := decode[struct{ Read, Share bool }](t, mustGet(c, "/api/v1/permissions?path=/")); ps.Read || ps.Share {
+		t.Fatalf("fresh non-admin perms = %+v, want none", ps)
+	}
+	if resp, _ := c.do(http.MethodGet, "/api/v1/users", nil); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-admin GET /users = %d, want 403", resp.StatusCode)
+	}
+	if resp, _ := c.do(http.MethodPost, "/api/v1/access", map[string]any{
+		"subject_id": bob.User.ID, "path": "/", "perms": map[string]bool{"read": true},
+	}); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-admin grant = %d, want 403", resp.StatusCode)
+	}
+
+	// Admin grants bob recursive read — but not share.
+	c.token = admin
+	if resp, raw := c.do(http.MethodPost, "/api/v1/access", map[string]any{
+		"subject_id": bob.User.ID, "path": "/", "perms": map[string]bool{"read": true}, "recursive": true,
+	}); resp.StatusCode != http.StatusCreated {
+		t.Fatalf("grant read = %d: %s", resp.StatusCode, raw)
+	}
+
+	// Bob can now read, and sharing is refused for lack of PermShare.
+	c.token = bob.Token
+	if ps := decode[struct{ Read, Share bool }](t, mustGet(c, "/api/v1/permissions?path=/doc.txt")); !ps.Read || ps.Share {
+		t.Fatalf("after read grant, perms = %+v, want read only", ps)
+	}
+	if resp, raw := c.do(http.MethodPost, "/api/v1/shares", map[string]string{"path": "/doc.txt"}); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("share without PermShare = %d, want 403: %s", resp.StatusCode, raw)
+	}
+
+	// Admin grants share; now bob can create the link.
+	c.token = admin
+	c.do(http.MethodPost, "/api/v1/access", map[string]any{
+		"subject_id": bob.User.ID, "path": "/", "perms": map[string]bool{"read": true, "share": true}, "recursive": true,
+	})
+	c.token = bob.Token
+	if resp, raw := c.do(http.MethodPost, "/api/v1/shares", map[string]string{"path": "/doc.txt"}); resp.StatusCode != http.StatusCreated {
+		t.Fatalf("share with PermShare = %d, want 201: %s", resp.StatusCode, raw)
+	}
+	c.token = admin
 }

@@ -74,6 +74,11 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) {
 				"Cannot protect a folder", "Folder shares cannot have a password yet.")
 			return
 		}
+		if errors.Is(err, share.ErrNotPermitted) {
+			writeProblem(w, r, http.StatusForbidden, CodePermissionDenied,
+				"Not allowed to share", "You do not have permission to share this item.")
+			return
+		}
 		writeError(w, r, err)
 		return
 	}

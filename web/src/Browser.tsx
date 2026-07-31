@@ -19,6 +19,7 @@ import {
   Copy as CopyIcon,
   DownloadSimple as Download,
   FolderOpen,
+  Key,
   Scissors,
   SquaresFour as LayoutGrid,
   List as ListIcon,
@@ -59,6 +60,7 @@ import { TrashScreen } from '@/components/trash-screen'
 import { SharesScreen } from '@/components/shares-screen'
 import { MembersScreen } from '@/components/members-screen'
 import { ShareDialog } from '@/components/share-dialog'
+import { AccessDialog } from '@/components/access-dialog'
 import {
   Dialog,
   DialogContent,
@@ -157,6 +159,8 @@ type EntryActions = {
   open: (entry: Entry) => void
   download: (entry: Entry) => void
   share: (entry: Entry) => void
+  manageAccess: (entry: Entry) => void
+  canManageAccess: boolean
   copy: (entry: Entry) => void
   cut: (entry: Entry) => void
   paste: () => void
@@ -192,6 +196,7 @@ type DialogState =
   | { kind: 'rename'; entry: Entry }
   | { kind: 'delete'; entries: Entry[] }
   | { kind: 'share'; entry: Entry }
+  | { kind: 'access'; entry: Entry }
 
 export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => void }) {
   const [path, setPath] = useState('/')
@@ -530,6 +535,8 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     },
     download,
     share: (entry) => setDialog({ kind: 'share', entry }),
+    manageAccess: (entry) => setDialog({ kind: 'access', entry }),
+    canManageAccess: user.is_admin,
     copy: (entry) => setClipboard({ mode: 'copy', entries: clipboardTargets(entry) }),
     cut: (entry) => setClipboard({ mode: 'cut', entries: clipboardTargets(entry) }),
     paste: () => void doPaste(),
@@ -956,6 +963,10 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         <ShareDialog entry={dialog.entry} onCreated={refreshShares} onClose={() => setDialog(null)} />
       )}
 
+      {dialog?.kind === 'access' && (
+        <AccessDialog entry={dialog.entry} onClose={() => setDialog(null)} />
+      )}
+
       {preview && (
         <PreviewOverlay
           entry={preview}
@@ -1245,6 +1256,12 @@ function EntryMenu({ entry, actions, children }: { entry: Entry; actions: EntryA
           <ShareNetwork />
           Share…
         </ContextMenuItem>
+        {actions.canManageAccess && (
+          <ContextMenuItem onSelect={() => actions.manageAccess(entry)}>
+            <Key />
+            Manage access…
+          </ContextMenuItem>
+        )}
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => actions.copy(entry)}>
           <CopyIcon />

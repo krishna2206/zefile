@@ -124,6 +124,12 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("GET /api/v1/invitations", s.handleInvitationList)
 	authed.HandleFunc("DELETE /api/v1/invitations/{id}", s.handleInvitationRevoke)
 
+	authed.HandleFunc("GET /api/v1/users", s.handleListUsers)
+	authed.HandleFunc("GET /api/v1/permissions", s.handleEffectivePermissions)
+	authed.HandleFunc("GET /api/v1/access", s.handleListAccess)
+	authed.HandleFunc("POST /api/v1/access", s.handleGrantAccess)
+	authed.HandleFunc("DELETE /api/v1/access/{id}", s.handleRevokeAccess)
+
 	authed.HandleFunc("OPTIONS /api/v1/uploads", s.handleUploadOptions)
 	authed.HandleFunc("POST /api/v1/uploads", s.handleUploadCreate)
 	authed.HandleFunc("HEAD /api/v1/uploads/{token}", s.handleUploadOffset)

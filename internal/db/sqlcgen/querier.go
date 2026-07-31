@@ -73,6 +73,7 @@ type Querier interface {
 	// Most recently deleted first: that is the order someone reaches for the trash
 	// to undo a mistake they just made.
 	ListTrash(ctx context.Context) ([]Trash, error)
+	ListUsers(ctx context.Context) ([]User, error)
 	LogShareAccess(ctx context.Context, arg LogShareAccessParams) error
 	MarkInvitationUsed(ctx context.Context, arg MarkInvitationUsedParams) error
 	MoveFileOwner(ctx context.Context, arg MoveFileOwnerParams) error
