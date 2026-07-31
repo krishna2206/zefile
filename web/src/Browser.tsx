@@ -561,9 +561,9 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     return selection.has(entry.path) && selected.length > 0 ? selected : [entry]
   }
 
-  // Paste the clipboard into the current folder. Copy leaves the clipboard so it
-  // can be pasted again; cut clears it. Names that would collide gain a "(copy)"
-  // suffix rather than overwriting.
+  // Paste the clipboard into the current folder, then clear it — pasting
+  // consumes the clipboard, so the Paste affordances disappear afterwards.
+  // Names that would collide gain a "(copy)" suffix rather than overwriting.
   const doPaste = useCallback(async () => {
     if (!clipboard) return
     const taken = new Set(entries.map((e) => e.name))
@@ -596,7 +596,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
         toast.error(err instanceof ApiError ? err.message : `Could not paste “${entry.name}”`)
       }
     }
-    if (clipboard.mode === 'cut') setClipboard(null)
+    setClipboard(null)
     clearSelection()
     void load(path)
     void refreshSpace()
