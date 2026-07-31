@@ -122,19 +122,28 @@ func (s *Server) handleListAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve user names in one pass rather than a query per rule.
-	names := map[int64]string{}
+	// Resolve subject names in one pass rather than a query per rule.
+	userNames := map[int64]string{}
 	if users, err := s.auth.Users(r.Context()); err == nil {
 		for _, u := range users {
-			names[u.ID] = u.Username
+			userNames[u.ID] = u.Username
+		}
+	}
+	groupNames := map[int64]string{}
+	if groups, err := s.acl.ListGroups(r.Context()); err == nil {
+		for _, g := range groups {
+			groupNames[g.ID] = g.Name
 		}
 	}
 
 	out := make([]accessRuleResponse, 0, len(rules))
 	for _, rule := range rules {
 		name := ""
-		if rule.SubjectType == acl.SubjectUser {
-			name = names[rule.SubjectID]
+		switch rule.SubjectType {
+		case acl.SubjectUser:
+			name = userNames[rule.SubjectID]
+		case acl.SubjectGroup:
+			name = groupNames[rule.SubjectID]
 		}
 		out = append(out, accessRuleResponse{
 			ID:          rule.ID,
@@ -150,14 +159,17 @@ func (s *Server) handleListAccess(w http.ResponseWriter, r *http.Request) {
 }
 
 type grantAccessRequest struct {
-	SubjectID int64   `json:"subject_id"`
-	Path      string  `json:"path"`
-	Perms     permSet `json:"perms"`
-	Recursive bool    `json:"recursive"`
-	Deny      bool    `json:"deny"`
+	// SubjectType is "user" (the default) or "group".
+	SubjectType string  `json:"subject_type"`
+	SubjectID   int64   `json:"subject_id"`
+	Path        string  `json:"path"`
+	Perms       permSet `json:"perms"`
+	Recursive   bool    `json:"recursive"`
+	Deny        bool    `json:"deny"`
 }
 
-// handleGrantAccess creates or replaces a user's rule at a path. Admin only.
+// handleGrantAccess creates or replaces a rule for a user or group at a path.
+// Admin only.
 func (s *Server) handleGrantAccess(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAdmin(w, r); !ok {
 		return
@@ -178,8 +190,31 @@ func (s *Server) handleGrantAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The subject must exist, so a rule is never granted to a user or group that
+	// is not there — which would look granted but resolve to nothing.
+	subjectType := acl.SubjectUser
+	switch body.SubjectType {
+	case "", "user":
+		if _, err := s.auth.GetUser(r.Context(), body.SubjectID); err != nil {
+			writeUserError(w, r, err)
+			return
+		}
+	case "group":
+		subjectType = acl.SubjectGroup
+		if exists, err := s.acl.GroupExists(r.Context(), body.SubjectID); err != nil {
+			writeError(w, r, err)
+			return
+		} else if !exists {
+			writeProblem(w, r, http.StatusNotFound, CodeNotFound, "No such group", "This group does not exist.")
+			return
+		}
+	default:
+		writeProblem(w, r, http.StatusBadRequest, CodeBadRequest, "Bad subject", "subject_type must be user or group.")
+		return
+	}
+
 	rule, err := s.acl.Grant(r.Context(), acl.Rule{
-		SubjectType: acl.SubjectUser,
+		SubjectType: subjectType,
 		SubjectID:   body.SubjectID,
 		Path:        p,
 		Perms:       perms,

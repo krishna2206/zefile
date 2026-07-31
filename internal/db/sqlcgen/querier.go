@@ -10,12 +10,14 @@ import (
 )
 
 type Querier interface {
+	AddGroupMember(ctx context.Context, arg AddGroupMemberParams) error
 	// Atomically take the oldest pending job and mark it running. The single writer
 	// connection serialises this, so two workers could not claim the same row.
 	ClaimNextJob(ctx context.Context, startedAt sql.NullInt64) (Job, error)
 	// Backs first-run detection: an instance with no account shows the setup link
 	// rather than a sign-in form.
 	CountUsers(ctx context.Context) (int64, error)
+	CreateGroup(ctx context.Context, arg CreateGroupParams) (Group, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreateJob(ctx context.Context, arg CreateJobParams) (Job, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
@@ -29,6 +31,7 @@ type Querier interface {
 	DeleteACLForSubject(ctx context.Context, arg DeleteACLForSubjectParams) error
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
 	DeleteFileOwner(ctx context.Context, path string) error
+	DeleteGroup(ctx context.Context, id int64) (int64, error)
 	// Only an unused, real invitation can be revoked; a used one has already become
 	// an account, and a setup token is not an admin's to cancel.
 	DeleteInvitationByID(ctx context.Context, id int64) (int64, error)
@@ -61,12 +64,16 @@ type Querier interface {
 	GetUpload(ctx context.Context, arg GetUploadParams) (Upload, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GroupExists(ctx context.Context, id int64) (int64, error)
 	IncrementShareDownloads(ctx context.Context, id int64) error
 	ListACLForGroups(ctx context.Context, groupIds []int64) ([]Acl, error)
 	// Backs the permissions screen: everything granted at one exact path.
 	ListACLForPath(ctx context.Context, path string) ([]Acl, error)
 	ListACLForUser(ctx context.Context, subjectID int64) ([]Acl, error)
 	ListExpiredUploads(ctx context.Context, expiresAt int64) ([]Upload, error)
+	ListGroupMemberIDs(ctx context.Context, groupID int64) ([]int64, error)
+	// Groups with how many members each holds, for the management screen.
+	ListGroups(ctx context.Context) ([]ListGroupsRow, error)
 	ListGroupsForUser(ctx context.Context, userID int64) ([]int64, error)
 	// Real invitations (those with an inviter) that are still open, newest first.
 	// Setup tokens have no inviter and are excluded.
@@ -88,6 +95,7 @@ type Querier interface {
 	// Follows a rename across a whole subtree, so a moved folder keeps ownership of
 	// everything inside it, not only its own row.
 	MoveFileOwner(ctx context.Context, arg MoveFileOwnerParams) error
+	RemoveGroupMember(ctx context.Context, arg RemoveGroupMemberParams) error
 	// A job left 'running' by a crash is reset so the worker picks it up again on
 	// the next start; its own idempotent construction makes the retry safe.
 	RequeueRunningJobs(ctx context.Context) error

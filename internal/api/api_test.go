@@ -1128,3 +1128,82 @@ func TestProfilePasswordAndSessions(t *testing.T) {
 		t.Fatalf("old password login = %d, want 401", resp.StatusCode)
 	}
 }
+
+// invite creates a non-admin account and returns its id and session token.
+func (c *client) invite(username string) (int64, string) {
+	c.t.Helper()
+	_, raw := c.do(http.MethodPost, "/api/v1/invitations", map[string]string{})
+	token := decode[struct {
+		Token string `json:"token"`
+	}](t2(c), raw).Token
+	_, raw = c.do(http.MethodPost, "/api/v1/invitations/accept", map[string]string{
+		"token": token, "username": username, "password": "correct horse battery",
+	})
+	u := decode[struct {
+		User  userJSON `json:"user"`
+		Token string   `json:"token"`
+	}](t2(c), raw)
+	return u.User.ID, u.Token
+}
+
+func t2(c *client) *testing.T { return c.t }
+
+func TestGroupsGrantAccess(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+	admin := c.token
+
+	bobID, bobToken := c.invite("bob")
+	_, carolToken := c.invite("carol")
+
+	c.do(http.MethodPost, "/api/v1/fs/dirs", map[string]string{"path": "/shared"})
+	if err := os.WriteFile(filepath.Join(c.root, "shared", "note.txt"), []byte("hi"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Create a group with bob in it.
+	_, raw := c.do(http.MethodPost, "/api/v1/groups", map[string]string{"name": "team"})
+	group := decode[struct {
+		ID int64 `json:"id"`
+	}](t, raw)
+	if resp, _ := c.do(http.MethodPut, fmt.Sprintf("/api/v1/groups/%d/members/%d", group.ID, bobID), nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("add member = %d", resp.StatusCode)
+	}
+
+	// Grant the group read on /shared.
+	if resp, body := c.do(http.MethodPost, "/api/v1/access", map[string]any{
+		"subject_type": "group", "subject_id": group.ID, "path": "/shared",
+		"perms": map[string]bool{"read": true}, "recursive": true,
+	}); resp.StatusCode != http.StatusCreated {
+		t.Fatalf("grant group = %d: %s", resp.StatusCode, body)
+	}
+
+	// Bob (in the group) reaches it; carol (not) does not.
+	c.token = bobToken
+	if inside := decode[listing](t, mustList(c, "/shared")); !hasEntry(inside.Entries, "note.txt") {
+		t.Fatalf("group member cannot see the folder: %+v", inside.Entries)
+	}
+	c.token = carolToken
+	if resp, _ := c.do(http.MethodGet, "/api/v1/fs?path=/shared", nil); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-member /shared = %d, want 403", resp.StatusCode)
+	}
+
+	// Deleting the group removes its rule; bob loses access.
+	c.token = admin
+	if resp, _ := c.do(http.MethodDelete, fmt.Sprintf("/api/v1/groups/%d", group.ID), nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete group = %d", resp.StatusCode)
+	}
+	if rules := decode[struct {
+		Rules []struct {
+			ID int64 `json:"id"`
+		} `json:"rules"`
+	}](t, mustGet(c, "/api/v1/access?path=/shared")); len(rules.Rules) != 0 {
+		t.Fatalf("group rule survived deletion: %+v", rules.Rules)
+	}
+	c.token = bobToken
+	if resp, _ := c.do(http.MethodGet, "/api/v1/fs?path=/shared", nil); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("ex-group-member /shared = %d, want 403", resp.StatusCode)
+	}
+}

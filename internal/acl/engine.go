@@ -482,6 +482,97 @@ func (e *Engine) RulesAt(ctx context.Context, p storage.Path) ([]Rule, error) {
 	return rules, nil
 }
 
+// --------------------------------------------------------------------- groups
+
+// Group is a named set of users that rules can be granted to.
+type Group struct {
+	ID          int64
+	Name        string
+	MemberCount int64
+	CreatedAt   time.Time
+}
+
+// ErrGroupNotFound means no group has the given id.
+var ErrGroupNotFound = errors.New("acl: no such group")
+
+// CreateGroup makes a new, empty group.
+func (e *Engine) CreateGroup(ctx context.Context, name string) (Group, error) {
+	row, err := e.writes.CreateGroup(ctx, sqlcgen.CreateGroupParams{
+		Name:      name,
+		CreatedAt: e.now().Unix(),
+	})
+	if err != nil {
+		return Group{}, fmt.Errorf("acl: create group: %w", err)
+	}
+	return Group{ID: row.ID, Name: row.Name, CreatedAt: time.Unix(row.CreatedAt, 0).UTC()}, nil
+}
+
+// ListGroups returns every group with its member count.
+func (e *Engine) ListGroups(ctx context.Context) ([]Group, error) {
+	rows, err := e.reads.ListGroups(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("acl: list groups: %w", err)
+	}
+	out := make([]Group, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, Group{
+			ID:          r.ID,
+			Name:        r.Name,
+			MemberCount: r.MemberCount,
+			CreatedAt:   time.Unix(r.CreatedAt, 0).UTC(),
+		})
+	}
+	return out, nil
+}
+
+// DeleteGroup removes a group, its memberships (cascading) and the ACL rules
+// granted to it, which carry no foreign key.
+func (e *Engine) DeleteGroup(ctx context.Context, id int64) error {
+	n, err := e.writes.DeleteGroup(ctx, id)
+	if err != nil {
+		return fmt.Errorf("acl: delete group: %w", err)
+	}
+	if n == 0 {
+		return ErrGroupNotFound
+	}
+	return e.RevokeAllForSubject(ctx, SubjectGroup, id)
+}
+
+// GroupExists reports whether a group id is real, so a rule is never granted to
+// a group that is not there.
+func (e *Engine) GroupExists(ctx context.Context, id int64) (bool, error) {
+	n, err := e.reads.GroupExists(ctx, id)
+	if err != nil {
+		return false, fmt.Errorf("acl: group exists: %w", err)
+	}
+	return n > 0, nil
+}
+
+// AddGroupMember adds a user to a group. Adding twice is not an error.
+func (e *Engine) AddGroupMember(ctx context.Context, groupID, userID int64) error {
+	if err := e.writes.AddGroupMember(ctx, sqlcgen.AddGroupMemberParams{GroupID: groupID, UserID: userID}); err != nil {
+		return fmt.Errorf("acl: add group member: %w", err)
+	}
+	return nil
+}
+
+// RemoveGroupMember takes a user out of a group.
+func (e *Engine) RemoveGroupMember(ctx context.Context, groupID, userID int64) error {
+	if err := e.writes.RemoveGroupMember(ctx, sqlcgen.RemoveGroupMemberParams{GroupID: groupID, UserID: userID}); err != nil {
+		return fmt.Errorf("acl: remove group member: %w", err)
+	}
+	return nil
+}
+
+// GroupMemberIDs returns the ids of a group's members.
+func (e *Engine) GroupMemberIDs(ctx context.Context, groupID int64) ([]int64, error) {
+	ids, err := e.reads.ListGroupMemberIDs(ctx, groupID)
+	if err != nil {
+		return nil, fmt.Errorf("acl: list group members: %w", err)
+	}
+	return ids, nil
+}
+
 // ----------------------------------------------------------------- ownership
 
 // SetOwner records who uploaded a path.

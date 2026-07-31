@@ -11,6 +11,7 @@ import {
 
 import { Empty } from '../App'
 import { api, ApiError, type Invitation, type User, type UserSummary } from '@/api'
+import { GroupsSection } from '@/components/groups-section'
 import { formatRelativeTime } from '@/lib/files'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -132,6 +133,10 @@ export function MembersScreen({ me }: { me: User }) {
                   />
                 ))}
               </div>
+            </section>
+
+            <section className="mt-6">
+              <GroupsSection users={users} />
             </section>
 
             <section className="mt-6">

@@ -64,6 +64,9 @@ export type AccessRule = {
 /** UserSummary is an account in the admin's user list. */
 export type UserSummary = { id: number; username: string; is_admin: boolean; disabled: boolean }
 
+/** Group is a named set of users that rules can be granted to. */
+export type Group = { id: number; name: string; member_count: number }
+
 /** SessionInfo is one of the caller's active sessions. */
 export type SessionInfo = {
   id: number
@@ -248,6 +251,7 @@ export const api = {
   listAccess: (path: string) =>
     request<{ rules: AccessRule[] }>(`/api/v1/access?path=${encodeURIComponent(path)}`),
   grantAccess: (body: {
+    subject_type?: 'user' | 'group'
     subject_id: number
     path: string
     perms: PermSet
@@ -255,6 +259,17 @@ export const api = {
     deny?: boolean
   }) => request<AccessRule>('/api/v1/access', { method: 'POST', body: JSON.stringify(body) }),
   revokeAccess: (id: number) => request<void>(`/api/v1/access/${id}`, { method: 'DELETE' }),
+
+  // Groups (admin): named sets of users that access can be granted to.
+  listGroups: () => request<{ groups: Group[] }>('/api/v1/groups'),
+  createGroup: (name: string) =>
+    request<Group>('/api/v1/groups', { method: 'POST', body: JSON.stringify({ name }) }),
+  deleteGroup: (id: number) => request<void>(`/api/v1/groups/${id}`, { method: 'DELETE' }),
+  groupMembers: (id: number) => request<{ member_ids: number[] }>(`/api/v1/groups/${id}/members`),
+  addGroupMember: (groupId: number, userId: number) =>
+    request<void>(`/api/v1/groups/${groupId}/members/${userId}`, { method: 'PUT' }),
+  removeGroupMember: (groupId: number, userId: number) =>
+    request<void>(`/api/v1/groups/${groupId}/members/${userId}`, { method: 'DELETE' }),
 
   listTrash: () => request<{ items: TrashItem[] }>('/api/v1/trash'),
   restoreTrash: (id: number) => request<void>(`/api/v1/trash/${id}/restore`, { method: 'POST' }),

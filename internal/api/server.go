@@ -141,6 +141,13 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("POST /api/v1/access", s.handleGrantAccess)
 	authed.HandleFunc("DELETE /api/v1/access/{id}", s.handleRevokeAccess)
 
+	authed.HandleFunc("GET /api/v1/groups", s.handleListGroups)
+	authed.HandleFunc("POST /api/v1/groups", s.handleCreateGroup)
+	authed.HandleFunc("DELETE /api/v1/groups/{id}", s.handleDeleteGroup)
+	authed.HandleFunc("GET /api/v1/groups/{id}/members", s.handleListGroupMembers)
+	authed.HandleFunc("PUT /api/v1/groups/{id}/members/{userID}", s.handleAddGroupMember)
+	authed.HandleFunc("DELETE /api/v1/groups/{id}/members/{userID}", s.handleRemoveGroupMember)
+
 	authed.HandleFunc("OPTIONS /api/v1/uploads", s.handleUploadOptions)
 	authed.HandleFunc("POST /api/v1/uploads", s.handleUploadCreate)
 	authed.HandleFunc("HEAD /api/v1/uploads/{token}", s.handleUploadOffset)
