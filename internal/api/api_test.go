@@ -1001,3 +1001,61 @@ func TestListingTraversesToGrants(t *testing.T) {
 	}
 	c.token = admin
 }
+
+func TestRenamePreservesAccess(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+
+	c.do(http.MethodPost, "/api/v1/fs/dirs", map[string]string{"path": "/partage"})
+	if err := os.WriteFile(filepath.Join(c.root, "partage", "note.txt"), []byte("hi"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	_, raw := c.do(http.MethodPost, "/api/v1/invitations", map[string]string{})
+	inviteToken := decode[struct {
+		Token string `json:"token"`
+	}](t, raw).Token
+	_, raw = c.do(http.MethodPost, "/api/v1/invitations/accept", map[string]string{
+		"token": inviteToken, "username": "bob", "password": "correct horse battery",
+	})
+	bob := decode[struct {
+		User  userJSON `json:"user"`
+		Token string   `json:"token"`
+	}](t, raw)
+	admin := c.token
+
+	c.do(http.MethodPost, "/api/v1/access", map[string]any{
+		"subject_id": bob.User.ID, "path": "/partage", "perms": map[string]bool{"read": true}, "recursive": true,
+	})
+
+	// Rename the shared folder.
+	if resp, body := c.do(http.MethodPost, "/api/v1/fs/move", map[string]string{"from": "/partage", "to": "/renamed"}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("rename = %d: %s", resp.StatusCode, body)
+	}
+
+	// The rule moved with it: nothing left at the old path, bob's rule at the new.
+	if old := decode[struct {
+		Rules []struct {
+			SubjectID int64 `json:"subject_id"`
+		} `json:"rules"`
+	}](t, mustGet(c, "/api/v1/access?path=/partage")); len(old.Rules) != 0 {
+		t.Fatalf("rules stranded at old path: %+v", old.Rules)
+	}
+	now := decode[struct {
+		Rules []struct {
+			SubjectID int64 `json:"subject_id"`
+		} `json:"rules"`
+	}](t, mustGet(c, "/api/v1/access?path=/renamed"))
+	if len(now.Rules) != 1 || now.Rules[0].SubjectID != bob.User.ID {
+		t.Fatalf("rule did not follow the rename: %+v", now.Rules)
+	}
+
+	// Bob still reaches the folder under its new name.
+	c.token = bob.Token
+	if inside := decode[listing](t, mustList(c, "/renamed")); !hasEntry(inside.Entries, "note.txt") {
+		t.Fatalf("bob lost access after rename: %+v", inside.Entries)
+	}
+	c.token = admin
+}

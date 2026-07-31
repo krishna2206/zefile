@@ -10,7 +10,12 @@ INSERT INTO file_owners (path, owner_id, created_at) VALUES (?, ?, ?)
 ON CONFLICT (path) DO UPDATE SET owner_id = excluded.owner_id;
 
 -- name: MoveFileOwner :exec
-UPDATE file_owners SET path = ? WHERE path = ?;
+-- Follows a rename across a whole subtree, so a moved folder keeps ownership of
+-- everything inside it, not only its own row.
+UPDATE file_owners
+SET path = sqlc.arg(to_path) || substr(path, length(sqlc.arg(from_path)) + 1)
+WHERE path = sqlc.arg(from_path)
+   OR substr(path, 1, length(sqlc.arg(from_path)) + 1) = sqlc.arg(from_path) || '/';
 
 -- name: DeleteFileOwner :exec
 DELETE FROM file_owners WHERE path = ?;

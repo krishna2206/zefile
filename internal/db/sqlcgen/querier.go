@@ -80,6 +80,13 @@ type Querier interface {
 	ListUsers(ctx context.Context) ([]User, error)
 	LogShareAccess(ctx context.Context, arg LogShareAccessParams) error
 	MarkInvitationUsed(ctx context.Context, arg MarkInvitationUsedParams) error
+	// Follows a rename: rewrite every rule at the path or anywhere beneath it, so a
+	// renamed folder carries its permissions with it instead of leaving them
+	// stranded on a name that no longer exists. The substr comparison avoids LIKE,
+	// whose wildcards a path containing '%' or '_' would trip.
+	MoveACLSubtree(ctx context.Context, arg MoveACLSubtreeParams) error
+	// Follows a rename across a whole subtree, so a moved folder keeps ownership of
+	// everything inside it, not only its own row.
 	MoveFileOwner(ctx context.Context, arg MoveFileOwnerParams) error
 	// A job left 'running' by a crash is reset so the worker picks it up again on
 	// the next start; its own idempotent construction makes the retry safe.

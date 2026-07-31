@@ -69,16 +69,21 @@ func (q *Queries) GetFileOwnersForPaths(ctx context.Context, paths []string) ([]
 }
 
 const moveFileOwner = `-- name: MoveFileOwner :exec
-UPDATE file_owners SET path = ? WHERE path = ?
+UPDATE file_owners
+SET path = ?1 || substr(path, length(?2) + 1)
+WHERE path = ?2
+   OR substr(path, 1, length(?2) + 1) = ?2 || '/'
 `
 
 type MoveFileOwnerParams struct {
-	Path   string
-	Path_2 string
+	ToPath   string
+	FromPath interface{}
 }
 
+// Follows a rename across a whole subtree, so a moved folder keeps ownership of
+// everything inside it, not only its own row.
 func (q *Queries) MoveFileOwner(ctx context.Context, arg MoveFileOwnerParams) error {
-	_, err := q.db.ExecContext(ctx, moveFileOwner, arg.Path, arg.Path_2)
+	_, err := q.db.ExecContext(ctx, moveFileOwner, arg.ToPath, arg.FromPath)
 	return err
 }
 

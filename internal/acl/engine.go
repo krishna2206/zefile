@@ -497,13 +497,27 @@ func (e *Engine) SetOwner(ctx context.Context, p storage.Path, userID int64) err
 }
 
 // MoveOwner follows a rename, so ownership is not orphaned by an operation the
-// application performed itself.
+// application performed itself. It moves the whole subtree: a renamed folder
+// keeps ownership of everything inside it, not only its own entry.
 func (e *Engine) MoveOwner(ctx context.Context, from, to storage.Path) error {
 	if err := e.writes.MoveFileOwner(ctx, sqlcgen.MoveFileOwnerParams{
-		Path:   to.String(),
-		Path_2: from.String(),
+		ToPath:   to.String(),
+		FromPath: from.String(),
 	}); err != nil {
 		return fmt.Errorf("acl: move owner: %w", err)
+	}
+	return nil
+}
+
+// MoveRules follows a rename, rewriting the ACL rules at a path and everything
+// beneath it. Without this, renaming a shared folder would strand its rules on
+// the old name and silently revoke everyone's access to it.
+func (e *Engine) MoveRules(ctx context.Context, from, to storage.Path) error {
+	if err := e.writes.MoveACLSubtree(ctx, sqlcgen.MoveACLSubtreeParams{
+		ToPath:   to.String(),
+		FromPath: from.String(),
+	}); err != nil {
+		return fmt.Errorf("acl: move rules: %w", err)
 	}
 	return nil
 }

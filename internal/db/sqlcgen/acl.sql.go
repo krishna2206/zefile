@@ -180,6 +180,27 @@ func (q *Queries) ListGroupsForUser(ctx context.Context, userID int64) ([]int64,
 	return items, nil
 }
 
+const moveACLSubtree = `-- name: MoveACLSubtree :exec
+UPDATE acl
+SET path = ?1 || substr(path, length(?2) + 1)
+WHERE path = ?2
+   OR substr(path, 1, length(?2) + 1) = ?2 || '/'
+`
+
+type MoveACLSubtreeParams struct {
+	ToPath   string
+	FromPath interface{}
+}
+
+// Follows a rename: rewrite every rule at the path or anywhere beneath it, so a
+// renamed folder carries its permissions with it instead of leaving them
+// stranded on a name that no longer exists. The substr comparison avoids LIKE,
+// whose wildcards a path containing '%' or '_' would trip.
+func (q *Queries) MoveACLSubtree(ctx context.Context, arg MoveACLSubtreeParams) error {
+	_, err := q.db.ExecContext(ctx, moveACLSubtree, arg.ToPath, arg.FromPath)
+	return err
+}
+
 const upsertACL = `-- name: UpsertACL :one
 INSERT INTO acl (subject_type, subject_id, path, perms, recursive, deny, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)

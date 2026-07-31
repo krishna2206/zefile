@@ -122,9 +122,14 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ownership is keyed by path, so a rename has to carry it across or the
-	// record is orphaned and the uploader silently loses their implicit rights.
+	// Ownership and permission rules are keyed by path, so a rename has to carry
+	// them across or ownership is orphaned and a shared folder silently loses the
+	// rules that granted access to it.
 	if err := s.acl.MoveOwner(r.Context(), from, to); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := s.acl.MoveRules(r.Context(), from, to); err != nil {
 		writeError(w, r, err)
 		return
 	}
