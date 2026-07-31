@@ -21,8 +21,12 @@ COPY --from=web /src/internal/web/dist/ ./internal/web/dist/
 # TARGETARCH is supplied by buildx, which is what makes one Dockerfile produce
 # both amd64 and arm64 images. CGO stays off, so cross-compiling needs no
 # toolchain for the target.
-ARG TARGETOS TARGETARCH VERSION=dev
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+ARG TARGETOS TARGETARCH VERSION=
+# When no version is passed in (the Dokploy build-from-source path does not),
+# fall back to version.txt — the release-please source of truth — so the running
+# instance still reports the version it was built at rather than "dev".
+RUN VERSION="${VERSION:-v$(cat version.txt 2>/dev/null || echo 0.0.0)}" && \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/zefile ./cmd/zefile
 
 # Alpine rather than scratch or distroless, for one reason: honouring PUID and
