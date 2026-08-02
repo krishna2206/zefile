@@ -18,6 +18,7 @@ import {
   ClipboardText,
   Copy as CopyIcon,
   DownloadSimple as Download,
+  Eye,
   FolderOpen,
   Key,
   Scissors,
@@ -1362,10 +1363,25 @@ function EntryMenu({ entry, actions, children }: { entry: Entry; actions: EntryA
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
-        <ContextMenuItem onSelect={() => actions.open(entry)}>
-          {entry.is_dir ? <FolderOpen /> : <Download />}
-          {entry.is_dir ? 'Open' : 'Download'}
-        </ContextMenuItem>
+        {entry.is_dir ? (
+          <ContextMenuItem onSelect={() => actions.open(entry)}>
+            <FolderOpen />
+            Open
+          </ContextMenuItem>
+        ) : (
+          <>
+            {isPreviewable(entry) && (
+              <ContextMenuItem onSelect={() => actions.open(entry)}>
+                <Eye />
+                Open
+              </ContextMenuItem>
+            )}
+            <ContextMenuItem onSelect={() => actions.download(entry)}>
+              <Download />
+              Download
+            </ContextMenuItem>
+          </>
+        )}
         {entry.is_dir && p.read && (
           <ContextMenuItem onSelect={() => actions.downloadZip(entry)}>
             <Download />
