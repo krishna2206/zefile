@@ -66,10 +66,15 @@ type Querier interface {
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GroupExists(ctx context.Context, id int64) (int64, error)
 	IncrementShareDownloads(ctx context.Context, id int64) error
+	InsertAuditEntry(ctx context.Context, arg InsertAuditEntryParams) error
 	ListACLForGroups(ctx context.Context, groupIds []int64) ([]Acl, error)
 	// Backs the permissions screen: everything granted at one exact path.
 	ListACLForPath(ctx context.Context, path string) ([]Acl, error)
 	ListACLForUser(ctx context.Context, subjectID int64) ([]Acl, error)
+	// Newest first, keyset-paginated by id (strictly decreasing). Pass a large id
+	// for the first page. The actor's name is joined in; it is null when the account
+	// was since deleted, which the entry still records by id and ip.
+	ListAuditEntries(ctx context.Context, arg ListAuditEntriesParams) ([]ListAuditEntriesRow, error)
 	ListExpiredUploads(ctx context.Context, expiresAt int64) ([]Upload, error)
 	ListGroupMemberIDs(ctx context.Context, groupID int64) ([]int64, error)
 	// Groups with how many members each holds, for the management screen.

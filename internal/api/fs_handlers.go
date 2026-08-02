@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/job"
 	"github.com/krishna2206/zefile/internal/storage"
@@ -246,6 +247,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionFileTrashed, p.String(), nil)
 	writeJSON(w, r, http.StatusNoContent, nil)
 }
 

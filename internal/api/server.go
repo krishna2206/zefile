@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/krishna2206/zefile/internal/acl"
+	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/auth"
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/job"
@@ -27,6 +28,7 @@ type Server struct {
 	trash         *trash.Service
 	shares        *share.Service
 	jobs          *job.Service
+	auditLog      *audit.Service
 	contentBase   string
 	version       string
 	singleOrigin  bool
@@ -43,6 +45,7 @@ type Options struct {
 	Trash   *trash.Service
 	Shares  *share.Service
 	Jobs    *job.Service
+	Audit   *audit.Service
 
 	// ContentBase is the public origin serving files, without a trailing
 	// slash. In single-origin mode it is the application's own address.
@@ -70,6 +73,7 @@ func New(opts Options) *Server {
 		trash:         opts.Trash,
 		shares:        opts.Shares,
 		jobs:          opts.Jobs,
+		auditLog:      opts.Audit,
 		contentBase:   opts.ContentBase,
 		version:       opts.Version,
 		singleOrigin:  opts.SingleOrigin,
@@ -133,6 +137,8 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("POST /api/v1/invitations", s.handleInvitationCreate)
 	authed.HandleFunc("GET /api/v1/invitations", s.handleInvitationList)
 	authed.HandleFunc("DELETE /api/v1/invitations/{id}", s.handleInvitationRevoke)
+
+	authed.HandleFunc("GET /api/v1/audit", s.handleAuditList)
 
 	authed.HandleFunc("GET /api/v1/users", s.handleListUsers)
 	authed.HandleFunc("PATCH /api/v1/users/{id}", s.handleUpdateUser)

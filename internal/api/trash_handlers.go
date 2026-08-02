@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/storage"
 	"github.com/krishna2206/zefile/internal/trash"
 )
@@ -60,6 +61,7 @@ func (s *Server) handleTrashRestore(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	s.audit(r, audit.ActionTrashRestored, dest.String(), nil)
 	writeJSON(w, r, http.StatusNoContent, nil)
 }
 
@@ -72,6 +74,7 @@ func (s *Server) handleTrashPurge(w http.ResponseWriter, r *http.Request) {
 		writeTrashError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionTrashPurged, "", map[string]any{"trash_id": id})
 	writeJSON(w, r, http.StatusNoContent, nil)
 }
 
@@ -80,6 +83,7 @@ func (s *Server) handleTrashEmpty(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionTrashEmptied, "", nil)
 	writeJSON(w, r, http.StatusNoContent, nil)
 }
 

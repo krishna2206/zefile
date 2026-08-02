@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/krishna2206/zefile/internal/acl"
+	"github.com/krishna2206/zefile/internal/audit"
 )
 
 // permSet is the JSON shape of a permission bitmask: one boolean per bit, so a
@@ -225,6 +226,9 @@ func (s *Server) handleGrantAccess(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionAccessGranted, p.String(), map[string]any{
+		"subject_type": string(subjectType), "subject_id": body.SubjectID, "perms": perms.String(),
+	})
 	writeJSON(w, r, http.StatusCreated, accessRuleResponse{
 		ID:          rule.ID,
 		SubjectType: string(rule.SubjectType),
@@ -249,5 +253,6 @@ func (s *Server) handleRevokeAccess(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionAccessRevoked, "", map[string]any{"rule_id": id})
 	writeJSON(w, r, http.StatusNoContent, nil)
 }

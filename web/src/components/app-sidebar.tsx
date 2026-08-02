@@ -1,4 +1,14 @@
-import { CaretUpDown, GearSix, House, IconContext, ShareNetwork, SignOut, Trash, UsersThree } from '@phosphor-icons/react'
+import {
+  CaretUpDown,
+  ClockCounterClockwise,
+  GearSix,
+  House,
+  IconContext,
+  ShareNetwork,
+  SignOut,
+  Trash,
+  UsersThree,
+} from '@phosphor-icons/react'
 
 import { formatSize, type Space, type User } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -13,7 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-type Section = 'files' | 'trash' | 'shared' | 'members' | 'settings'
+type Section = 'files' | 'trash' | 'shared' | 'members' | 'settings' | 'activity'
 
 type Props = {
   user: User
@@ -26,6 +36,7 @@ type Props = {
   onTrash: () => void
   onShared: () => void
   onMembers: () => void
+  onActivity: () => void
   onSettings: () => void
   onSignOut: () => void
 }
@@ -34,7 +45,7 @@ type Props = {
  * Sidebar is the app's fixed left column: identity, the "New" action,
  * navigation, and the storage gauge that tells you when to stop uploading.
  */
-export function Sidebar({ user, space, section, create, canCreate, version, onHome, onTrash, onShared, onMembers, onSettings, onSignOut }: Props) {
+export function Sidebar({ user, space, section, create, canCreate, version, onHome, onTrash, onShared, onMembers, onActivity, onSettings, onSignOut }: Props) {
   const inFiles = section === 'files'
   const used = space ? Math.max(0, space.total - space.available) : 0
   const percent = space && space.total > 0 ? (used / space.total) * 100 : 0
@@ -149,6 +160,12 @@ export function Sidebar({ user, space, section, create, canCreate, version, onHo
                 <DropdownMenuItem onSelect={onMembers}>
                   <UsersThree />
                   Members
+                </DropdownMenuItem>
+              )}
+              {user.is_admin && (
+                <DropdownMenuItem onSelect={onActivity}>
+                  <ClockCounterClockwise />
+                  Activity
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />

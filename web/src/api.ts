@@ -67,6 +67,18 @@ export type UserSummary = { id: number; username: string; is_admin: boolean; dis
 /** Group is a named set of users that rules can be granted to. */
 export type Group = { id: number; name: string; member_count: number }
 
+/** AuditEntry is one recorded action, as the activity log shows it. */
+export type AuditEntry = {
+  id: number
+  at: string
+  actor?: string
+  actor_id?: number
+  ip?: string
+  action: string
+  target?: string
+  details?: Record<string, unknown>
+}
+
 /** SessionInfo is one of the caller's active sessions. */
 export type SessionInfo = {
   id: number
@@ -251,6 +263,11 @@ export const api = {
   // listing/granting/revoking rules is admin-only and the server enforces it.
   effectivePermissions: (path: string) =>
     request<PermSet>(`/api/v1/permissions?path=${encodeURIComponent(path)}`),
+  listAudit: (before?: number) =>
+    request<{ entries: AuditEntry[]; next_before: number }>(
+      `/api/v1/audit${before ? `?before=${before}` : ''}`,
+    ),
+
   listUsers: () => request<{ users: UserSummary[] }>('/api/v1/users'),
   updateUser: (id: number, patch: { is_admin?: boolean; disabled?: boolean }) =>
     request<UserSummary>(`/api/v1/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),

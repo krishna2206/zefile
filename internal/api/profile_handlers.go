@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/auth"
 )
 
@@ -40,6 +41,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionPasswordChanged, "", nil)
 
 	if err := s.auth.RevokeOtherSessions(r.Context(), c.user.ID, c.session.ID); err != nil {
 		writeError(w, r, err)

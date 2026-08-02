@@ -20,6 +20,7 @@ import (
 
 	"github.com/krishna2206/zefile/internal/acl"
 	"github.com/krishna2206/zefile/internal/api"
+	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/auth"
 	"github.com/krishna2206/zefile/internal/db"
 	"github.com/krishna2206/zefile/internal/job"
@@ -99,6 +100,7 @@ func newClient(t *testing.T) *client {
 			return engine.Allows(ctx, acl.PermShare, p)
 		})),
 		Jobs:          jobs,
+		Audit:         audit.New(database),
 		ContentBase:   "https://content.example",
 		SecureCookies: false,
 	}).Handler())
@@ -1205,5 +1207,59 @@ func TestGroupsGrantAccess(t *testing.T) {
 	c.token = bobToken
 	if resp, _ := c.do(http.MethodGet, "/api/v1/fs?path=/shared", nil); resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("ex-group-member /shared = %d, want 403", resp.StatusCode)
+	}
+}
+
+func TestAuditRecordsActions(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp() // records auth.setup
+
+	// A few auditable actions.
+	c.do(http.MethodPost, "/api/v1/invitations", map[string]string{"email": "bob@example.com"})
+	c.do(http.MethodPost, "/api/v1/groups", map[string]string{"name": "team"})
+	c.do(http.MethodPost, "/api/v1/fs/dirs", map[string]string{"path": "/x"})
+	if err := os.WriteFile(filepath.Join(c.root, "x", "f.txt"), []byte("hi"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	c.do(http.MethodDelete, "/api/v1/fs?path="+url.QueryEscape("/x/f.txt"), nil)
+
+	list := decode[struct {
+		Entries []struct {
+			Actor  string `json:"actor"`
+			Action string `json:"action"`
+			Target string `json:"target"`
+		} `json:"entries"`
+		NextBefore int64 `json:"next_before"`
+	}](t, mustGet(c, "/api/v1/audit"))
+
+	seen := map[string]string{} // action -> target
+	for _, e := range list.Entries {
+		if e.Actor != "krishna" {
+			t.Errorf("entry %q has actor %q, want krishna", e.Action, e.Actor)
+		}
+		seen[e.Action] = e.Target
+	}
+	for _, want := range []string{"auth.setup", "invitation.created", "group.created", "file.trashed"} {
+		if _, ok := seen[want]; !ok {
+			t.Errorf("audit did not record %q; got %v", want, seen)
+		}
+	}
+	if seen["file.trashed"] != "/x/f.txt" {
+		t.Errorf("file.trashed target = %q, want /x/f.txt", seen["file.trashed"])
+	}
+}
+
+func TestAuditIsAdminOnly(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+	_, bobToken := c.invite("bob")
+
+	c.token = bobToken
+	if resp, _ := c.do(http.MethodGet, "/api/v1/audit", nil); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-admin audit = %d, want 403", resp.StatusCode)
 	}
 }

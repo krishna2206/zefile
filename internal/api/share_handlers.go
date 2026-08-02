@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/share"
 )
 
@@ -82,6 +83,7 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionShareCreated, p.String(), nil)
 	writeJSON(w, r, http.StatusCreated, s.toShareResponse(sh, token))
 }
 
@@ -124,5 +126,6 @@ func (s *Server) handleShareRevoke(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionShareRevoked, "", map[string]any{"share_id": id})
 	writeJSON(w, r, http.StatusNoContent, nil)
 }

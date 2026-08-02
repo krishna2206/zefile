@@ -17,6 +17,7 @@ import (
 
 	"github.com/krishna2206/zefile/internal/acl"
 	"github.com/krishna2206/zefile/internal/api"
+	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/auth"
 	"github.com/krishna2206/zefile/internal/config"
 	"github.com/krishna2206/zefile/internal/content"
@@ -95,6 +96,7 @@ func run() error {
 
 	uploads := upload.New(database, fs)
 	trashService := trash.New(database, fs)
+	auditLog := audit.New(database)
 	shareService := share.New(database, fs, share.GuardFunc(func(ctx context.Context, p storage.Path) (bool, error) {
 		return engine.Allows(ctx, acl.PermShare, p)
 	}))
@@ -114,6 +116,7 @@ func run() error {
 		Trash:         trashService,
 		Shares:        shareService,
 		Jobs:          jobs,
+		Audit:         auditLog,
 		Auth:          authService,
 		ACL:           engine,
 		Signer:        signer,

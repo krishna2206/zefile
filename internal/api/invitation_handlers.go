@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/auth"
 )
 
@@ -54,6 +55,7 @@ func (s *Server) handleInvitationCreate(w http.ResponseWriter, r *http.Request) 
 	}
 	out := toInvitationResponse(inv)
 	out.Token = token
+	s.audit(r, audit.ActionInvitationCreate, inv.Email, nil)
 	writeJSON(w, r, http.StatusCreated, out)
 }
 
@@ -94,6 +96,7 @@ func (s *Server) handleInvitationRevoke(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionInvitationRevoke, "", map[string]any{"invitation_id": id})
 	writeJSON(w, r, http.StatusNoContent, nil)
 }
 
@@ -144,6 +147,7 @@ func (s *Server) handleInvitationAccept(w http.ResponseWriter, r *http.Request) 
 	}
 
 	http.SetCookie(w, auth.SessionCookie(token, session.ExpiresAt, s.secureCookies))
+	s.auditAs(r, user.ID, audit.ActionUserJoined, user.Username, nil)
 	writeJSON(w, r, http.StatusCreated, sessionResponse{
 		User:      toUserResponse(user),
 		ExpiresAt: session.ExpiresAt,

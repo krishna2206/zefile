@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/auth"
 )
 
@@ -56,6 +57,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, auth.SessionCookie(token, session.ExpiresAt, s.secureCookies))
+	s.auditAs(r, user.ID, audit.ActionLogin, "", nil)
 	writeJSON(w, r, http.StatusOK, sessionResponse{
 		User:      toUserResponse(user),
 		ExpiresAt: session.ExpiresAt,
@@ -77,6 +79,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.audit(r, audit.ActionLogout, "", nil)
 	http.SetCookie(w, auth.ClearSessionCookie(s.secureCookies))
 	writeJSON(w, r, http.StatusNoContent, nil)
 }
@@ -131,6 +134,7 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, auth.SessionCookie(token, session.ExpiresAt, s.secureCookies))
+	s.auditAs(r, user.ID, audit.ActionSetup, user.Username, nil)
 	writeJSON(w, r, http.StatusCreated, sessionResponse{
 		User:      toUserResponse(user),
 		ExpiresAt: session.ExpiresAt,

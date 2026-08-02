@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/krishna2206/zefile/internal/acl"
+	"github.com/krishna2206/zefile/internal/audit"
 )
 
 type groupResponse struct {
@@ -64,6 +65,7 @@ func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionGroupCreated, group.Name, nil)
 	writeJSON(w, r, http.StatusCreated, groupResponse{ID: group.ID, Name: group.Name})
 }
 
@@ -84,6 +86,7 @@ func (s *Server) handleDeleteGroup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionGroupDeleted, "", map[string]any{"group_id": id})
 	writeJSON(w, r, http.StatusNoContent, nil)
 }
 
@@ -126,6 +129,7 @@ func (s *Server) handleAddGroupMember(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionGroupMemberAdd, "", map[string]any{"group_id": groupID, "user_id": userID})
 	writeJSON(w, r, http.StatusNoContent, nil)
 }
 
@@ -147,6 +151,7 @@ func (s *Server) handleRemoveGroupMember(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionGroupMemberDrop, "", map[string]any{"group_id": groupID, "user_id": userID})
 	writeJSON(w, r, http.StatusNoContent, nil)
 }
 

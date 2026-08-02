@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/krishna2206/zefile/internal/acl"
+	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/auth"
 )
 
@@ -62,6 +63,9 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeUserError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionUserUpdated, updated.Username, map[string]any{
+		"is_admin": updated.IsAdmin, "disabled": updated.Disabled,
+	})
 	writeJSON(w, r, http.StatusOK, userSummary{
 		ID: updated.ID, Username: updated.Username, IsAdmin: updated.IsAdmin, Disabled: updated.Disabled,
 	})
@@ -84,7 +88,8 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := s.auth.GetUser(r.Context(), id); err != nil {
+	target, err := s.auth.GetUser(r.Context(), id)
+	if err != nil {
 		writeUserError(w, r, err)
 		return
 	}
@@ -99,6 +104,7 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	s.audit(r, audit.ActionUserDeleted, target.Username, map[string]any{"user_id": id})
 	writeJSON(w, r, http.StatusNoContent, nil)
 }
 
