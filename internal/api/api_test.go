@@ -1263,3 +1263,41 @@ func TestAuditIsAdminOnly(t *testing.T) {
 		t.Fatalf("non-admin audit = %d, want 403", resp.StatusCode)
 	}
 }
+
+func TestTextPreviewCapsSize(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+
+	if err := os.WriteFile(filepath.Join(c.root, "small.txt"), []byte("hello world"), 0o644); err != nil {
+		t.Fatalf("seed small: %v", err)
+	}
+	big := make([]byte, (2<<20)+100) // just over the 2 MiB cap
+	for i := range big {
+		big[i] = 'a'
+	}
+	if err := os.WriteFile(filepath.Join(c.root, "big.log"), big, 0o644); err != nil {
+		t.Fatalf("seed big: %v", err)
+	}
+
+	type textResp struct {
+		Content   string `json:"content"`
+		Truncated bool   `json:"truncated"`
+	}
+
+	small := decode[textResp](t, mustGet(c, "/api/v1/fs/text?path="+url.QueryEscape("/small.txt")))
+	if small.Content != "hello world" || small.Truncated {
+		t.Fatalf("small = %+v, want the content untruncated", small)
+	}
+
+	huge := decode[textResp](t, mustGet(c, "/api/v1/fs/text?path="+url.QueryEscape("/big.log")))
+	if !huge.Truncated || len(huge.Content) != 2<<20 {
+		t.Fatalf("big: truncated=%v len=%d, want truncated with %d bytes", huge.Truncated, len(huge.Content), 2<<20)
+	}
+
+	// A directory is not text.
+	if resp, _ := c.do(http.MethodGet, "/api/v1/fs/text?path=/", nil); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("text of dir = %d, want 400", resp.StatusCode)
+	}
+}

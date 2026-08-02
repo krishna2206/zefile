@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -354,6 +355,57 @@ func bundleName(paths []storage.Path) string {
 		return paths[0].Name() + ".zip"
 	}
 	return "zefile.zip"
+}
+
+// maxTextPreviewBytes bounds a text preview. Enough for a source file or a log
+// tail; a caller wanting the whole of a huge file downloads it.
+const maxTextPreviewBytes = 2 << 20 // 2 MiB
+
+type textResponse struct {
+	Content   string `json:"content"`
+	Truncated bool   `json:"truncated"`
+}
+
+// handleText returns a file's content as text for the preview, same-origin and
+// size-capped. It reads through the storage layer, so it authorises like any
+// other read and never serves a reserved path.
+func (s *Server) handleText(w http.ResponseWriter, r *http.Request) {
+	p, ok := pathParam(w, r)
+	if !ok {
+		return
+	}
+	info, err := s.fs.Stat(r.Context(), p)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if info.IsDir {
+		writeError(w, r, storage.ErrIsDir)
+		return
+	}
+
+	file, err := s.fs.Open(r.Context(), p)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	defer file.Close()
+
+	// Read one byte past the cap so a file exactly at the cap is not mislabelled
+	// truncated, and anything larger is.
+	buf, err := io.ReadAll(io.LimitReader(file, maxTextPreviewBytes+1))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	truncated := len(buf) > maxTextPreviewBytes
+	if truncated {
+		buf = buf[:maxTextPreviewBytes]
+	}
+
+	// Invalid UTF-8 becomes U+FFFD in the JSON string rather than corrupting the
+	// response; the interface only asks for this on text-shaped extensions.
+	writeJSON(w, r, http.StatusOK, textResponse{Content: string(buf), Truncated: truncated})
 }
 
 type spaceResponse struct {

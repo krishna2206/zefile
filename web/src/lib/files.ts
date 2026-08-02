@@ -106,10 +106,51 @@ export function isPdf(entry: Entry): boolean {
   return !entry.is_dir && entry.name.toLowerCase().endsWith('.pdf')
 }
 
+/** extensionOf returns an entry's lower-case extension, or '' when it has none. */
+function extensionOf(entry: Entry): string {
+  if (entry.is_dir) return ''
+  const dot = entry.name.lastIndexOf('.')
+  return dot <= 0 ? '' : entry.name.slice(dot + 1).toLowerCase()
+}
+
+// Only the container formats browsers actually play. mkv, avi and wmv are left
+// out on purpose: an unsupported <video> just shows a broken player, which is
+// worse than offering the download.
+const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'ogv', 'ogg', 'm4v', 'mov'])
+const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'aac', 'wav', 'oga', 'ogg', 'flac', 'opus'])
+
+// Text and code shown as monospace source. Extensionless names that are
+// conventionally text (Dockerfile, Makefile) are matched by name.
+const TEXT_EXTENSIONS = new Set([
+  'txt', 'log', 'md', 'markdown', 'csv', 'tsv',
+  'js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'json', 'jsonc',
+  'yaml', 'yml', 'toml', 'xml', 'html', 'htm', 'css', 'scss', 'sass', 'less',
+  'go', 'py', 'rb', 'rs', 'java', 'kt', 'c', 'h', 'cpp', 'cc', 'hpp',
+  'php', 'sh', 'bash', 'zsh', 'sql', 'env', 'ini', 'conf', 'cfg', 'properties',
+  'gitignore', 'dockerignore', 'editorconfig',
+])
+const TEXT_NAMES = new Set(['dockerfile', 'makefile', 'license', 'readme', '.env', '.gitignore'])
+
+/** isVideo reports whether an entry plays in a native video element. */
+export function isVideo(entry: Entry): boolean {
+  return VIDEO_EXTENSIONS.has(extensionOf(entry))
+}
+
+/** isAudio reports whether an entry plays in a native audio element. */
+export function isAudio(entry: Entry): boolean {
+  return AUDIO_EXTENSIONS.has(extensionOf(entry))
+}
+
+/** isText reports whether an entry can be shown as monospace source. */
+export function isText(entry: Entry): boolean {
+  if (entry.is_dir) return false
+  return TEXT_EXTENSIONS.has(extensionOf(entry)) || TEXT_NAMES.has(entry.name.toLowerCase())
+}
+
 /** isPreviewable reports whether opening an entry should show a preview rather
  *  than download it. */
 export function isPreviewable(entry: Entry): boolean {
-  return isImage(entry) || isPdf(entry)
+  return isImage(entry) || isPdf(entry) || isVideo(entry) || isAudio(entry) || isText(entry)
 }
 
 const CATEGORY_BY_EXTENSION: Record<string, string> = {

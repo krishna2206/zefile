@@ -249,6 +249,12 @@ export const api = {
       body: JSON.stringify({ paths }),
     }),
 
+  // fileText returns a file's content as text for the preview, size-capped.
+  fileText: (path: string) =>
+    request<{ content: string; truncated: boolean }>(
+      `/api/v1/fs/text?path=${encodeURIComponent(path)}`,
+    ),
+
   config: () => request<{ inline_preview: boolean; version: string }>('/api/v1/config'),
 
   createShare: (path: string, opts: { expires_in_hours?: number; password?: string } = {}) =>

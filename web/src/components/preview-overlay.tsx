@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { CaretLeft, CaretRight, CircleNotch, DownloadSimple, X } from '@phosphor-icons/react'
 
 import { api, formatSize, type Entry } from '@/api'
-import { entryKind, isImage, isPdf } from '@/lib/files'
+import { entryKind, isAudio, isImage, isPdf, isText, isVideo } from '@/lib/files'
 import { Button } from '@/components/ui/button'
 
 /**
@@ -30,20 +30,34 @@ export function PreviewOverlay({
   onDownload: (entry: Entry) => void
 }) {
   const [url, setUrl] = useState<string | null>(null)
+  const [text, setText] = useState<{ content: string; truncated: boolean } | null>(null)
   const [failed, setFailed] = useState(false)
+
+  const asText = isText(entry)
 
   useEffect(() => {
     let alive = true
     setUrl(null)
+    setText(null)
     setFailed(false)
-    api
-      .downloadLink(entry.path)
-      .then(({ url }) => alive && setUrl(url))
-      .catch(() => alive && setFailed(true))
+
+    // Text is read same-origin and size-capped; everything else is a signed
+    // link the browser's own image/video/audio/pdf handling streams.
+    if (asText) {
+      api
+        .fileText(entry.path)
+        .then((t) => alive && setText(t))
+        .catch(() => alive && setFailed(true))
+    } else {
+      api
+        .downloadLink(entry.path)
+        .then(({ url }) => alive && setUrl(url))
+        .catch(() => alive && setFailed(true))
+    }
     return () => {
       alive = false
     }
-  }, [entry.path])
+  }, [entry.path, asText])
 
   const index = siblings.findIndex((e) => e.path === entry.path)
   const prev = index > 0 ? siblings[index - 1]! : null
@@ -95,6 +109,12 @@ export function PreviewOverlay({
         <div className="flex max-h-full items-center justify-center" onClick={(e) => e.stopPropagation()}>
           {failed ? (
             <Fallback entry={entry} message="This file could not be loaded." onDownload={onDownload} />
+          ) : asText ? (
+            text === null ? (
+              <CircleNotch className="size-8 animate-spin text-white/70" aria-label="Loading" />
+            ) : (
+              <TextPreview data={text} />
+            )
           ) : !url ? (
             <CircleNotch className="size-8 animate-spin text-white/70" aria-label="Loading" />
           ) : isImage(entry) ? (
@@ -104,6 +124,16 @@ export function PreviewOverlay({
               className="max-h-[85vh] max-w-[90vw] rounded object-contain shadow-2xl"
               onError={() => setFailed(true)}
             />
+          ) : isVideo(entry) ? (
+            <video
+              src={url}
+              controls
+              autoPlay
+              className="max-h-[85vh] max-w-[90vw] rounded shadow-2xl"
+              onError={() => setFailed(true)}
+            />
+          ) : isAudio(entry) ? (
+            <AudioPreview entry={entry} url={url} onError={() => setFailed(true)} />
           ) : isPdf(entry) && inlinePreview ? (
             <iframe
               title={entry.name}
@@ -120,6 +150,36 @@ export function PreviewOverlay({
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+/** TextPreview shows a file's source as monospace text, scrollable, with a note
+ *  when it was cut at the size cap. */
+function TextPreview({ data }: { data: { content: string; truncated: boolean } }) {
+  return (
+    <div className="flex max-h-[85vh] w-[min(90vw,64rem)] flex-col overflow-hidden rounded-lg bg-card shadow-2xl">
+      {data.truncated && (
+        <p className="shrink-0 border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+          Showing the first 2 MB — download the file to see the rest.
+        </p>
+      )}
+      <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed">
+        {data.content || '(empty file)'}
+      </pre>
+    </div>
+  )
+}
+
+/** AudioPreview wraps a native audio player in a card, since a bare control on a
+ *  dark backdrop reads as nothing. */
+function AudioPreview({ entry, url, onError }: { entry: Entry; url: string; onError: () => void }) {
+  const { icon: Icon, color } = entryKind(entry)
+  return (
+    <div className="flex w-[min(90vw,28rem)] flex-col items-center gap-4 rounded-xl bg-card p-8">
+      <Icon className={`size-16 ${color}`} />
+      <p className="max-w-full truncate text-sm font-medium">{entry.name}</p>
+      <audio src={url} controls autoPlay className="w-full" onError={onError} />
     </div>
   )
 }
