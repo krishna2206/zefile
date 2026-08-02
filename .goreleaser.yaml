@@ -29,6 +29,13 @@ archives:
 checksum:
   name_template: checksums.txt
 
+release:
+  # release-please owns the GitHub release and its notes; goreleaser only
+  # attaches the built binaries to it. Without append it would refuse to touch
+  # a release that already exists, which is exactly the one release-please just
+  # created.
+  mode: append
+
 changelog:
   # Grouped rather than a flat list: a release note is read by someone deciding
   # whether to upgrade, and a security fix must not be buried among renames.
