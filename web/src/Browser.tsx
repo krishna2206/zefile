@@ -501,7 +501,9 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
   const download = useCallback(async (entry: Entry) => {
     try {
       const { url } = await api.downloadLink(entry.path)
-      window.location.href = url
+      // Force an attachment: the signed link serves previewable types inline,
+      // which is what the preview overlay wants but not a Download click.
+      window.location.href = url + (url.includes('?') ? '&' : '?') + 'download=1'
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Could not build a download link.')
     }

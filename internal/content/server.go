@@ -110,7 +110,11 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	s.setHeaders(w, p, info.Size)
+	// ?download=1 forces an attachment, so the same signed link serves a preview
+	// inline and a real download when the interface asks for one. The flag rides
+	// in the query, not the signed token, so it changes nothing about access.
+	forceDownload := r.URL.Query().Get("download") == "1"
+	s.setHeaders(w, p, info.Size, forceDownload)
 
 	// ServeContent handles conditional requests and the whole of RFC 9110's
 	// range grammar: open ranges, suffix ranges, unsatisfiable ranges, and the
@@ -319,7 +323,7 @@ func (s *Server) serveShareFile(w http.ResponseWriter, r *http.Request, ctx cont
 		_ = s.shares.RecordDownload(ctx, shareID, clientIP(r), r.UserAgent())
 	}
 
-	s.setHeaders(w, p, info.Size)
+	s.setHeaders(w, p, info.Size, r.URL.Query().Get("download") == "1")
 	http.ServeContent(w, r.WithContext(ctx), p.Name(), info.ModTime, file)
 }
 
@@ -536,8 +540,9 @@ func (s *Server) open(ctx context.Context, p storage.Path) (storage.File, storag
 	return file, info, nil
 }
 
-// setHeaders decides how a browser is allowed to treat the file.
-func (s *Server) setHeaders(w http.ResponseWriter, p storage.Path, size int64) {
+// setHeaders decides how a browser is allowed to treat the file. When
+// forceDownload is set the file is always an attachment, whatever its type.
+func (s *Server) setHeaders(w http.ResponseWriter, p storage.Path, size int64, forceDownload bool) {
 	// Without this, a browser may ignore the declared type and guess from the
 	// bytes — which is how a file uploaded as text ends up executed as script.
 	w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -552,7 +557,7 @@ func (s *Server) setHeaders(w http.ResponseWriter, p storage.Path, size int64) {
 	}
 	w.Header().Set("Content-Type", contentType)
 
-	if s.inlineAllowed(contentType) {
+	if !forceDownload && s.inlineAllowed(contentType) {
 		w.Header().Set("Content-Disposition", "inline; filename*=UTF-8''"+encodeFilename(p.Name()))
 	} else {
 		w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+encodeFilename(p.Name()))
