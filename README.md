@@ -59,6 +59,8 @@ codebase except the lessons it documented.
   database server.
 - **Sessions that actually end.** Opaque server-side tokens, never JWT. Logging
   out revokes the token immediately.
+- **API tokens** for scripts, CI and integrations. A token carries your own
+  permissions, is shown once, and can be revoked at any time.
 - **No telemetry.** No usage metrics, no update checks, no outbound request you
   did not ask for.
 
@@ -72,6 +74,42 @@ Stated plainly so nobody has to ask:
 - No bidirectional desktop sync client
 
 Zefile aims to be the File Browser that should have existed, not a Nextcloud alternative.
+
+## API
+
+Everything the interface does is a plain JSON API under `/api/v1`. A browser
+authenticates with an HttpOnly session cookie; a program authenticates with an
+**API token** it sends as a bearer credential.
+
+Create one under **Settings → API tokens**. It is shown once, at creation — store
+it somewhere safe. A token acts with the full authority of the account that made
+it: the same permissions and the same file and folder access, resolved fresh on
+every request. Changing that account's rights takes effect on its tokens
+immediately; revoking the token, disabling or deleting the account cuts it off at
+once. Tokens are recognisable by their `zefile_live_` prefix, so a leaked one is
+easy to spot in a log or a repository.
+
+```sh
+TOKEN=zefile_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# List a directory
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://files.example.com/api/v1/fs?path=/"
+
+# Get a short-lived signed download link for a file, then fetch it
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://files.example.com/api/v1/fs/link?path=/reports/q3.pdf"
+
+# Create a folder
+curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"path":"/backups"}' \
+  "https://files.example.com/api/v1/fs/dirs"
+```
+
+Uploads use the [tus](https://tus.io/) resumable protocol under `/api/v1/uploads`,
+so a large transfer that drops can pick up where it left off. The full surface —
+listing, search, move, copy, trash, shares, uploads — is described in the design
+document below.
 
 ## Stack
 
