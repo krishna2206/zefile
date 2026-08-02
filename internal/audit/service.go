@@ -42,6 +42,8 @@ const (
 	ActionTrashRestored    = "trash.restored"
 	ActionTrashPurged      = "trash.purged"
 	ActionTrashEmptied     = "trash.emptied"
+	ActionTokenCreated     = "token.created"
+	ActionTokenRevoked     = "token.revoked"
 )
 
 // Entry is one recorded action.

@@ -185,6 +185,14 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		writeProblem(w, r, http.StatusUnauthorized, CodeUnauthenticated,
 			"Not signed in", "Your session is no longer valid.")
 
+	case errors.Is(err, auth.ErrInvalidToken):
+		writeProblem(w, r, http.StatusUnauthorized, CodeUnauthenticated,
+			"Invalid token", "This API token is unknown, expired, or revoked.")
+
+	case errors.Is(err, auth.ErrTokenNotFound):
+		writeProblem(w, r, http.StatusNotFound, CodeNotFound,
+			"No such token", "This API token does not exist.")
+
 	case errors.Is(err, auth.ErrAlreadySetUp):
 		writeProblem(w, r, http.StatusConflict, CodeSetupClosed,
 			"Already set up", "This instance already has an account.")

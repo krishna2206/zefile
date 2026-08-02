@@ -89,6 +89,17 @@ export type SessionInfo = {
   last_seen_at: string
 }
 
+/** ApiToken is a long-lived credential for programmatic access. The plaintext
+ *  is returned only once, at creation; afterwards only the prefix identifies it. */
+export type ApiToken = {
+  id: number
+  name: string
+  prefix: string
+  created_at: string
+  last_used_at?: string
+  expires_at?: string
+}
+
 /** TrashItem is an entry sitting in the trash, remembering where to restore it. */
 export type TrashItem = {
   id: number
@@ -186,6 +197,16 @@ export const api = {
   revokeSession: (id: number) => request<void>(`/api/v1/auth/sessions/${id}`, { method: 'DELETE' }),
   revokeOtherSessions: () =>
     request<void>('/api/v1/auth/sessions/revoke-others', { method: 'POST' }),
+
+  // API tokens. A token acts with the full authority of the account that made
+  // it; the plaintext comes back only from createToken and is never shown again.
+  listTokens: () => request<{ tokens: ApiToken[] }>('/api/v1/tokens'),
+  createToken: (name: string, expiresInDays: number) =>
+    request<{ token: string; info: ApiToken }>('/api/v1/tokens', {
+      method: 'POST',
+      body: JSON.stringify({ name, expires_in_days: expiresInDays }),
+    }),
+  revokeToken: (id: number) => request<void>(`/api/v1/tokens/${id}`, { method: 'DELETE' }),
 
   // Invitations. Accepting is public (the account does not exist yet); creating,
   // listing and revoking are admin-only and the server enforces it.

@@ -127,6 +127,15 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			return
 		}
 
+		// An API token carries its namespace in the value itself, so the kind
+		// of credential is known before any lookup. This keeps the two paths
+		// from ever being confused: a session token cannot be presented as a
+		// bearer API token, nor the reverse.
+		if strings.HasPrefix(token, auth.APIPrefix) {
+			s.serveWithAPIToken(w, r, token, next)
+			return
+		}
+
 		session, user, err := s.auth.Lookup(r.Context(), token)
 		if err != nil {
 			if errors.Is(err, auth.ErrInvalidSession) {
@@ -150,6 +159,34 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		s.auth.Touch(ctx, session.ID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// serveWithAPIToken authenticates a request bearing a zefile_live_ token.
+//
+// It resolves to the same subject a session would, so every downstream
+// permission check behaves identically no matter how the caller arrived: a
+// token inherits the full authority of the account that owns it, including its
+// file and folder access. There is no session row, so the caller carries a
+// zero Session — the session-management endpoints a token might reach then act
+// on id 0, which matches nothing.
+func (s *Server) serveWithAPIToken(w http.ResponseWriter, r *http.Request, token string, next http.Handler) {
+	apiToken, user, err := s.auth.LookupAPIToken(r.Context(), token)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	subject, err := s.acl.LoadSubject(r.Context(), user.ID, user.IsAdmin)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	ctx := acl.NewContext(r.Context(), subject)
+	ctx = withUser(ctx, user, auth.Session{})
+
+	s.auth.TouchAPIToken(ctx, apiToken.ID)
+	next.ServeHTTP(w, r.WithContext(ctx))
 }
 
 type userKey struct{}

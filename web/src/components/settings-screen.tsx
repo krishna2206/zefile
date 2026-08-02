@@ -7,6 +7,7 @@ import { formatRelativeTime } from '@/lib/files'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { TokensSection } from '@/components/tokens-section'
 
 /** deviceLabel turns a user-agent into a short, human name. It is best-effort:
  *  a hint about which session is which, not a precise fingerprint. */
@@ -56,6 +57,7 @@ export function SettingsScreen({ me, onSignedOut }: { me: User; onSignedOut: () 
           </section>
 
           <PasswordSection />
+          <TokensSection />
           <SessionsSection onSignedOut={onSignedOut} />
         </div>
       </div>

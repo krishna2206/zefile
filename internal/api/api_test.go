@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1261,6 +1262,95 @@ func TestAuditIsAdminOnly(t *testing.T) {
 	c.token = bobToken
 	if resp, _ := c.do(http.MethodGet, "/api/v1/audit", nil); resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("non-admin audit = %d, want 403", resp.StatusCode)
+	}
+}
+
+func TestAPITokenAuthenticates(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp() // admin session token in c.token
+
+	// Mint a token for this account.
+	created := decode[struct {
+		Token string `json:"token"`
+		Info  struct {
+			ID     int64  `json:"id"`
+			Name   string `json:"name"`
+			Prefix string `json:"prefix"`
+		} `json:"info"`
+	}](t, func() []byte {
+		resp, raw := c.do(http.MethodPost, "/api/v1/tokens", map[string]any{"name": "backup"})
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create token = %d: %s", resp.StatusCode, raw)
+		}
+		return raw
+	}())
+
+	if !strings.HasPrefix(created.Token, "zefile_live_") {
+		t.Fatalf("token %q lacks the zefile_live_ prefix", created.Token)
+	}
+	if created.Info.Prefix == "" || strings.Contains(created.Info.Prefix, created.Token[20:]) {
+		t.Fatalf("prefix %q should be a short display fragment, not the full secret", created.Info.Prefix)
+	}
+
+	// Swap the session cookie for the API token: it must authenticate the same
+	// account, reaching an authenticated endpoint.
+	c.token = created.Token
+	if resp, raw := c.do(http.MethodGet, "/api/v1/fs?path=/", nil); resp.StatusCode != http.StatusOK {
+		t.Fatalf("listing with API token = %d: %s", resp.StatusCode, raw)
+	}
+
+	// The token appears in its owner's list, showing only the prefix.
+	list := decode[struct {
+		Tokens []struct {
+			ID     int64  `json:"id"`
+			Name   string `json:"name"`
+			Prefix string `json:"prefix"`
+		} `json:"tokens"`
+	}](t, mustGet(c, "/api/v1/tokens"))
+	if len(list.Tokens) != 1 || list.Tokens[0].Name != "backup" {
+		t.Fatalf("token list = %+v, want one named backup", list.Tokens)
+	}
+}
+
+func TestAPITokenRevocation(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+
+	created := decode[struct {
+		Token string `json:"token"`
+		Info  struct {
+			ID int64 `json:"id"`
+		} `json:"info"`
+	}](t, func() []byte {
+		_, raw := c.do(http.MethodPost, "/api/v1/tokens", map[string]any{"name": "ci"})
+		return raw
+	}())
+
+	// Revoke it (still using the admin session).
+	if resp, raw := c.do(http.MethodDelete, "/api/v1/tokens/"+strconv.FormatInt(created.Info.ID, 10), nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("revoke = %d: %s", resp.StatusCode, raw)
+	}
+
+	// The revoked token no longer authenticates.
+	c.token = created.Token
+	if resp, _ := c.do(http.MethodGet, "/api/v1/fs?path=/", nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("revoked token = %d, want 401", resp.StatusCode)
+	}
+}
+
+func TestAPITokenInvalidIsRejected(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+
+	c.token = "zefile_live_notarealtoken"
+	if resp, _ := c.do(http.MethodGet, "/api/v1/fs?path=/", nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("bogus token = %d, want 401", resp.StatusCode)
 	}
 }
 

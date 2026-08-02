@@ -17,6 +17,7 @@ type Querier interface {
 	// Backs first-run detection: an instance with no account shows the setup link
 	// rather than a sign-in form.
 	CountUsers(ctx context.Context) (int64, error)
+	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateGroup(ctx context.Context, arg CreateGroupParams) (Group, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreateJob(ctx context.Context, arg CreateJobParams) (Job, error)
@@ -43,6 +44,11 @@ type Querier interface {
 	// separately by the caller.
 	DeleteUser(ctx context.Context, id int64) error
 	FinishJob(ctx context.Context, arg FinishJobParams) error
+	// The lookup performed on every request that arrives with a zefile_live_ token.
+	// Expiry and revocation are filtered here, alongside the account being enabled,
+	// so a caller cannot present a token whose owner has been disabled. A NULL
+	// expires_at means the token never expires.
+	GetAPITokenByHash(ctx context.Context, arg GetAPITokenByHashParams) (GetAPITokenByHashRow, error)
 	GetFileOwner(ctx context.Context, path string) (FileOwner, error)
 	// Batched so that listing a directory costs one query rather than one per entry.
 	GetFileOwnersForPaths(ctx context.Context, paths []string) ([]FileOwner, error)
@@ -71,6 +77,9 @@ type Querier interface {
 	// Backs the permissions screen: everything granted at one exact path.
 	ListACLForPath(ctx context.Context, path string) ([]Acl, error)
 	ListACLForUser(ctx context.Context, subjectID int64) ([]Acl, error)
+	// The management list. Revoked tokens are dropped so the screen shows only what
+	// is still live; the plaintext is never held, so only the prefix is shown.
+	ListAPITokensForUser(ctx context.Context, userID int64) ([]ApiToken, error)
 	// Newest first, keyset-paginated by id (strictly decreasing). Pass a large id
 	// for the first page. The actor's name is joined in; it is null when the account
 	// was since deleted, which the entry still records by id and ip.
@@ -104,6 +113,9 @@ type Querier interface {
 	// A job left 'running' by a crash is reset so the worker picks it up again on
 	// the next start; its own idempotent construction makes the retry safe.
 	RequeueRunningJobs(ctx context.Context) error
+	// Scoped to the owner so one account cannot revoke another's token by guessing
+	// an id. execrows lets the handler answer 404 when nothing matched.
+	RevokeAPITokenForUser(ctx context.Context, arg RevokeAPITokenForUserParams) (int64, error)
 	RevokeAllSessionsForUser(ctx context.Context, arg RevokeAllSessionsForUserParams) error
 	// Signs the account out everywhere but the session making the request.
 	RevokeOtherSessionsForUser(ctx context.Context, arg RevokeOtherSessionsForUserParams) error
@@ -115,6 +127,9 @@ type Querier interface {
 	SetFileOwner(ctx context.Context, arg SetFileOwnerParams) error
 	SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error
 	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) error
+	// Records use for the "last used" column. Best-effort, like session touch: a
+	// lost timestamp must never fail an otherwise-valid request.
+	TouchAPIToken(ctx context.Context, arg TouchAPITokenParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	UpdateJobProgress(ctx context.Context, arg UpdateJobProgressParams) error
 	UpdateUploadOffset(ctx context.Context, arg UpdateUploadOffsetParams) error
