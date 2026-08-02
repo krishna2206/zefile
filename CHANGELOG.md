@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.6.0](https://github.com/krishna2206/zefile/compare/v0.5.0...v0.6.0) (2026-08-02)
+
+
+### Features
+
+* account menu in the sidebar footer ([73f693b](https://github.com/krishna2206/zefile/commit/73f693b31fa36c1f067606c22484be05753f45d8))
+* account settings — change password and manage sessions ([5d40ab9](https://github.com/krishna2206/zefile/commit/5d40ab96f4ee2dd9bba07f23b7914ead71306a50))
+* API tokens for programmatic access ([892ebdd](https://github.com/krishna2206/zefile/commit/892ebdd5eb3fffa51c0cde4b7e6a4746de573048))
+* audit log of who did what ([242d5a3](https://github.com/krishna2206/zefile/commit/242d5a3bb7784d671afc6f4f3493a807b7fbd1ca))
+* download a selection or a folder as a zip ([63f4ca5](https://github.com/krishna2206/zefile/commit/63f4ca57fffc8a5249b5a7b8a9314a6ede76de00))
+* preview video, audio and text as well as images and PDF ([a04b034](https://github.com/krishna2206/zefile/commit/a04b034431d02acb220f784eca220b8eeebd369e))
+* user groups for granting access to a team at once ([2ec1e81](https://github.com/krishna2206/zefile/commit/2ec1e812545ad77893a5d02d9cf4fc146be64c86))
+
+
+### Bug Fixes
+
+* Download saves the file instead of opening it inline ([0e0a2d6](https://github.com/krishna2206/zefile/commit/0e0a2d6fa03f35a63c2a9f2b3dbdedb3d4972190))
+* stamp the version from version.txt when none is passed to the build ([119558c](https://github.com/krishna2206/zefile/commit/119558ccbbeca3dbc8ff0f639f2e247ba855c22b))
+* the context-menu Download actually downloads ([41cd63a](https://github.com/krishna2206/zefile/commit/41cd63a74efade6be019361eddd3f927302f21b0))
+
 ## [0.5.0](https://github.com/krishna2206/zefile/compare/v0.4.0...v0.5.0) (2026-07-31)
 
 
