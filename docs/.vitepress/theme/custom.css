@@ -102,6 +102,25 @@
   font-weight: 640;
 }
 
+/* Logo set just before the hero name, in place of a separate hero image. */
+.VPHero .name {
+  display: inline-flex;
+  align-items: center;
+}
+.VPHero .name::before {
+  content: '';
+  display: inline-block;
+  flex: none;
+  /* The logo.png is cropped tight to the folder, so a size close to the
+     wordmark reads well. Adjust this one number to taste. */
+  width: 0.95em;
+  height: 0.95em;
+  margin-right: 0.35em;
+  /* base is /zefile/; update this if the base path changes. */
+  background: url('/zefile/logo.png') center / contain no-repeat;
+  border-radius: 6px;
+}
+
 /* A hairline under section headings, echoing the design documents' rules. */
 .vp-doc h2 {
   border-top: 1px solid var(--vp-c-divider);

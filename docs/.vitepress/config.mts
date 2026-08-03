@@ -11,11 +11,21 @@ export default defineConfig({
   lastUpdated: true,
   cleanUrls: true,
 
+  // Favicon set generated from the logo. Hrefs include the base (/zefile/);
+  // update them if the base path changes.
+  head: [
+    ['link', { rel: 'icon', type: 'image/x-icon', href: '/zefile/favicon.ico' }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/zefile/favicon-32.png' }],
+    ['link', { rel: 'apple-touch-icon', href: '/zefile/apple-touch-icon.png' }],
+  ],
+
   // The design documents are internal HTML artifacts kept in docs/design/. They
   // are not part of the built site; VitePress only routes Markdown.
   srcExclude: ['design/**', '**/README.md'],
 
   themeConfig: {
+    logo: '/logo.png',
+
     nav: [
       { text: 'Guide', link: '/guide/introduction' },
       { text: 'Features', link: '/features/users-and-groups' },
