@@ -20,6 +20,7 @@ import {
   DownloadSimple as Download,
   Eye,
   FolderOpen,
+  House,
   Key,
   Scissors,
   SquaresFour as LayoutGrid,
@@ -1309,7 +1310,8 @@ function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string
   const segments = path === '/' ? [] : path.slice(1).split('/')
   return (
     <nav aria-label="Location" className="flex items-center gap-0.5 px-3 py-1.5">
-      <Button variant="ghost" size="sm" onClick={() => onNavigate('/')}>
+      <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => onNavigate('/')}>
+        <House className="size-4" aria-hidden />
         Home
       </Button>
       {segments.map((segment, index) => {

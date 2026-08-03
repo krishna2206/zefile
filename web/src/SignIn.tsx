@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ThemeToggle } from '@/components/theme-toggle'
+import logoUrl from '@/assets/logo.png'
 
 type Props = { mode: 'login' | 'setup' | 'accept'; onDone: () => void }
 
@@ -148,6 +149,7 @@ export function SignIn({ mode, onDone }: Props) {
       <ThemeToggle className="absolute right-4 top-4" />
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-1 text-center">
+          <img src={logoUrl} alt="" className="mx-auto mb-3 h-16 w-auto" />
           <h1 className="font-serif text-4xl font-semibold tracking-tight">Zefile</h1>
           <p className="text-sm text-muted-foreground">{subtitle}</p>
         </div>

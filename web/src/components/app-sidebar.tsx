@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { NewButton, type CreateActions } from '@/components/create-menu'
+import logoUrl from '@/assets/logo.png'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,7 +56,8 @@ export function Sidebar({ user, space, section, create, canCreate, version, onHo
     // Phosphor's default regular weight.
     <IconContext.Provider value={{ weight: 'duotone' }}>
     <aside className="flex w-60 shrink-0 flex-col border-r bg-card/40">
-      <div className="flex h-14 items-center px-5">
+      <div className="flex h-14 items-center gap-2 px-5">
+        <img src={logoUrl} alt="" className="h-5 w-auto" />
         <span className="font-serif text-xl font-semibold tracking-tight">Zefile</span>
       </div>
 
