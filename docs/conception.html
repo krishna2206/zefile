@@ -483,7 +483,7 @@
       <span><b>Backend</b> Go</span>
       <span><b>Licence</b> Apache-2.0</span>
       <span><b>Statut</b> prêt pour l’implémentation</span>
-      <span><b>Dernière révision</b> 29 juillet 2026</span>
+      <span><b>Dernière révision</b> 2 août 2026</span>
     </div>
   </header>
 
@@ -622,7 +622,7 @@
           </div>
           <div class="scope-row">
             <div class="name">Jetons d’API <span class="chip locked">Verrouillé</span></div>
-            <div class="desc">Portée restreinte, révocables individuellement, dernier usage visible.</div>
+            <div class="desc">Autorité complète du compte, révocables individuellement, dernier usage visible.</div>
           </div>
         </div>
 
@@ -765,7 +765,7 @@
         <p>Les deux se résolvent vers le même contexte utilisateur et traversent les mêmes contrôles. Un jeton ne détient jamais plus de droits que l’utilisateur qui l’a créé.</p>
 
         <h3><span class="sub">6.2</span>Jetons d’API</h3>
-        <p>Portées&nbsp;: <code>files:read</code>, <code>files:write</code>, <code>files:delete</code>, <code>shares:manage</code>, <code>admin</code>. Un client mobile n’a pas besoin de <code>admin</code>&nbsp;; un script de sauvegarde se contente de <code>files:read</code>.</p>
+        <p>Chaque utilisateur crée ses propres jetons, pour un script, une intégration ou la CI. Un jeton porte l’<strong>autorité complète du compte qui l’a créé</strong>&nbsp;— mêmes permissions, mêmes accès fichiers, résolus à chaque requête&nbsp;: modifier les droits du compte prend effet aussitôt sur ses jetons. <strong>Pas de portées</strong>&nbsp;: le modèle est délibérément simple, comme chez Dokploy. L’atténuation d’une fuite passe par la révocation du jeton concerné&nbsp;— et par le fait d’en créer un par usage&nbsp;— non par la restriction de ses droits.</p>
         <p>Forme <code>zefile_live_&lt;aléatoire&gt;</code>&nbsp;— un préfixe explicite et non ambigu, pour que les outils de détection de secrets puissent le repérer dans un dépôt ou un journal. Seuls le haché et un préfixe court sont conservés&nbsp;; la valeur complète n’est affichée qu’une fois, à la création. Chaque jeton expose sa date de dernier usage, pour repérer et révoquer ce qui traîne.</p>
 
         <h3><span class="sub">6.3</span>Journal d’audit</h3>

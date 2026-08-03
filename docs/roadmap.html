@@ -170,7 +170,7 @@
 
     <div class="rule warn">
       <span class="label">État — août 2026</span>
-      <p>La fondation, le multi-utilisateur (comptes, invitations, permissions par chemin, <b>groupes</b>), les partages, la corbeille, la file de tâches, la recherche et les aperçus sont <b>livrés</b>, ainsi que le <b>journal d’audit</b>, les <b>jetons d’API</b> (autorité pleine, portées à venir), le <b>téléchargement groupé en zip</b> et la <b>distribution</b> (images multi-arch sur GHCR, binaires de Releases). L’instance tourne en production (<b>v0.6.0</b>). Les lots encore ouverts&nbsp;— double facteur (TOTP), portées de jetons, téléchargement depuis une URL, extraction d’archives, empreintes, sauvegarde, migration, contrat d’API publié et client mobile&nbsp;— sont marqués comme tels ci-dessous.</p>
+      <p>La fondation, le multi-utilisateur (comptes, invitations, permissions par chemin, <b>groupes</b>), les partages, la corbeille, la file de tâches, la recherche et les aperçus sont <b>livrés</b>, ainsi que le <b>journal d’audit</b>, les <b>jetons d’API</b>, le <b>téléchargement groupé en zip</b> et la <b>distribution</b> (images multi-arch sur GHCR, binaires de Releases). L’instance tourne en production (<b>v0.6.0</b>). Les lots encore ouverts&nbsp;— double facteur (TOTP), téléchargement depuis une URL, extraction d’archives, empreintes, sauvegarde, migration, contrat d’API publié et client mobile&nbsp;— sont marqués comme tels ci-dessous.</p>
     </div>
   </div>
 
@@ -347,11 +347,11 @@
         <div class="done"><b>Terminé quand</b> l’interface explique laquelle des deux formes convient à un gestionnaire de téléchargement.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">3.5</span>
-        <div class="title">Jetons d’API<span class="status" style="background:var(--ink-3)">Partiel</span></div>
-        <div class="body">Affichage unique à la création, préfixe <code>zefile_live_</code>, date de dernier usage, révocation individuelle&nbsp;: <strong>livrés</strong>. Chaque jeton porte pour l’instant l’autorité complète de son compte&nbsp;; les <strong>portées</strong> (lecture seule, etc.) restent à faire.</div>
-        <div class="done"><b>Terminé quand</b> un jeton en lecture seule se voit refuser toute écriture, y compris par un chemin détourné.</div>
+        <div class="title">Jetons d’API<span class="status">Fait</span></div>
+        <div class="body">Chaque compte crée ses propres jetons <code>zefile_live_</code> pour un script, une intégration ou la CI. Autorité complète du compte, résolue à chaque requête&nbsp;; affichage unique à la création, date de dernier usage, révocation individuelle. Pas de portées&nbsp;: modèle Dokploy assumé — l’atténuation d’une fuite passe par la révocation du jeton, pas par sa restriction.</div>
+        <div class="done"><b>Terminé quand</b> modifier les droits d’un compte prend effet aussitôt sur ses jetons, et qu’en révoquer un coupe l’accès à la requête suivante.</div>
       </div>
 
       <div class="item shipped">
