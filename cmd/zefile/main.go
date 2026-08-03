@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -40,6 +41,7 @@ const shutdownGrace = 30 * time.Second
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
+	flag.Usage = usage
 	flag.Parse()
 
 	if *showVersion {
@@ -49,10 +51,82 @@ func main() {
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
-	if err := run(); err != nil {
-		slog.Error("zefile failed to start", "error", err)
+	// The default command is to serve. backup and restore are maintenance
+	// commands run against the same instance's configuration, so they read the
+	// database location from the same environment the server does.
+	var err error
+	switch cmd := flag.Arg(0); cmd {
+	case "", "serve":
+		err = run()
+	case "backup":
+		err = runBackup(flag.Arg(1))
+	case "restore":
+		err = runRestore(flag.Arg(1))
+	default:
+		usage()
+		err = fmt.Errorf("unknown command %q", cmd)
+	}
+	if err != nil {
+		slog.Error("zefile: command failed", "error", err)
 		os.Exit(1)
 	}
+}
+
+func usage() {
+	fmt.Fprint(os.Stderr, `zefile — self-hosted file server
+
+Usage:
+  zefile [serve]              start the server (default)
+  zefile backup [file]        write a consistent database snapshot
+  zefile restore <file>       replace the database with a snapshot (stop the server first)
+  zefile -version             print the version
+
+backup and restore read `+config.EnvConfigDir+` from the environment.
+`)
+}
+
+// runBackup writes a snapshot of the database. With no destination it lands in a
+// timestamped file under <config>/backups, which is the common case for a cron.
+func runBackup(dest string) error {
+	dir := os.Getenv(config.EnvConfigDir)
+	if dir == "" {
+		return fmt.Errorf("%s is not set", config.EnvConfigDir)
+	}
+	if dest == "" {
+		dest = filepath.Join(dir, "backups", "zefile-"+time.Now().Format("2006-01-02-150405")+".db")
+	}
+
+	if err := db.BackupTo(context.Background(), db.DBPath(dir), dest); err != nil {
+		return err
+	}
+	if info, err := os.Stat(dest); err == nil {
+		fmt.Printf("backup written to %s (%d KiB)\n", dest, info.Size()/1024)
+	} else {
+		fmt.Printf("backup written to %s\n", dest)
+	}
+	return nil
+}
+
+// runRestore replaces the database with a snapshot. It validates the snapshot
+// and copies the current database aside before overwriting it.
+func runRestore(src string) error {
+	if src == "" {
+		return errors.New("usage: zefile restore <backup-file>")
+	}
+	dir := os.Getenv(config.EnvConfigDir)
+	if dir == "" {
+		return fmt.Errorf("%s is not set", config.EnvConfigDir)
+	}
+
+	report, err := db.RestoreFrom(context.Background(), dir, src)
+	if err != nil {
+		return err
+	}
+	if report.PreviousSaved != "" {
+		fmt.Printf("previous database saved to %s\n", report.PreviousSaved)
+	}
+	fmt.Printf("restored %s from %s — restart zefile to use it\n", db.DBPath(dir), src)
+	return nil
 }
 
 func run() error {

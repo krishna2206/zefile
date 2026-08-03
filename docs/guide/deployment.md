@@ -33,8 +33,33 @@ log, this is a known trade-off favouring safety.
 
 ## Backups
 
-Back up the **config volume** (the database) and your **data directory**. The
-database holds every account, permission, share and token — losing it loses all
-of that even though the files themselves survive. A dedicated backup/restore
-command is on the roadmap; until then, snapshot the config volume while the
-container is stopped, or copy the SQLite file with the container's own tooling.
+Back up two things separately: your **data directory** (the files — use your
+usual disk backup) and the **database**, which holds every account, permission,
+share and token. Losing the database loses all of that even though the files
+survive, so it is the critical half.
+
+Zefile has built-in commands for the database. `backup` is safe to run while the
+server is live — it takes a consistent snapshot with SQLite's `VACUUM INTO`:
+
+```sh
+docker compose exec zefile zefile backup
+# → /config/backups/zefile-2026-08-03-020000.db
+```
+
+Pass a path to choose where it lands — handy for a nightly cron:
+
+```sh
+docker compose exec zefile zefile backup /config/backups/nightly.db
+```
+
+The snapshot is a self-contained SQLite file you can copy off the host.
+
+To restore, **stop the server first** — replacing the database under a running
+instance would corrupt it. `restore` validates the snapshot and copies the
+current database aside (as `zefile.db.pre-restore-…`) before replacing it:
+
+```sh
+docker compose stop zefile
+docker compose run --rm zefile zefile restore /config/backups/nightly.db
+docker compose start zefile
+```
