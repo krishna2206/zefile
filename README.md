@@ -79,42 +79,6 @@ Stated plainly so nobody has to ask:
 
 Zefile aims to be the File Browser that should have existed, not a Nextcloud alternative.
 
-## API
-
-Everything the interface does is a plain JSON API under `/api/v1`. A browser
-authenticates with an HttpOnly session cookie; a program authenticates with an
-**API token** it sends as a bearer credential.
-
-Create one under **Settings → API tokens**. It is shown once, at creation — store
-it somewhere safe. A token acts with the full authority of the account that made
-it: the same permissions and the same file and folder access, resolved fresh on
-every request. Changing that account's rights takes effect on its tokens
-immediately; revoking the token, disabling or deleting the account cuts it off at
-once. Tokens are recognisable by their `zefile_live_` prefix, so a leaked one is
-easy to spot in a log or a repository.
-
-```sh
-TOKEN=zefile_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-
-# List a directory
-curl -H "Authorization: Bearer $TOKEN" \
-  "https://files.example.com/api/v1/fs?path=/"
-
-# Get a short-lived signed download link for a file, then fetch it
-curl -H "Authorization: Bearer $TOKEN" \
-  "https://files.example.com/api/v1/fs/link?path=/reports/q3.pdf"
-
-# Create a folder
-curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"path":"/backups"}' \
-  "https://files.example.com/api/v1/fs/dirs"
-```
-
-Uploads use the [tus](https://tus.io/) resumable protocol under `/api/v1/uploads`,
-so a large transfer that drops can pick up where it left off. The full surface —
-listing, search, move, copy, trash, shares, uploads — is described in the design
-document below.
-
 ## Stack
 
 Go 1.25 · SQLite ([`modernc.org/sqlite`](https://pkg.go.dev/modernc.org/sqlite), pure Go) ·
@@ -123,20 +87,13 @@ React 19 + Vite · [shadcn/ui](https://ui.shadcn.com/) (Radix + Tailwind CSS 4) 
 
 ## Documentation
 
-User documentation — installation, configuration, features and the API — lives
-in [`docs/`](docs/) and is published as a [VitePress](https://vitepress.dev)
-site. Build it locally with `cd docs && pnpm install && pnpm dev`.
+Full documentation — installation, configuration, features and the API — lives at
+**[krishna2206.github.io/zefile](https://krishna2206.github.io/zefile/)**. The
+source is in [`docs/`](docs/) ([VitePress](https://vitepress.dev)); build it
+locally with `cd docs && pnpm install && pnpm dev`.
 
-## Design documents
-
-The design was written down before the code, and is kept in
-[`docs/design/`](docs/design/).
-
-| Document | Contents |
-| --- | --- |
-| [`docs/design/conception.html`](docs/design/conception.html) | Scope, architecture, data model, security, API, deployment |
-| [`docs/design/roadmap.html`](docs/design/roadmap.html) | The work plan and what has shipped |
-| [`docs/design/ui.html`](docs/design/ui.html) | Interface design, component inventory, states |
+The design documents that predate the code — scope, architecture, data model and
+interface — are kept in [`docs/design/`](docs/design/).
 
 ## Deploying
 
