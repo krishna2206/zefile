@@ -1,0 +1,110 @@
+/*
+ * Zefile documentation theme.
+ *
+ * Maps the palette and typography of the design documents (docs/design/*.html)
+ * onto VitePress's CSS variables: warm paper ground, deep-green accent, serif
+ * display face for headings. Light and dark are the same two schemes the design
+ * documents use.
+ */
+
+:root {
+  /* Typography */
+  --vp-font-family-base: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --vp-font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --zf-font-display: "Charter", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+
+  /* Surfaces — light */
+  --vp-c-bg: #f4f5f2;        /* ground */
+  --vp-c-bg-alt: #ffffff;    /* surface */
+  --vp-c-bg-soft: #eceee9;
+  --vp-c-bg-elv: #ffffff;
+
+  /* Ink — light */
+  --vp-c-text-1: #191d1b;
+  --vp-c-text-2: #4c5652;
+  --vp-c-text-3: #79837e;
+
+  /* Lines — light */
+  --vp-c-divider: #dbdfd9;
+  --vp-c-border: #c3c9c1;
+  --vp-c-gutter: #dbdfd9;
+
+  /* Brand — deep green (light) */
+  --vp-c-brand-1: #2f5d50;
+  --vp-c-brand-2: #234840;
+  --vp-c-brand-3: #2f5d50;
+  --vp-c-brand-soft: #e2ece7;
+
+  /* Neutral set aligned to the paper palette */
+  --vp-c-default-1: #79837e;
+  --vp-c-default-2: #4c5652;
+  --vp-c-default-3: #c3c9c1;
+  --vp-c-default-soft: #eceee9;
+
+  /* Solid brand button: white text on green */
+  --vp-button-brand-bg: var(--vp-c-brand-3);
+  --vp-button-brand-hover-bg: var(--vp-c-brand-2);
+  --vp-button-brand-active-bg: var(--vp-c-brand-1);
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-hover-border: transparent;
+  --vp-button-brand-active-border: transparent;
+
+  /* Home hero: accent name, no gradient */
+  --vp-home-hero-name-color: var(--vp-c-brand-1);
+}
+
+.dark {
+  /* Surfaces — dark */
+  --vp-c-bg: #121614;        /* ground */
+  --vp-c-bg-alt: #1a201d;    /* surface */
+  --vp-c-bg-soft: #171c1a;
+  --vp-c-bg-elv: #1a201d;
+
+  /* Ink — dark */
+  --vp-c-text-1: #e6eae7;
+  --vp-c-text-2: #a9b3ae;
+  --vp-c-text-3: #7c8782;
+
+  /* Lines — dark */
+  --vp-c-divider: #2b3330;
+  --vp-c-border: #3c4642;
+  --vp-c-gutter: #2b3330;
+
+  /* Brand — mint (dark) */
+  --vp-c-brand-1: #74c3a6;
+  --vp-c-brand-2: #9ad6bf;
+  --vp-c-brand-3: #74c3a6;
+  --vp-c-brand-soft: #1c2a26;
+
+  --vp-c-default-1: #7c8782;
+  --vp-c-default-2: #a9b3ae;
+  --vp-c-default-3: #3c4642;
+  --vp-c-default-soft: #232a27;
+
+  /* Mint button reads better with dark ink on it */
+  --vp-button-brand-text: #121614;
+  --vp-button-brand-hover-bg: #9ad6bf;
+  --vp-button-brand-active-bg: #9ad6bf;
+}
+
+/* Serif display face for headings and the hero, as in the design documents. */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4,
+.VPHome .name,
+.VPHome .text,
+.VPHero .name,
+.VPHero .text {
+  font-family: var(--zf-font-display);
+  letter-spacing: -0.015em;
+  font-weight: 640;
+}
+
+/* A hairline under section headings, echoing the design documents' rules. */
+.vp-doc h2 {
+  border-top: 1px solid var(--vp-c-divider);
+  padding-top: 24px;
+  margin-top: 40px;
+}
