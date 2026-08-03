@@ -155,7 +155,7 @@
 <div class="shell">
 
   <header class="masthead">
-    <div class="eyebrow">Zefile · roadmap d'implémentation · v1.1</div>
+    <div class="eyebrow">Zefile · roadmap d'implémentation · v1.2</div>
     <h1>Roadmap d'implémentation</h1>
     <p class="standfirst">Découpage ordonné par dépendances techniques, sans échéance. Chaque élément est un lot de travail cohérent, avec son critère d’achèvement.</p>
   </header>
@@ -169,8 +169,8 @@
     </div>
 
     <div class="rule warn">
-      <span class="label">État — juillet 2026</span>
-      <p>La fondation, le multi-utilisateur (comptes, invitations, permissions par chemin, <b>groupes</b>), les partages, la corbeille, la file de tâches, la recherche et les aperçus sont <b>livrés</b>. L’instance tourne en production (<b>v0.5.0</b>). Les lots encore ouverts&nbsp;— journal d’audit, double facteur, jetons d’API, extraction d’archives, sauvegarde, migration&nbsp;— sont marqués comme tels ci-dessous.</p>
+      <span class="label">État — août 2026</span>
+      <p>La fondation, le multi-utilisateur (comptes, invitations, permissions par chemin, <b>groupes</b>), les partages, la corbeille, la file de tâches, la recherche et les aperçus sont <b>livrés</b>, ainsi que le <b>journal d’audit</b>, les <b>jetons d’API</b> (autorité pleine, portées à venir), le <b>téléchargement groupé en zip</b> et la <b>distribution</b> (images multi-arch sur GHCR, binaires de Releases). L’instance tourne en production (<b>v0.6.0</b>). Les lots encore ouverts&nbsp;— double facteur (TOTP), portées de jetons, téléchargement depuis une URL, extraction d’archives, empreintes, sauvegarde, migration, contrat d’API publié et client mobile&nbsp;— sont marqués comme tels ci-dessous.</p>
     </div>
   </div>
 
@@ -295,15 +295,15 @@
 
       <div class="item">
         <span class="id">2.5</span>
-        <div class="title">Double facteur et sessions</div>
-        <div class="body">TOTP à l’inscription et à la connexion. Écran des sessions actives avec révocation à distance et «&nbsp;déconnecter partout&nbsp;».</div>
+        <div class="title">Double facteur et sessions<span class="status" style="background:var(--ink-3)">Partiel</span></div>
+        <div class="body">Écran des sessions actives avec révocation à distance et «&nbsp;déconnecter partout&nbsp;»&nbsp;: <strong>livré</strong>. Le TOTP à l’inscription et à la connexion reste à faire.</div>
         <div class="done"><b>Terminé quand</b> révoquer une session depuis un autre appareil prend effet sur la requête suivante.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">2.6</span>
-        <div class="title">Journal d’audit</div>
-        <div class="body">Connexions et échecs, modifications de permissions, cycle de vie des jetons, suppressions de comptes et de fichiers. Consultation administrateur, conservation configurable.</div>
+        <div class="title">Journal d’audit<span class="status">Fait</span></div>
+        <div class="body">Connexions et échecs, modifications de permissions, cycle de vie des jetons, suppressions de comptes et de fichiers. Consultation administrateur paginée. La conservation configurable reste à ajouter.</div>
         <div class="done"><b>Terminé quand</b> toute action sensible laisse une trace horodatée et attribuée.</div>
       </div>
 
@@ -349,8 +349,8 @@
 
       <div class="item">
         <span class="id">3.5</span>
-        <div class="title">Jetons d’API</div>
-        <div class="body">Création avec portées, affichage unique à la création, préfixe <code>zefile_live_</code>, date de dernier usage, révocation individuelle.</div>
+        <div class="title">Jetons d’API<span class="status" style="background:var(--ink-3)">Partiel</span></div>
+        <div class="body">Affichage unique à la création, préfixe <code>zefile_live_</code>, date de dernier usage, révocation individuelle&nbsp;: <strong>livrés</strong>. Chaque jeton porte pour l’instant l’autorité complète de son compte&nbsp;; les <strong>portées</strong> (lecture seule, etc.) restent à faire.</div>
         <div class="done"><b>Terminé quand</b> un jeton en lecture seule se voit refuser toute écriture, y compris par un chemin détourné.</div>
       </div>
 
@@ -404,7 +404,7 @@
       <div class="item shipped">
         <span class="id">4.5</span>
         <div class="title">Aperçus<span class="status">Fait</span></div>
-        <div class="body">Images, vidéo avec navigation temporelle, audio, texte et code, Markdown, PDF. Rendu intégralement côté client dans une iframe cloisonnée&nbsp;: <strong>aucun analyseur de document côté serveur</strong>.</div>
+        <div class="body">Images, vidéo avec navigation temporelle, audio, PDF, et texte&nbsp;— code et Markdown compris&nbsp;— <strong>affiché en source, sans coloration syntaxique ni rendu</strong>. Tout côté client&nbsp;: <strong>aucun analyseur de document côté serveur</strong>.</div>
         <div class="done"><b>Terminé quand</b> les formats prévus s’affichent et que le backend n’a acquis aucune dépendance de parsing.</div>
       </div>
 
@@ -420,6 +420,13 @@
         <div class="title">Recherche<span class="status">Fait</span></div>
         <div class="body">Index FTS5 alimenté en tâche de fond, réconciliation périodique avec le disque puisque celui-ci fait foi. Noms normalisés en forme composée.</div>
         <div class="done"><b>Terminé quand</b> un fichier déposé en SSH devient trouvable, et qu’un nom accentué se trouve quelle que soit la forme saisie.</div>
+      </div>
+
+      <div class="item shipped">
+        <span class="id">4.8</span>
+        <div class="title">Téléchargement groupé (zip)<span class="status">Fait</span></div>
+        <div class="body">Une sélection ou un dossier entier se télécharge en une archive zip diffusée à la volée, sans compression (<code>zip.Store</code>)&nbsp;: le débit est borné par le disque et le réseau, pas par le CPU&nbsp;— là où File Browser rame. Zip64 automatique, aucun fichier temporaire.</div>
+        <div class="done"><b>Terminé quand</b> un dossier plus gros que la RAM se télécharge en zip sans que l’empreinte mémoire du service n’enfle.</div>
       </div>
 
     </div>
@@ -450,14 +457,14 @@
 
       <div class="item">
         <span class="id">5.3</span>
-        <div class="title">Interface aboutie</div>
-        <div class="body">Thème clair et sombre, navigation clavier complète, états vides et d’erreur soignés, glisser-déposer, palette de commandes.</div>
+        <div class="title">Interface aboutie<span class="status" style="background:var(--ink-3)">Partiel</span></div>
+        <div class="body">Thème clair et sombre, états vides et d’erreur soignés, glisser-déposer&nbsp;: <strong>livrés</strong>. La navigation clavier complète et la palette de commandes restent à faire.</div>
         <div class="done"><b>Terminé quand</b> toutes les opérations courantes sont réalisables sans souris.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">5.4</span>
-        <div class="title">Documentation et gouvernance</div>
+        <div class="title">Documentation et gouvernance<span class="status">Fait</span></div>
         <div class="body">README avec le périmètre hors scope écrit noir sur blanc, <code>SECURITY.md</code> et procédure de divulgation, <code>CONTRIBUTING.md</code> avec les jetons de design et la règle sur le code généré, documentation d’installation.</div>
         <div class="done"><b>Terminé quand</b> quelqu’un installe l’outil sans poser de question.</div>
       </div>
@@ -469,10 +476,10 @@
         <div class="done"><b>Terminé quand</b> une base File Browser réelle est importée sans perte de configuration d’accès.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">5.6</span>
-        <div class="title">Distribution</div>
-        <div class="body">Template Dokploy, images publiées sur GHCR, binaires de Releases, annonce.</div>
+        <div class="title">Distribution<span class="status">Fait</span></div>
+        <div class="body">Template Dokploy, images multi-arch (amd64 + arm64) publiées sur GHCR et binaires de Releases, coupées automatiquement par release-please à chaque version. L’annonce publique reste à faire.</div>
         <div class="done"><b>Terminé quand</b> l’installation type se fait en une composition et deux enregistrements DNS.</div>
       </div>
 
@@ -493,8 +500,8 @@
 
   <div class="colophon">
     <span>Zefile — roadmap d’implémentation</span>
-    <span>Version 1.1</span>
-    <span>29 juillet 2026</span>
+    <span>Version 1.2</span>
+    <span>2 août 2026</span>
     <span>Adossée au document de conception rév. 1.3</span>
   </div>
 
