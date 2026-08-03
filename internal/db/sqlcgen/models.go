@@ -86,6 +86,14 @@ type Job struct {
 	FinishedAt sql.NullInt64
 }
 
+type RecoveryCode struct {
+	ID        int64
+	UserID    int64
+	CodeHash  string
+	CreatedAt int64
+	UsedAt    sql.NullInt64
+}
+
 type Session struct {
 	ID         int64
 	UserID     int64

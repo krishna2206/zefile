@@ -94,6 +94,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/setup", s.handleSetupStatus)
 	mux.HandleFunc("POST /api/v1/setup", s.handleSetupComplete)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
+	// Resetting a forgotten password happens before signing in, so it is open.
+	mux.HandleFunc("POST /api/v1/auth/reset", s.handleResetPassword)
 
 	// Accepting an invitation happens before the account exists, so these two are
 	// open; creating and managing invitations is an admin action, below.
@@ -105,6 +107,8 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("POST /api/v1/auth/logout", s.handleLogout)
 	authed.HandleFunc("GET /api/v1/auth/me", s.handleMe)
 	authed.HandleFunc("POST /api/v1/auth/password", s.handleChangePassword)
+	authed.HandleFunc("GET /api/v1/auth/recovery", s.handleRecoveryStatus)
+	authed.HandleFunc("POST /api/v1/auth/recovery", s.handleRegenerateRecovery)
 	authed.HandleFunc("GET /api/v1/auth/sessions", s.handleListSessions)
 	authed.HandleFunc("POST /api/v1/auth/sessions/revoke-others", s.handleRevokeOtherSessions)
 	authed.HandleFunc("DELETE /api/v1/auth/sessions/{id}", s.handleRevokeSession)

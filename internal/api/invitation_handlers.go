@@ -148,10 +148,13 @@ func (s *Server) handleInvitationAccept(w http.ResponseWriter, r *http.Request) 
 
 	http.SetCookie(w, auth.SessionCookie(token, session.ExpiresAt, s.secureCookies))
 	s.auditAs(r, user.ID, audit.ActionUserJoined, user.Username, nil)
+
+	codes, _ := s.auth.GenerateRecoveryCodes(r.Context(), user.ID)
 	writeJSON(w, r, http.StatusCreated, sessionResponse{
-		User:      toUserResponse(user),
-		ExpiresAt: session.ExpiresAt,
-		Token:     token,
+		User:          toUserResponse(user),
+		ExpiresAt:     session.ExpiresAt,
+		Token:         token,
+		RecoveryCodes: codes,
 	})
 }
 

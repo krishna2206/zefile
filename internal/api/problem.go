@@ -177,6 +177,10 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		writeProblem(w, r, http.StatusUnauthorized, CodeInvalidCredentials,
 			"Invalid credentials", "The username or password is wrong.")
 
+	case errors.Is(err, auth.ErrInvalidRecovery):
+		writeProblem(w, r, http.StatusUnauthorized, CodeInvalidCredentials,
+			"Reset failed", "The username or recovery code is not valid.")
+
 	case errors.Is(err, auth.ErrRateLimited):
 		writeProblem(w, r, http.StatusTooManyRequests, CodeRateLimited,
 			"Too many attempts", "Too many recent failures. Try again later.")

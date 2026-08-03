@@ -14,6 +14,7 @@ type Querier interface {
 	// Atomically take the oldest pending job and mark it running. The single writer
 	// connection serialises this, so two workers could not claim the same row.
 	ClaimNextJob(ctx context.Context, startedAt sql.NullInt64) (Job, error)
+	CountUnusedRecoveryCodesForUser(ctx context.Context, userID int64) (int64, error)
 	// Backs first-run detection: an instance with no account shows the setup link
 	// rather than a sign-in form.
 	CountUsers(ctx context.Context) (int64, error)
@@ -21,6 +22,7 @@ type Querier interface {
 	CreateGroup(ctx context.Context, arg CreateGroupParams) (Group, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreateJob(ctx context.Context, arg CreateJobParams) (Job, error)
+	CreateRecoveryCode(ctx context.Context, arg CreateRecoveryCodeParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	// max_downloads stays in the table but is left NULL: the download-limit feature
 	// was removed, and the column is kept only to avoid a migration.
@@ -36,6 +38,8 @@ type Querier interface {
 	// Only an unused, real invitation can be revoked; a used one has already become
 	// an account, and a setup token is not an admin's to cancel.
 	DeleteInvitationByID(ctx context.Context, id int64) (int64, error)
+	// Regenerating replaces the whole set, so the old codes are cleared first.
+	DeleteRecoveryCodesForUser(ctx context.Context, userID int64) error
 	DeleteTrash(ctx context.Context, id int64) error
 	DeleteUnusedInvitations(ctx context.Context) error
 	DeleteUpload(ctx context.Context, id int64) error
@@ -98,9 +102,14 @@ type Querier interface {
 	// Most recently deleted first: that is the order someone reaches for the trash
 	// to undo a mistake they just made.
 	ListTrash(ctx context.Context) ([]Trash, error)
+	// A reset tries the presented code against each unused code for the account.
+	ListUnusedRecoveryCodesForUser(ctx context.Context, userID int64) ([]ListUnusedRecoveryCodesForUserRow, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	LogShareAccess(ctx context.Context, arg LogShareAccessParams) error
 	MarkInvitationUsed(ctx context.Context, arg MarkInvitationUsedParams) error
+	// Scoped to an unused code so the same code can never be spent twice, even in a
+	// race: execrows lets the caller confirm exactly one row changed.
+	MarkRecoveryCodeUsed(ctx context.Context, arg MarkRecoveryCodeUsedParams) (int64, error)
 	// Follows a rename: rewrite every rule at the path or anywhere beneath it, so a
 	// renamed folder carries its permissions with it instead of leaving them
 	// stranded on a name that no longer exists. The substr comparison avoids LIKE,

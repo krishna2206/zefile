@@ -36,6 +36,11 @@ type sessionResponse struct {
 	// bearer credential. A browser ignores it and uses the cookie, which is
 	// what keeps the value out of reach of any script on the page.
 	Token string `json:"token"`
+
+	// RecoveryCodes is present only when an account is first created, so the
+	// interface can show them once. They are the emailless way to reset a
+	// forgotten password later.
+	RecoveryCodes []string `json:"recovery_codes,omitempty"`
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -135,10 +140,14 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, auth.SessionCookie(token, session.ExpiresAt, s.secureCookies))
 	s.auditAs(r, user.ID, audit.ActionSetup, user.Username, nil)
+
+	// Best-effort: an account with no codes yet can generate a set from Settings.
+	codes, _ := s.auth.GenerateRecoveryCodes(r.Context(), user.ID)
 	writeJSON(w, r, http.StatusCreated, sessionResponse{
-		User:      toUserResponse(user),
-		ExpiresAt: session.ExpiresAt,
-		Token:     token,
+		User:          toUserResponse(user),
+		ExpiresAt:     session.ExpiresAt,
+		Token:         token,
+		RecoveryCodes: codes,
 	})
 }
 

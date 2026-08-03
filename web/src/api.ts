@@ -172,9 +172,16 @@ export const api = {
   setupStatus: () => request<{ needs_setup: boolean }>('/api/v1/setup'),
 
   completeSetup: (token: string, username: string, password: string) =>
-    request<{ user: User }>('/api/v1/setup', {
+    request<{ user: User; recovery_codes?: string[] }>('/api/v1/setup', {
       method: 'POST',
       body: JSON.stringify({ token, username, password }),
+    }),
+
+  // Reset a forgotten password with a recovery code — no email involved.
+  resetPassword: (username: string, code: string, newPassword: string) =>
+    request<void>('/api/v1/auth/reset', {
+      method: 'POST',
+      body: JSON.stringify({ username, code, new_password: newPassword }),
     }),
 
   login: (username: string, password: string) =>
@@ -193,6 +200,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
     }),
+  // Recovery codes: how many are left, and regenerate a fresh set (shown once).
+  recoveryStatus: () => request<{ remaining: number }>('/api/v1/auth/recovery'),
+  regenerateRecoveryCodes: () =>
+    request<{ codes: string[] }>('/api/v1/auth/recovery', { method: 'POST' }),
   listSessions: () => request<{ sessions: SessionInfo[] }>('/api/v1/auth/sessions'),
   revokeSession: (id: number) => request<void>(`/api/v1/auth/sessions/${id}`, { method: 'DELETE' }),
   revokeOtherSessions: () =>
@@ -215,7 +226,7 @@ export const api = {
       `/api/v1/invitations/check?token=${encodeURIComponent(token)}`,
     ),
   acceptInvitation: (token: string, username: string, password: string) =>
-    request<{ user: User }>('/api/v1/invitations/accept', {
+    request<{ user: User; recovery_codes?: string[] }>('/api/v1/invitations/accept', {
       method: 'POST',
       body: JSON.stringify({ token, username, password }),
     }),

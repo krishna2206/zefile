@@ -38,6 +38,11 @@ export function SignIn({ mode, onDone }: Props) {
   const [formError, setFormError] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // Creating an account issues recovery codes to show once; the sign-in screen
+  // can also switch to the forgotten-password flow.
+  const [stage, setStage] = useState<'auth' | 'reset' | 'codes'>('auth')
+  const [issuedCodes, setIssuedCodes] = useState<string[]>([])
+
   // For an invite, confirm the link is usable before asking for a password, so a
   // dead link says so plainly rather than after the form is filled in.
   const [invite, setInvite] = useState<{ checking: boolean; valid: boolean; email?: string }>({
@@ -119,10 +124,16 @@ export function SignIn({ mode, onDone }: Props) {
     setBusy(true)
     setFormError('')
     try {
-      if (setup) {
-        await api.completeSetup(token.trim(), username.trim(), password)
-      } else if (accept) {
-        await api.acceptInvitation(token.trim(), username.trim(), password)
+      if (setup || accept) {
+        const res = setup
+          ? await api.completeSetup(token.trim(), username.trim(), password)
+          : await api.acceptInvitation(token.trim(), username.trim(), password)
+        if (res.recovery_codes?.length) {
+          setIssuedCodes(res.recovery_codes)
+          setStage('codes')
+          setBusy(false)
+          return
+        }
       } else {
         await api.login(username.trim(), password)
       }
@@ -136,6 +147,21 @@ export function SignIn({ mode, onDone }: Props) {
       }
       setBusy(false)
     }
+  }
+
+  if (stage === 'codes') {
+    return (
+      <AuthShell subtitle="Save your recovery codes.">
+        <RecoveryCodesCard codes={issuedCodes} onDone={onDone} />
+      </AuthShell>
+    )
+  }
+  if (stage === 'reset') {
+    return (
+      <AuthShell subtitle="Reset your password.">
+        <ResetCard onBack={() => setStage('auth')} />
+      </AuthShell>
+    )
   }
 
   const subtitle = setup
@@ -256,8 +282,204 @@ export function SignIn({ mode, onDone }: Props) {
             )}
           </CardContent>
         </Card>
+
+        {mode === 'login' && (
+          <button
+            type="button"
+            className="mx-auto block text-sm text-muted-foreground underline-offset-4 hover:underline"
+            onClick={() => {
+              setFormError('')
+              setErrors({})
+              setStage('reset')
+            }}
+          >
+            Forgot your password?
+          </button>
+        )}
       </div>
     </div>
+  )
+}
+
+/** AuthShell is the centred card layout shared by every sign-in stage. */
+function AuthShell({ subtitle, children }: { subtitle: string; children: ReactNode }) {
+  return (
+    <div className="relative grid min-h-dvh place-items-center bg-background p-6">
+      <ThemeToggle className="absolute right-4 top-4" />
+      <div className="w-full max-w-sm space-y-6">
+        <div className="space-y-1 text-center">
+          <img src={logoUrl} alt="" className="mx-auto mb-3 h-16 w-auto" />
+          <h1 className="font-serif text-4xl font-semibold tracking-tight">Zefile</h1>
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+/** RecoveryCodesCard shows a fresh set of codes once, at account creation. */
+function RecoveryCodesCard({ codes, onDone }: { codes: string[]; onDone: () => void }) {
+  const [copied, setCopied] = useState(false)
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(codes.join('\n'))
+      setCopied(true)
+    } catch {
+      // The codes are on screen; copying is only a convenience.
+    }
+  }
+  return (
+    <Card>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Save these somewhere safe. If you forget your password, one of these codes
+          resets it — there is no email recovery. Each works once, and they are shown
+          only now.
+        </p>
+        <div className="grid grid-cols-2 gap-1.5 rounded-md border bg-muted/40 p-3 text-center font-mono text-sm">
+          {codes.map((code) => (
+            <span key={code}>{code}</span>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" className="flex-1" onClick={copy}>
+            {copied ? 'Copied' : 'Copy codes'}
+          </Button>
+          <Button type="button" className="flex-1" onClick={onDone}>
+            I’ve saved them
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+type ResetErrors = Partial<Record<'username' | 'code' | 'password' | 'confirm', string>>
+
+/** ResetCard is the forgotten-password flow: a username and a recovery code set
+ *  a new password, no email involved. */
+function ResetCard({ onBack }: { onBack: () => void }) {
+  const [username, setUsername] = useState('')
+  const [code, setCode] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [errors, setErrors] = useState<ResetErrors>({})
+  const [formError, setFormError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    const found: ResetErrors = {}
+    if (!username.trim()) found.username = 'Enter your username.'
+    if (!code.trim()) found.code = 'Enter a recovery code.'
+    if ([...password].length < 12) found.password = 'Use at least 12 characters.'
+    if (confirm !== password) found.confirm = 'These do not match.'
+    setErrors(found)
+    if (Object.values(found).some(Boolean)) return
+
+    setBusy(true)
+    setFormError('')
+    try {
+      await api.resetPassword(username.trim(), code.trim(), password)
+      setDone(true)
+    } catch (err) {
+      if (err instanceof ApiError && err.problem.errors) {
+        setErrors(err.problem.errors as ResetErrors)
+      } else {
+        setFormError(err instanceof ApiError ? err.message : 'Could not reset the password.')
+      }
+      setBusy(false)
+    }
+  }
+
+  if (done) {
+    return (
+      <Card>
+        <CardContent className="space-y-4 py-2 text-center">
+          <p className="text-sm font-medium">Your password has been reset.</p>
+          <p className="text-sm text-muted-foreground">
+            Sign in with your new password. That code has now been used.
+          </p>
+          <Button className="w-full" onClick={onBack}>
+            Back to sign in
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardContent>
+        <form onSubmit={submit} noValidate className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Enter your username and one of your recovery codes to set a new password.
+          </p>
+          <Field label="Username" error={errors.username}>
+            {(id) => (
+              <Input
+                id={id}
+                value={username}
+                autoComplete="username"
+                aria-invalid={!!errors.username}
+                onChange={(e) => setUsername(e.currentTarget.value)}
+              />
+            )}
+          </Field>
+          <Field label="Recovery code" error={errors.code}>
+            {(id) => (
+              <Input
+                id={id}
+                value={code}
+                autoComplete="one-time-code"
+                placeholder="xxxxx-xxxxx"
+                aria-invalid={!!errors.code}
+                onChange={(e) => setCode(e.currentTarget.value)}
+              />
+            )}
+          </Field>
+          <Field label="New password" error={errors.password}>
+            {(id) => (
+              <Input
+                id={id}
+                type="password"
+                value={password}
+                autoComplete="new-password"
+                aria-invalid={!!errors.password}
+                onChange={(e) => setPassword(e.currentTarget.value)}
+              />
+            )}
+          </Field>
+          <Field label="Confirm new password" error={errors.confirm}>
+            {(id) => (
+              <Input
+                id={id}
+                type="password"
+                value={confirm}
+                autoComplete="new-password"
+                aria-invalid={!!errors.confirm}
+                onChange={(e) => setConfirm(e.currentTarget.value)}
+              />
+            )}
+          </Field>
+          {formError && (
+            <p role="alert" className="text-sm text-destructive">
+              {formError}
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button type="button" variant="ghost" className="flex-1" onClick={onBack} disabled={busy}>
+              Back
+            </Button>
+            <Button type="submit" className="flex-1" disabled={busy}>
+              {busy ? 'Working…' : 'Reset password'}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   )
 }
 

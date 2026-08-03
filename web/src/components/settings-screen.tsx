@@ -57,6 +57,7 @@ export function SettingsScreen({ me, onSignedOut }: { me: User; onSignedOut: () 
           </section>
 
           <PasswordSection />
+          <RecoveryCodesSection />
           <TokensSection />
           <SessionsSection onSignedOut={onSignedOut} />
         </div>
@@ -66,6 +67,62 @@ export function SettingsScreen({ me, onSignedOut }: { me: User; onSignedOut: () 
 }
 
 type FieldErrors = Partial<Record<'current_password' | 'password' | 'confirm', string>>
+
+function RecoveryCodesSection() {
+  const [remaining, setRemaining] = useState<number | null>(null)
+  const [codes, setCodes] = useState<string[] | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    api
+      .recoveryStatus()
+      .then((r) => setRemaining(r.remaining))
+      .catch(() => setRemaining(null))
+  }, [])
+
+  async function regenerate() {
+    setBusy(true)
+    try {
+      const result = await api.regenerateRecoveryCodes()
+      setCodes(result.codes)
+      setRemaining(result.codes.length)
+      toast.success('New recovery codes generated')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not generate codes.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div>
+          <h2 className="text-sm font-medium">Recovery codes</h2>
+          <p className="text-sm text-muted-foreground">
+            Use one to reset a forgotten password — there is no email recovery.
+            {remaining !== null && ` ${remaining} left.`}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" className="ml-auto shrink-0" onClick={regenerate} disabled={busy}>
+          {busy ? 'Generating…' : 'Regenerate'}
+        </Button>
+      </div>
+      {codes && (
+        <div className="space-y-2 rounded-md border p-3">
+          <p className="text-xs text-muted-foreground">
+            Save these now — they are shown only once, and regenerating replaced any previous set.
+          </p>
+          <div className="grid grid-cols-2 gap-1.5 font-mono text-sm">
+            {codes.map((code) => (
+              <span key={code}>{code}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
 
 function PasswordSection() {
   const [current, setCurrent] = useState('')
