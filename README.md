@@ -1,6 +1,10 @@
-# Zefile
+<p align="center">
+  <img src="docs/public/logo.png" alt="Zefile" width="128">
+</p>
 
-> Because it's not just another file browser — it's *Ze* file browser.
+<h1 align="center">Zefile</h1>
+
+<p align="center"><em>Because it's not just another file browser — it's <b>Ze</b> file browser.</em></p>
 
 A self-hosted file server in a single binary. Store, organise and share large files
 on your own server, with a security model and an API designed in from the start.
