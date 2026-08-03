@@ -2,12 +2,17 @@
 /bin/
 /dist/
 
-# Frontend build output is never versioned — see docs/conception.html §12.4.
+# Frontend build output is never versioned — see docs/design/conception.html §12.4.
 # Committing it makes contributions unreviewable and conflicts constant.
 /internal/web/dist/*
 !/internal/web/dist/.gitkeep
 /web/node_modules/
 /web/tsconfig.tsbuildinfo
+
+# Documentation site (VitePress)
+/docs/node_modules/
+/docs/.vitepress/dist/
+/docs/.vitepress/cache/
 
 # Local runtime data
 *.db

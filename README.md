@@ -117,15 +117,22 @@ Go 1.25 · SQLite ([`modernc.org/sqlite`](https://pkg.go.dev/modernc.org/sqlite)
 React 19 + Vite · [shadcn/ui](https://ui.shadcn.com/) (Radix + Tailwind CSS 4) ·
 [Phosphor Icons](https://phosphoricons.com/)
 
+## Documentation
+
+User documentation — installation, configuration, features and the API — lives
+in [`docs/`](docs/) and is published as a [VitePress](https://vitepress.dev)
+site. Build it locally with `cd docs && pnpm install && pnpm dev`.
+
 ## Design documents
 
-The design was written down before the code, and is kept alongside it.
+The design was written down before the code, and is kept in
+[`docs/design/`](docs/design/).
 
 | Document | Contents |
 | --- | --- |
-| [`docs/conception.html`](docs/conception.html) | Scope, architecture, data model, security, API, deployment |
-| [`docs/roadmap.html`](docs/roadmap.html) | The work plan and what has shipped |
-| [`docs/ui.html`](docs/ui.html) | Interface design, component inventory, states |
+| [`docs/design/conception.html`](docs/design/conception.html) | Scope, architecture, data model, security, API, deployment |
+| [`docs/design/roadmap.html`](docs/design/roadmap.html) | The work plan and what has shipped |
+| [`docs/design/ui.html`](docs/design/ui.html) | Interface design, component inventory, states |
 
 ## Deploying
 
