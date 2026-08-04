@@ -170,7 +170,7 @@
 
     <div class="rule warn">
       <span class="label">État — août 2026</span>
-      <p>La fondation, le multi-utilisateur (comptes, invitations, permissions par chemin, <b>groupes</b>), les partages, la corbeille, la file de tâches, la recherche et les aperçus sont <b>livrés</b>, ainsi que le <b>journal d’audit</b>, les <b>jetons d’API</b>, le <b>téléchargement groupé en zip</b> et la <b>distribution</b> (images multi-arch sur GHCR, binaires de Releases). L’instance tourne en production (<b>v0.6.0</b>). Les lots encore ouverts&nbsp;— double facteur (TOTP), téléchargement depuis une URL, extraction d’archives, empreintes, sauvegarde, migration, contrat d’API publié et client mobile&nbsp;— sont marqués comme tels ci-dessous.</p>
+      <p>La fondation, le multi-utilisateur (comptes, invitations, permissions par chemin, <b>groupes</b>), les partages, la corbeille, la file de tâches, la recherche et les aperçus sont <b>livrés</b>, ainsi que le <b>journal d’audit</b>, les <b>jetons d’API</b>, le <b>téléchargement groupé en zip</b>, la <b>distribution</b> (images multi-arch sur GHCR, binaires de Releases), le <b>double facteur (TOTP)</b>, la <b>sauvegarde/restauration</b>, la <b>rétention configurable</b> et les <b>empreintes SHA-256</b>. L’instance tourne en production (<b>v0.6.0</b>). Les lots encore ouverts&nbsp;— téléchargement depuis une URL, extraction d’archives, navigation clavier complète et client mobile&nbsp;— sont marqués comme tels ci-dessous.</p>
     </div>
   </div>
 
@@ -335,8 +335,8 @@
 
       <div class="item">
         <span class="id">3.3</span>
-        <div class="title">Comptage et limitation</div>
-        <div class="body">Décompte des téléchargements <em>distincts</em> par fenêtre glissante, et non des requêtes HTTP. Limitation de débit par IP. Journal d’accès alimenté.</div>
+        <div class="title">Comptage et limitation<span class="status" style="background:var(--ink-3)">Différé</span></div>
+        <div class="body">Décompte des téléchargements <em>distincts</em> par fenêtre glissante, et non des requêtes HTTP. Limitation de débit par IP. Journal d’accès alimenté. Différé&nbsp;— la limitation du login est déjà en place, le reste attendra un besoin réel.</div>
         <div class="done"><b>Terminé quand</b> un téléchargement en seize connexions compte pour un, et non pour seize.</div>
       </div>
 
@@ -457,7 +457,7 @@
       <div class="item">
         <span class="id">5.3</span>
         <div class="title">Interface aboutie<span class="status" style="background:var(--ink-3)">Partiel</span></div>
-        <div class="body">Thème clair et sombre, états vides et d’erreur soignés, glisser-déposer&nbsp;: <strong>livrés</strong>. La navigation clavier complète et la palette de commandes restent à faire.</div>
+        <div class="body">Thème clair et sombre, états vides et d’erreur soignés, glisser-déposer&nbsp;: <strong>livrés</strong>. La navigation clavier complète reste à faire.</div>
         <div class="done"><b>Terminé quand</b> toutes les opérations courantes sont réalisables sans souris.</div>
       </div>
 
@@ -466,13 +466,6 @@
         <div class="title">Documentation et gouvernance<span class="status">Fait</span></div>
         <div class="body">README avec le périmètre hors scope écrit noir sur blanc, <code>SECURITY.md</code> et procédure de divulgation, <code>CONTRIBUTING.md</code> avec les jetons de design et la règle sur le code généré, documentation d’installation.</div>
         <div class="done"><b>Terminé quand</b> quelqu’un installe l’outil sans poser de question.</div>
-      </div>
-
-      <div class="item">
-        <span class="id">5.5</span>
-        <div class="title">Migration depuis File Browser</div>
-        <div class="body">Reprise des comptes et conversion des «&nbsp;scopes&nbsp;» en entrées ACL. Les mots de passe ne sont pas transposables&nbsp;: réinitialisation par lien d’invitation.</div>
-        <div class="done"><b>Terminé quand</b> une base File Browser réelle est importée sans perte de configuration d’accès.</div>
       </div>
 
       <div class="item shipped">
