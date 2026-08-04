@@ -441,10 +441,10 @@
     </div>
     <div class="items">
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">5.1</span>
-        <div class="title">Sauvegarde et restauration<span class="status" style="background:var(--ink-3)">Partiel</span></div>
-        <div class="body"><code>zefile backup</code> (copie cohérente à chaud par <code>VACUUM INTO</code>) et <code>zefile restore</code> (validation du fichier + copie de sécurité de la base remplacée) sont <strong>livrés</strong>, restauration sur machine vierge vérifiée de bout en bout. L'instantané automatique avant migration et le rapport de divergences avec le disque restent à ajouter.</div>
+        <div class="title">Sauvegarde et restauration<span class="status">Fait</span></div>
+        <div class="body"><code>zefile backup</code> (copie cohérente à chaud par <code>VACUUM INTO</code>) et <code>zefile restore</code> (validation du fichier, copie de sécurité de la base remplacée, rapport des chemins absents du disque). Instantané automatique de la base avant toute migration de schéma. Restauration sur machine vierge vérifiée de bout en bout.</div>
         <div class="done"><b>Terminé quand</b> une restauration sur une machine vierge est vérifiée de bout en bout.</div>
       </div>
 

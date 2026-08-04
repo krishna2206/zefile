@@ -118,7 +118,7 @@ func runRestore(src string) error {
 		return fmt.Errorf("%s is not set", config.EnvConfigDir)
 	}
 
-	report, err := db.RestoreFrom(context.Background(), dir, src)
+	report, err := db.RestoreFrom(context.Background(), dir, os.Getenv(config.EnvDataDir), src)
 	if err != nil {
 		return err
 	}
@@ -126,6 +126,18 @@ func runRestore(src string) error {
 		fmt.Printf("previous database saved to %s\n", report.PreviousSaved)
 	}
 	fmt.Printf("restored %s from %s — restart zefile to use it\n", db.DBPath(dir), src)
+
+	if len(report.Diverged) > 0 {
+		const show = 20
+		fmt.Printf("\nwarning: %d path(s) referenced by the restored database no longer exist on disk:\n", len(report.Diverged))
+		for i, p := range report.Diverged {
+			if i == show {
+				fmt.Printf("  … and %d more\n", len(report.Diverged)-show)
+				break
+			}
+			fmt.Printf("  %s\n", p)
+		}
+	}
 	return nil
 }
 

@@ -30,7 +30,7 @@ func TestBackupAndRestoreRoundTrip(t *testing.T) {
 
 	// Restore into an empty directory and confirm the account survived.
 	restoreDir := t.TempDir()
-	report, err := RestoreFrom(t.Context(), restoreDir, dest)
+	report, err := RestoreFrom(t.Context(), restoreDir, "", dest)
 	if err != nil {
 		t.Fatalf("RestoreFrom: %v", err)
 	}
@@ -62,12 +62,44 @@ func TestBackupRefusesExistingTarget(t *testing.T) {
 	}
 }
 
+func TestRestoreReportsDivergenceFromDisk(t *testing.T) {
+	dir := t.TempDir()
+	d := open(t, Config{Dir: dir})
+	// Two access rules: one whose path exists on disk, one whose path does not.
+	for _, p := range []string{"/present", "/ghost"} {
+		if _, err := d.Write.ExecContext(t.Context(),
+			`INSERT INTO acl (subject_type, subject_id, path, perms, created_at) VALUES ('user', 1, ?, 1, 0)`, p); err != nil {
+			t.Fatalf("seed acl: %v", err)
+		}
+	}
+
+	snap := filepath.Join(t.TempDir(), "snap.db")
+	if err := BackupTo(t.Context(), DBPath(dir), snap); err != nil {
+		t.Fatalf("BackupTo: %v", err)
+	}
+
+	// A data directory where only /present exists.
+	dataDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dataDir, "present"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := RestoreFrom(t.Context(), t.TempDir(), dataDir, snap)
+	if err != nil {
+		t.Fatalf("RestoreFrom: %v", err)
+	}
+
+	if got := report.Diverged; len(got) != 1 || got[0] != "/ghost" {
+		t.Errorf("Diverged = %v, want exactly [/ghost]", got)
+	}
+}
+
 func TestRestoreRejectsNonZefileDatabase(t *testing.T) {
 	bogus := filepath.Join(t.TempDir(), "bogus.db")
 	if err := os.WriteFile(bogus, []byte("not a database"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := RestoreFrom(t.Context(), t.TempDir(), bogus); err == nil {
+	if _, err := RestoreFrom(t.Context(), t.TempDir(), "", bogus); err == nil {
 		t.Fatal("expected RestoreFrom to reject a file that is not a Zefile database")
 	}
 }
@@ -90,7 +122,7 @@ func TestRestoreSavesTheReplacedDatabase(t *testing.T) {
 		t.Fatalf("close existing: %v", err)
 	}
 
-	report, err := RestoreFrom(t.Context(), dstDir, snap)
+	report, err := RestoreFrom(t.Context(), dstDir, "", snap)
 	if err != nil {
 		t.Fatalf("RestoreFrom: %v", err)
 	}

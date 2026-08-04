@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -55,6 +56,11 @@ type RestoreReport struct {
 	// PreviousSaved is where the database that was replaced got copied, or empty
 	// if there was none.
 	PreviousSaved string
+
+	// Diverged lists paths the restored database still references but that no
+	// longer exist on disk — the metadata got ahead of, or behind, the files.
+	// Empty when no data directory was given to check against.
+	Diverged []string
 }
 
 // RestoreFrom replaces the database in configDir with the backup at src.
@@ -63,7 +69,12 @@ type RestoreReport struct {
 // would corrupt its open connection. src is validated as a healthy Zefile
 // database before anything is touched, and the database being replaced is copied
 // aside first, so a mistaken restore is itself reversible.
-func RestoreFrom(ctx context.Context, configDir, src string) (RestoreReport, error) {
+//
+// When dataDir is given, the restored database is compared against the files on
+// disk and any references to missing files are reported — restoring an old
+// snapshot onto a newer tree (or the reverse) leaves the two out of step, and
+// this says where.
+func RestoreFrom(ctx context.Context, configDir, dataDir, src string) (RestoreReport, error) {
 	if err := validateBackup(ctx, src); err != nil {
 		return RestoreReport{}, err
 	}
@@ -91,7 +102,46 @@ func RestoreFrom(ctx context.Context, configDir, src string) (RestoreReport, err
 	_ = os.Remove(dst + "-wal")
 	_ = os.Remove(dst + "-shm")
 
+	// Best-effort: a failed scan must not fail an otherwise-good restore.
+	if dataDir != "" {
+		report.Diverged, _ = checkDivergence(ctx, dst, dataDir)
+	}
+
 	return report, nil
+}
+
+// checkDivergence returns the paths the database references — through access
+// rules, ownership and shares — that no longer exist under dataDir. The reverse
+// (files on disk the database does not mention) is normal for Zefile, where the
+// filesystem is the authority, so it is not reported.
+func checkDivergence(ctx context.Context, dbPath, dataDir string) ([]string, error) {
+	pool, err := sql.Open("sqlite", dbPath+"?_pragma=query_only(true)&_pragma=busy_timeout(2000)")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = pool.Close() }()
+
+	rows, err := pool.QueryContext(ctx, `
+		SELECT path FROM acl
+		UNION SELECT path FROM file_owners
+		UNION SELECT path FROM shares`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var missing []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		disk := filepath.Join(dataDir, filepath.FromSlash(strings.TrimPrefix(p, "/")))
+		if _, err := os.Stat(disk); errors.Is(err, os.ErrNotExist) {
+			missing = append(missing, p)
+		}
+	}
+	return missing, rows.Err()
 }
 
 // validateBackup refuses a file that is not a healthy Zefile database, so a

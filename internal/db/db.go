@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -92,12 +93,17 @@ func Open(ctx context.Context, cfg Config) (*DB, error) {
 
 	path := filepath.Join(cfg.Dir, FileName)
 
+	// Whether the database already holds data decides if a pre-migration
+	// snapshot is worth taking: a brand-new file has nothing to protect.
+	_, statErr := os.Stat(path)
+	existed := statErr == nil
+
 	write, err := openPool(path, 1)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := migrate(ctx, write); err != nil {
+	if err := migrate(ctx, write, path, existed); err != nil {
 		_ = write.Close()
 		return nil, err
 	}
@@ -166,7 +172,7 @@ func openPool(path string, maxConns int) (*sql.DB, error) {
 // caught exactly that. Production opens one database at startup and would never
 // have noticed, which is what makes the provider API the right choice rather
 // than an assumption about call sites.
-func migrate(ctx context.Context, pool *sql.DB) error {
+func migrate(ctx context.Context, pool *sql.DB, path string, existed bool) error {
 	migrations, err := fs.Sub(migrationFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("db: locate migrations: %w", err)
@@ -176,6 +182,28 @@ func migrate(ctx context.Context, pool *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("db: migration provider: %w", err)
 	}
+
+	// Before changing the schema of a database that already holds data, snapshot
+	// it. A migration that fails partway or turns out to be wrong can then be
+	// undone with `zefile restore`, rather than leaving a half-migrated database
+	// with no way back.
+	if existed {
+		pending, err := provider.HasPending(ctx)
+		if err != nil {
+			return fmt.Errorf("db: check pending migrations: %w", err)
+		}
+		if pending {
+			from, _ := provider.GetDBVersion(ctx)
+			dest := filepath.Join(filepath.Dir(path), "backups",
+				fmt.Sprintf("pre-migration-v%d-%s.db", from, time.Now().Format("20060102-150405")))
+			if err := BackupTo(ctx, path, dest); err != nil {
+				return fmt.Errorf("db: snapshot before migration: %w", err)
+			}
+			slog.InfoContext(ctx, "snapshotted the database before applying migrations",
+				"from_version", from, "backup", dest)
+		}
+	}
+
 	if _, err := provider.Up(ctx); err != nil {
 		return fmt.Errorf("db: migrate: %w", err)
 	}

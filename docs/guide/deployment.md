@@ -63,3 +63,8 @@ docker compose stop zefile
 docker compose run --rm zefile zefile restore /config/backups/nightly.db
 docker compose start zefile
 ```
+
+If the restored database references files that no longer exist on disk — because
+the snapshot predates changes to the tree — `restore` lists them, so you know
+what drifted. Schema migrations also snapshot the database automatically before
+they run, so an upgrade always has a point to roll back to.
