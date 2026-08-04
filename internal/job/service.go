@@ -30,6 +30,10 @@ type Type string
 const (
 	// TypeCopy copies a file or directory tree in the background.
 	TypeCopy Type = "copy"
+
+	// TypeChecksum computes a file's SHA-256 in the background, so hashing a
+	// very large file does not block a request.
+	TypeChecksum Type = "checksum"
 )
 
 // Status values mirror the CHECK constraint on the jobs table.

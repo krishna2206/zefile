@@ -81,7 +81,7 @@ export function TokensSection() {
     <section className="space-y-3">
       <div className="flex items-center gap-3">
         <div>
-          <h2 className="text-sm font-medium">API tokens</h2>
+          <h2 className="text-base font-semibold text-foreground">API tokens</h2>
           <p className="text-sm text-muted-foreground">
             For scripts and integrations. A token acts with your permissions.
           </p>

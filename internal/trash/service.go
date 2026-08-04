@@ -139,6 +139,25 @@ func (s *Service) Purge(ctx context.Context, id int64) error {
 	return s.writes.DeleteTrash(ctx, id)
 }
 
+// PurgeExpired permanently removes items deleted before the cutoff, returning
+// how many went. It backs the configurable trash retention.
+func (s *Service) PurgeExpired(ctx context.Context, before time.Time) (int, error) {
+	items, err := s.List(ctx)
+	if err != nil {
+		return 0, err
+	}
+	purged := 0
+	for _, it := range items {
+		if it.DeletedAt.Before(before) {
+			if err := s.Purge(ctx, it.ID); err != nil {
+				return purged, err
+			}
+			purged++
+		}
+	}
+	return purged, nil
+}
+
 // Empty purges every trashed item. It stops at the first failure rather than
 // pressing on, so a disk error surfaces instead of being buried under later
 // successes.

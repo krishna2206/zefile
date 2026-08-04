@@ -7,8 +7,10 @@ import (
 	"github.com/krishna2206/zefile/internal/acl"
 	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/auth"
+	"github.com/krishna2206/zefile/internal/checksum"
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/job"
+	"github.com/krishna2206/zefile/internal/settings"
 	"github.com/krishna2206/zefile/internal/share"
 	"github.com/krishna2206/zefile/internal/storage"
 	"github.com/krishna2206/zefile/internal/trash"
@@ -28,7 +30,9 @@ type Server struct {
 	trash         *trash.Service
 	shares        *share.Service
 	jobs          *job.Service
+	checksums     *checksum.Service
 	auditLog      *audit.Service
+	settings      *settings.Service
 	contentBase   string
 	version       string
 	singleOrigin  bool
@@ -37,15 +41,17 @@ type Server struct {
 
 // Options configures a [Server].
 type Options struct {
-	FS      storage.FS
-	Auth    *auth.Service
-	ACL     *acl.Engine
-	Signer  *content.Signer
-	Uploads *upload.Service
-	Trash   *trash.Service
-	Shares  *share.Service
-	Jobs    *job.Service
-	Audit   *audit.Service
+	FS        storage.FS
+	Auth      *auth.Service
+	ACL       *acl.Engine
+	Signer    *content.Signer
+	Uploads   *upload.Service
+	Trash     *trash.Service
+	Shares    *share.Service
+	Jobs      *job.Service
+	Checksums *checksum.Service
+	Audit     *audit.Service
+	Settings  *settings.Service
 
 	// ContentBase is the public origin serving files, without a trailing
 	// slash. In single-origin mode it is the application's own address.
@@ -73,7 +79,9 @@ func New(opts Options) *Server {
 		trash:         opts.Trash,
 		shares:        opts.Shares,
 		jobs:          opts.Jobs,
+		checksums:     opts.Checksums,
 		auditLog:      opts.Audit,
+		settings:      opts.Settings,
 		contentBase:   opts.ContentBase,
 		version:       opts.Version,
 		singleOrigin:  opts.SingleOrigin,
@@ -128,6 +136,7 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("POST /api/v1/fs/bundle", s.handleBundleLink)
 	authed.HandleFunc("GET /api/v1/fs/thumb", s.handleThumb)
 	authed.HandleFunc("GET /api/v1/fs/space", s.handleSpace)
+	authed.HandleFunc("GET /api/v1/fs/checksum", s.handleChecksum)
 	authed.HandleFunc("GET /api/v1/config", s.handleConfig)
 
 	authed.HandleFunc("GET /api/v1/trash", s.handleTrashList)
@@ -151,6 +160,9 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("DELETE /api/v1/tokens/{id}", s.handleRevokeToken)
 
 	authed.HandleFunc("GET /api/v1/audit", s.handleAuditList)
+
+	authed.HandleFunc("GET /api/v1/settings/retention", s.handleGetRetention)
+	authed.HandleFunc("PUT /api/v1/settings/retention", s.handleSetRetention)
 
 	authed.HandleFunc("GET /api/v1/users", s.handleListUsers)
 	authed.HandleFunc("PATCH /api/v1/users/{id}", s.handleUpdateUser)

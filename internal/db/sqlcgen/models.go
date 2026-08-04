@@ -42,6 +42,15 @@ type AuditLog struct {
 	Details string
 }
 
+type Checksum struct {
+	Path       string
+	Algo       string
+	Hash       string
+	Size       int64
+	ModifiedAt int64
+	ComputedAt int64
+}
+
 type FileIndex struct {
 	Path string
 	Name string
@@ -104,6 +113,12 @@ type Session struct {
 	UserAgent  string
 	Ip         string
 	RevokedAt  sql.NullInt64
+}
+
+type Setting struct {
+	Key       string
+	Value     string
+	UpdatedAt int64
 }
 
 type Share struct {

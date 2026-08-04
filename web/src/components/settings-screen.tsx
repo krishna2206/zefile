@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { CircleNotch, DeviceMobile, Monitor } from '@phosphor-icons/react'
 import { toDataURL } from 'qrcode'
@@ -48,22 +48,41 @@ export function SettingsScreen({ me, onSignedOut }: { me: User; onSignedOut: () 
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        <div className="mx-auto max-w-xl space-y-8 p-6">
-          <section className="space-y-1">
-            <h2 className="text-sm font-medium">Account</h2>
-            <p className="text-sm text-muted-foreground">
-              Signed in as <span className="font-medium text-foreground">{me.username}</span>
-              {me.is_admin && ' · administrator'}
-            </p>
+        <div className="mx-auto max-w-3xl space-y-6 p-4">
+          <section>
+            <SectionLabel>Account</SectionLabel>
+            <div className="flex h-14 items-center gap-3 rounded-lg border px-4">
+              <div className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
+                {me.username.slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm">{me.username}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {me.is_admin ? 'Administrator' : 'Member'}
+                </p>
+              </div>
+            </div>
           </section>
 
           <PasswordSection />
           <TwoFactorSection initiallyEnabled={!!me.totp_enabled} />
           <RecoveryCodesSection />
           <TokensSection />
+          {me.is_admin && <RetentionSection />}
           <SessionsSection onSignedOut={onSignedOut} />
         </div>
       </div>
+    </div>
+  )
+}
+
+/** SectionLabel is the small uppercase header each settings section carries, with
+ *  an optional action on the right — the same language as the Members screen. */
+function SectionLabel({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="mb-2 flex min-h-8 items-center justify-between gap-3 px-1">
+      <h2 className="text-base font-semibold text-foreground">{children}</h2>
+      {action}
     </div>
   )
 }
@@ -126,7 +145,7 @@ function TwoFactorSection({ initiallyEnabled }: { initiallyEnabled: boolean }) {
     <section className="space-y-3">
       <div className="flex items-center gap-3">
         <div>
-          <h2 className="text-sm font-medium">Two-factor authentication</h2>
+          <h2 className="text-base font-semibold text-foreground">Two-factor authentication</h2>
           <p className="text-sm text-muted-foreground">
             {enabled
               ? 'On — an authenticator code is required at sign-in.'
@@ -140,9 +159,9 @@ function TwoFactorSection({ initiallyEnabled }: { initiallyEnabled: boolean }) {
         )}
         {enabled && !disabling && (
           <Button
-            variant="ghost"
+            variant="destructiveOutline"
             size="sm"
-            className="ml-auto shrink-0 text-muted-foreground hover:text-destructive"
+            className="ml-auto shrink-0"
             onClick={() => {
               setDisabling(true)
               setCode('')
@@ -236,7 +255,7 @@ function RecoveryCodesSection() {
     <section className="space-y-3">
       <div className="flex items-center gap-3">
         <div>
-          <h2 className="text-sm font-medium">Recovery codes</h2>
+          <h2 className="text-base font-semibold text-foreground">Recovery codes</h2>
           <p className="text-sm text-muted-foreground">
             Use one to reset a forgotten password — there is no email recovery.
             {remaining !== null && ` ${remaining} left.`}
@@ -299,7 +318,7 @@ function PasswordSection() {
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-sm font-medium">Change password</h2>
+        <h2 className="text-base font-semibold text-foreground">Change password</h2>
         <p className="text-sm text-muted-foreground">Changing it signs out every other device.</p>
       </div>
       <form onSubmit={submit} noValidate className="max-w-sm space-y-3">
@@ -397,7 +416,7 @@ function SessionsSection({ onSignedOut }: { onSignedOut: () => void }) {
     <section className="space-y-3">
       <div className="flex items-center gap-3">
         <div>
-          <h2 className="text-sm font-medium">Active sessions</h2>
+          <h2 className="text-base font-semibold text-foreground">Active sessions</h2>
           <p className="text-sm text-muted-foreground">Devices signed in to your account.</p>
         </div>
         {others > 0 && (
@@ -441,6 +460,96 @@ function SessionsSection({ onSignedOut }: { onSignedOut: () => void }) {
             )
           })}
         </ul>
+      )}
+    </section>
+  )
+}
+
+const RETENTION_OPTIONS = [
+  { label: 'Keep forever', days: 0 },
+  { label: '7 days', days: 7 },
+  { label: '30 days', days: 30 },
+  { label: '90 days', days: 90 },
+  { label: '180 days', days: 180 },
+  { label: '1 year', days: 365 },
+]
+
+const retentionSelectClass =
+  'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]'
+
+function RetentionSection() {
+  const [audit, setAudit] = useState('0')
+  const [trash, setTrash] = useState('0')
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    api
+      .getRetention()
+      .then((r) => {
+        setAudit(String(r.audit_days))
+        setTrash(String(r.trash_days))
+      })
+      .catch(() => toast.error('Could not load retention settings.'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function save() {
+    setBusy(true)
+    try {
+      await api.setRetention({ audit_days: Number(audit) || 0, trash_days: Number(trash) || 0 })
+      toast.success('Retention saved')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not save retention settings.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-base font-semibold text-foreground">Retention</h2>
+        <p className="text-sm text-muted-foreground">
+          Automatically purge old data. Use 0 to keep it indefinitely.
+        </p>
+      </div>
+      {loading ? (
+        <div className="grid place-items-center py-6">
+          <CircleNotch className="size-5 animate-spin text-muted-foreground" aria-label="Loading" />
+        </div>
+      ) : (
+        <div className="max-w-sm space-y-3">
+          <Field label="Audit log">
+            <select
+              className={retentionSelectClass}
+              value={audit}
+              onChange={(e) => setAudit(e.currentTarget.value)}
+            >
+              {RETENTION_OPTIONS.map((o) => (
+                <option key={o.days} value={String(o.days)}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Trash">
+            <select
+              className={retentionSelectClass}
+              value={trash}
+              onChange={(e) => setTrash(e.currentTarget.value)}
+            >
+              {RETENTION_OPTIONS.map((o) => (
+                <option key={o.days} value={String(o.days)}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Button onClick={save} disabled={busy}>
+            {busy ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
       )}
     </section>
   )

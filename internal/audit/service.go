@@ -44,6 +44,7 @@ const (
 	ActionTrashRestored    = "trash.restored"
 	ActionTrashPurged      = "trash.purged"
 	ActionTrashEmptied     = "trash.emptied"
+	ActionSettingsUpdated  = "settings.updated"
 	ActionTokenCreated     = "token.created"
 	ActionTokenRevoked     = "token.revoked"
 )
@@ -111,6 +112,17 @@ func (s *Service) Record(ctx context.Context, actorID int64, ip, action, target 
 
 // List returns entries newest first, older than beforeID. Pass a large beforeID
 // for the first page and the last returned id for the next.
+// PurgeBefore deletes entries older than the cutoff, returning how many went.
+// It backs the configurable retention: the log records IP addresses, so keeping
+// it bounded is a privacy measure as much as housekeeping.
+func (s *Service) PurgeBefore(ctx context.Context, before time.Time) (int64, error) {
+	n, err := s.writes.DeleteAuditEntriesBefore(ctx, before.Unix())
+	if err != nil {
+		return 0, fmt.Errorf("audit: purge before %s: %w", before, err)
+	}
+	return n, nil
+}
+
 func (s *Service) List(ctx context.Context, beforeID int64, limit int) ([]Entry, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50

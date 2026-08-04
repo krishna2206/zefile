@@ -32,6 +32,9 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteACL(ctx context.Context, id int64) error
 	DeleteACLForSubject(ctx context.Context, arg DeleteACLForSubjectParams) error
+	// Retention purge: drop entries older than a cutoff. The audit log records IP
+	// addresses, so keeping it bounded is a privacy measure, not only housekeeping.
+	DeleteAuditEntriesBefore(ctx context.Context, at int64) (int64, error)
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
 	DeleteFileOwner(ctx context.Context, path string) error
 	DeleteGroup(ctx context.Context, id int64) (int64, error)
@@ -53,6 +56,7 @@ type Querier interface {
 	// so a caller cannot present a token whose owner has been disabled. A NULL
 	// expires_at means the token never expires.
 	GetAPITokenByHash(ctx context.Context, arg GetAPITokenByHashParams) (GetAPITokenByHashRow, error)
+	GetChecksum(ctx context.Context, path string) (Checksum, error)
 	GetFileOwner(ctx context.Context, path string) (FileOwner, error)
 	// Batched so that listing a directory costs one query rather than one per entry.
 	GetFileOwnersForPaths(ctx context.Context, paths []string) ([]FileOwner, error)
@@ -64,6 +68,7 @@ type Querier interface {
 	// are filtered here rather than in Go: a caller that forgets the check must not
 	// be able to resurrect a dead session.
 	GetSessionByTokenHash(ctx context.Context, arg GetSessionByTokenHashParams) (GetSessionByTokenHashRow, error)
+	GetSetting(ctx context.Context, key string) (string, error)
 	// The status (expired, revoked, exhausted) is decided in Go so the public
 	// endpoint can tell a holder why a link stopped working; the row is fetched
 	// whatever its state.
@@ -147,6 +152,8 @@ type Querier interface {
 	UpdateUploadOffset(ctx context.Context, arg UpdateUploadOffsetParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpsertACL(ctx context.Context, arg UpsertACLParams) (Acl, error)
+	UpsertChecksum(ctx context.Context, arg UpsertChecksumParams) error
+	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 }
 
 var _ Querier = (*Queries)(nil)

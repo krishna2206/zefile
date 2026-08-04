@@ -12,3 +12,8 @@ LEFT JOIN users u ON u.id = a.actor_id
 WHERE a.id < ?
 ORDER BY a.id DESC
 LIMIT ?;
+
+-- name: DeleteAuditEntriesBefore :execrows
+-- Retention purge: drop entries older than a cutoff. The audit log records IP
+-- addresses, so keeping it bounded is a privacy measure, not only housekeeping.
+DELETE FROM audit_log WHERE at < ?;

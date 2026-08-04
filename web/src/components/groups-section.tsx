@@ -48,8 +48,8 @@ export function GroupsSection({ users }: { users: UserSummary[] }) {
 
   return (
     <section className="space-y-2">
-      <div className="flex items-center gap-3">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Groups</h2>
+      <div className="mb-2 flex items-center gap-3 px-1">
+        <h2 className="text-base font-semibold text-foreground">Groups</h2>
         <Button size="sm" variant="outline" className="ml-auto gap-2" onClick={() => setCreating(true)}>
           <UsersThree />
           New group

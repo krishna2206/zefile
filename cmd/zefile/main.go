@@ -20,10 +20,12 @@ import (
 	"github.com/krishna2206/zefile/internal/api"
 	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/auth"
+	"github.com/krishna2206/zefile/internal/checksum"
 	"github.com/krishna2206/zefile/internal/config"
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/db"
 	"github.com/krishna2206/zefile/internal/job"
+	"github.com/krishna2206/zefile/internal/settings"
 	"github.com/krishna2206/zefile/internal/share"
 	"github.com/krishna2206/zefile/internal/storage"
 	"github.com/krishna2206/zefile/internal/trash"
@@ -183,6 +185,8 @@ func run() error {
 	uploads := upload.New(database, fs)
 	trashService := trash.New(database, fs)
 	auditLog := audit.New(database)
+	checksums := checksum.New(database, fs)
+	settingsSvc := settings.New(database)
 	shareService := share.New(database, fs, share.GuardFunc(func(ctx context.Context, p storage.Path) (bool, error) {
 		return engine.Allows(ctx, acl.PermShare, p)
 	}))
@@ -192,9 +196,12 @@ func run() error {
 	// asked to stop, and requeued on the next start.
 	jobs := job.New(database)
 	jobs.Register(job.TypeCopy, copyJobHandler(fs, engine))
+	jobs.Register(job.TypeChecksum, checksumJobHandler(checksums, engine))
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
 	go jobs.Run(workerCtx)
+
+	startRetention(workerCtx, auditLog, trashService, settingsSvc)
 
 	appHandler := api.New(api.Options{
 		FS:            fs,
@@ -202,7 +209,9 @@ func run() error {
 		Trash:         trashService,
 		Shares:        shareService,
 		Jobs:          jobs,
+		Checksums:     checksums,
 		Audit:         auditLog,
+		Settings:      settingsSvc,
 		Auth:          authService,
 		ACL:           engine,
 		Signer:        signer,
@@ -262,6 +271,76 @@ func copyJobHandler(fs *storage.Local, engine *acl.Engine) job.Handler {
 			return err
 		}
 		return engine.SetOwner(ctx, to, p.UserID)
+	}
+}
+
+// startRetention runs the purges — old audit entries and expired trash — a few
+// times a day, reading the current policy from settings each time so a change
+// made in the interface takes effect within hours without a restart. A zero
+// policy keeps everything, so an unconfigured instance purges nothing.
+func startRetention(ctx context.Context, auditLog *audit.Service, trashService *trash.Service, settingsSvc *settings.Service) {
+	purge := func() {
+		policy, err := settingsSvc.Retention(ctx)
+		if err != nil {
+			slog.WarnContext(ctx, "retention: could not read policy", "error", err)
+			return
+		}
+		now := time.Now()
+		if policy.AuditDays > 0 {
+			cutoff := now.AddDate(0, 0, -policy.AuditDays)
+			if n, err := auditLog.PurgeBefore(ctx, cutoff); err != nil {
+				slog.WarnContext(ctx, "audit retention purge failed", "error", err)
+			} else if n > 0 {
+				slog.InfoContext(ctx, "purged old audit entries", "count", n, "older_than_days", policy.AuditDays)
+			}
+		}
+		if policy.TrashDays > 0 {
+			cutoff := now.AddDate(0, 0, -policy.TrashDays)
+			if n, err := trashService.PurgeExpired(ctx, cutoff); err != nil {
+				slog.WarnContext(ctx, "trash retention purge failed", "error", err)
+			} else if n > 0 {
+				slog.InfoContext(ctx, "purged expired trash", "count", n, "older_than_days", policy.TrashDays)
+			}
+		}
+	}
+
+	go func() {
+		purge()
+		ticker := time.NewTicker(6 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				purge()
+			}
+		}
+	}()
+}
+
+// checksumJobHandler computes a file's SHA-256 in the background. Like the copy
+// handler it rebuilds the caller's authority from the payload, so hashing is
+// subject to the same read permission as any other access to the file.
+func checksumJobHandler(checksums *checksum.Service, engine *acl.Engine) job.Handler {
+	return func(ctx context.Context, payload string, _ func(float64)) error {
+		var p checksum.Payload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			return fmt.Errorf("checksum job: decode payload: %w", err)
+		}
+
+		subject, err := engine.LoadSubject(ctx, p.UserID, p.IsAdmin)
+		if err != nil {
+			return fmt.Errorf("checksum job: load subject: %w", err)
+		}
+		ctx = acl.NewContext(ctx, subject)
+
+		path, err := storage.ParsePath(p.Path)
+		if err != nil {
+			return err
+		}
+		_, err = checksums.Compute(ctx, path)
+		return err
 	}
 }
 

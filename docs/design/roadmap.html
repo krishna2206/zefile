@@ -303,7 +303,7 @@
       <div class="item shipped">
         <span class="id">2.6</span>
         <div class="title">Journal d’audit<span class="status">Fait</span></div>
-        <div class="body">Connexions et échecs, modifications de permissions, cycle de vie des jetons, suppressions de comptes et de fichiers. Consultation administrateur paginée. La conservation configurable reste à ajouter.</div>
+        <div class="body">Connexions et échecs, modifications de permissions, cycle de vie des jetons, suppressions de comptes et de fichiers. Consultation administrateur paginée. Conservation configurable&nbsp;: purge automatique des entrées (et de la corbeille) au-delà d’un nombre de jours réglable.</div>
         <div class="done"><b>Terminé quand</b> toute action sensible laisse une trace horodatée et attribuée.</div>
       </div>
 
@@ -394,10 +394,10 @@
         <div class="done"><b>Terminé quand</b> une archive piégée à traversée et une bombe de décompression sont toutes deux refusées.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">4.4</span>
-        <div class="title">Empreintes</div>
-        <div class="body">Calcul SHA-256 à la demande, mise en cache, vérification. Tâche de fond, car c’est intensif en lecture disque.</div>
+        <div class="title">Empreintes<span class="status">Fait</span></div>
+        <div class="body">Calcul SHA-256 à la demande via la file de tâches (non bloquant), mise en cache invalidée par la taille et la date du fichier. Exposé dans l’API et en un clic dans le menu contextuel.</div>
         <div class="done"><b>Terminé quand</b> l’empreinte d’un fichier de 40&nbsp;Go se calcule sans bloquer le service.</div>
       </div>
 

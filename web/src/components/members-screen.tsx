@@ -119,7 +119,7 @@ export function MembersScreen({ me }: { me: User }) {
         ) : (
           <div className="mx-auto max-w-3xl p-4">
             <section>
-              <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <h2 className="mb-2 px-1 text-base font-semibold text-foreground">
                 Accounts
               </h2>
               <div className="overflow-hidden rounded-lg border">
@@ -140,7 +140,7 @@ export function MembersScreen({ me }: { me: User }) {
             </section>
 
             <section className="mt-6">
-              <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <h2 className="mb-2 px-1 text-base font-semibold text-foreground">
                 Pending invitations
               </h2>
               {invitations.length === 0 ? (

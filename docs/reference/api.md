@@ -64,6 +64,7 @@ Field-level validation errors add an `errors` map of field name to message.
 | `POST` | `/api/v1/fs/bundle` | Mint a signed zip link for a selection or folder |
 | `GET` | `/api/v1/fs/thumb?path=` | Image/video thumbnail |
 | `GET` | `/api/v1/fs/space` | Free space and read-only state |
+| `GET` | `/api/v1/fs/checksum?path=` | SHA-256 of a file (cached, or a job to poll) |
 | `GET` | `/api/v1/config` | Public instance capabilities and version |
 
 ## Sharing

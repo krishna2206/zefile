@@ -46,6 +46,12 @@ reserve.
 *Optional, default `false`.* When `true`, refuses every write regardless of free
 space. Useful for maintenance or a read-only mirror.
 
+::: tip Retention
+How long the audit log and the trash are kept is **not** an environment setting —
+it is configured at runtime under **Settings → Retention** (admin). See the
+[audit log](/features/audit-log).
+:::
+
 ## Server
 
 ### `ZEFILE_LISTEN`

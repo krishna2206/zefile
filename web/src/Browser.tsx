@@ -19,6 +19,7 @@ import {
   Copy as CopyIcon,
   DownloadSimple as Download,
   Eye,
+  Fingerprint,
   FolderOpen,
   House,
   Key,
@@ -164,6 +165,7 @@ type EntryActions = {
   open: (entry: Entry) => void
   download: (entry: Entry) => void
   downloadZip: (entry: Entry) => void
+  checksum: (entry: Entry) => void
   share: (entry: Entry) => void
   manageAccess: (entry: Entry) => void
   canManageAccess: boolean
@@ -522,6 +524,30 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     }
   }, [])
 
+  // checksum computes (or reuses) a file's SHA-256 and copies it. Hashing runs
+  // as a background job, so a large file is polled rather than awaited inline.
+  const checksum = useCallback(async (entry: Entry) => {
+    const id = toast.loading(`Computing SHA-256 of “${entry.name}”…`)
+    try {
+      const res = await api.checksum(entry.path)
+      let sum = res.checksum
+      if (!sum && res.job) {
+        let job = res.job
+        for (let i = 0; i < 900 && (job.status === 'pending' || job.status === 'running'); i++) {
+          await new Promise((r) => setTimeout(r, 800))
+          job = await api.getJob(job.id)
+        }
+        if (job.status !== 'done') throw new Error('checksum job did not finish')
+        sum = (await api.checksum(entry.path)).checksum
+      }
+      if (!sum) throw new Error('no checksum returned')
+      await navigator.clipboard.writeText(sum.hash)
+      toast.success('SHA-256 copied to clipboard', { id, description: sum.hash })
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not compute the checksum.', { id })
+    }
+  }, [])
+
   const selectEntry = useCallback(
     (entry: Entry, intent: ClickIntent) => {
       setSelection((current) => {
@@ -587,6 +613,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     },
     download,
     downloadZip: (entry) => void downloadZip([entry]),
+    checksum: (entry) => void checksum(entry),
     share: (entry) => setDialog({ kind: 'share', entry }),
     manageAccess: (entry) => setDialog({ kind: 'access', entry }),
     canManageAccess: user.is_admin,
@@ -1381,6 +1408,10 @@ function EntryMenu({ entry, actions, children }: { entry: Entry; actions: EntryA
             <ContextMenuItem onSelect={() => actions.download(entry)}>
               <Download />
               Download
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => actions.checksum(entry)}>
+              <Fingerprint />
+              Copy SHA-256
             </ContextMenuItem>
           </>
         )}

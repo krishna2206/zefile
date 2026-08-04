@@ -10,6 +10,20 @@ import (
 	"database/sql"
 )
 
+const deleteAuditEntriesBefore = `-- name: DeleteAuditEntriesBefore :execrows
+DELETE FROM audit_log WHERE at < ?
+`
+
+// Retention purge: drop entries older than a cutoff. The audit log records IP
+// addresses, so keeping it bounded is a privacy measure, not only housekeeping.
+func (q *Queries) DeleteAuditEntriesBefore(ctx context.Context, at int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteAuditEntriesBefore, at)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const insertAuditEntry = `-- name: InsertAuditEntry :exec
 INSERT INTO audit_log (at, actor_id, actor_ip, action, target, details)
 VALUES (?, ?, ?, ?, ?, ?)

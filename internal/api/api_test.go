@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -23,6 +24,7 @@ import (
 	"github.com/krishna2206/zefile/internal/api"
 	"github.com/krishna2206/zefile/internal/audit"
 	"github.com/krishna2206/zefile/internal/auth"
+	"github.com/krishna2206/zefile/internal/checksum"
 	"github.com/krishna2206/zefile/internal/db"
 	"github.com/krishna2206/zefile/internal/job"
 	"github.com/krishna2206/zefile/internal/share"
@@ -90,6 +92,24 @@ func newClient(t *testing.T) *client {
 		}
 		return engine.SetOwner(ctx, to, p.UserID)
 	})
+	checksums := checksum.New(database, fs)
+	jobs.Register(job.TypeChecksum, func(ctx context.Context, payload string, _ func(float64)) error {
+		var p checksum.Payload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			return err
+		}
+		subject, err := engine.LoadSubject(ctx, p.UserID, p.IsAdmin)
+		if err != nil {
+			return err
+		}
+		ctx = acl.NewContext(ctx, subject)
+		path, err := storage.ParsePath(p.Path)
+		if err != nil {
+			return err
+		}
+		_, err = checksums.Compute(ctx, path)
+		return err
+	})
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	t.Cleanup(stopWorker)
 	go jobs.Run(workerCtx)
@@ -101,6 +121,7 @@ func newClient(t *testing.T) *client {
 			return engine.Allows(ctx, acl.PermShare, p)
 		})),
 		Jobs:          jobs,
+		Checksums:     checksums,
 		Audit:         audit.New(database),
 		ContentBase:   "https://content.example",
 		SecureCookies: false,
@@ -1351,6 +1372,52 @@ func TestAPITokenInvalidIsRejected(t *testing.T) {
 	c.token = "zefile_live_notarealtoken"
 	if resp, _ := c.do(http.MethodGet, "/api/v1/fs?path=/", nil); resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("bogus token = %d, want 401", resp.StatusCode)
+	}
+}
+
+func TestChecksumComputesAndCaches(t *testing.T) {
+	t.Parallel()
+
+	c := newClient(t)
+	c.setUp()
+
+	body := []byte("hello checksum")
+	if err := os.WriteFile(filepath.Join(c.root, "f.bin"), body, 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	want := fmt.Sprintf("%x", sha256.Sum256(body))
+
+	// First request: not cached, so a background job comes back.
+	resp, raw := c.do(http.MethodGet, "/api/v1/fs/checksum?path="+url.QueryEscape("/f.bin"), nil)
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("first checksum = %d: %s", resp.StatusCode, raw)
+	}
+	first := decode[struct {
+		Job *struct {
+			ID int64 `json:"id"`
+		} `json:"job"`
+	}](t, raw)
+	if first.Job == nil {
+		t.Fatal("expected a job on the first request")
+	}
+
+	// The worker computes it; the same call then returns the cached digest.
+	var got string
+	for i := 0; i < 100; i++ {
+		resp, raw := c.do(http.MethodGet, "/api/v1/fs/checksum?path="+url.QueryEscape("/f.bin"), nil)
+		if resp.StatusCode == http.StatusOK {
+			got = decode[struct {
+				Checksum struct {
+					Hash      string `json:"hash"`
+					Algorithm string `json:"algorithm"`
+				} `json:"checksum"`
+			}](t, raw).Checksum.Hash
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got != want {
+		t.Fatalf("checksum = %q, want %q", got, want)
 	}
 }
 

@@ -17,5 +17,6 @@ The audit log is visible to administrators from the **Activity** screen, with
 keyset pagination for a large history. Each entry carries the actor, the action,
 the target and the client IP.
 
-Because the IP is recorded, the log is data you should not keep indefinitely by
-default. A configurable retention period is planned.
+Because the IP is recorded, the log is data you should not keep indefinitely.
+Under **Settings → Retention** an administrator can set a number of days after
+which old entries (and expired trash) are purged automatically.

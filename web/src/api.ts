@@ -31,6 +31,10 @@ export type Share = {
 
 /** Job is a background operation (currently a large or folder copy). Progress is
  *  a fraction in [0,1]. */
+export type Retention = { audit_days: number; trash_days: number }
+
+export type Checksum = { path: string; algorithm: string; hash: string; size: number; computed_at: string }
+
 export type Job = {
   id: number
   type: string
@@ -229,6 +233,11 @@ export const api = {
     }),
   revokeToken: (id: number) => request<void>(`/api/v1/tokens/${id}`, { method: 'DELETE' }),
 
+  // Retention policy (admin). Days; 0 keeps data indefinitely.
+  getRetention: () => request<Retention>('/api/v1/settings/retention'),
+  setRetention: (r: Retention) =>
+    request<Retention>('/api/v1/settings/retention', { method: 'PUT', body: JSON.stringify(r) }),
+
   // Invitations. Accepting is public (the account does not exist yet); creating,
   // listing and revoking are admin-only and the server enforces it.
   checkInvitation: (token: string) =>
@@ -274,6 +283,11 @@ export const api = {
     }),
 
   getJob: (id: number) => request<Job>(`/api/v1/jobs/${id}`),
+
+  // A file's SHA-256. Returns the cached digest when current, otherwise a job to
+  // poll; call again once it is done to get the digest.
+  checksum: (path: string) =>
+    request<{ checksum?: Checksum; job?: Job }>(`/api/v1/fs/checksum?path=${encodeURIComponent(path)}`),
 
   remove: (path: string, recursive = false) =>
     request<void>(
