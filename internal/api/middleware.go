@@ -217,13 +217,41 @@ func bearerToken(r *http.Request) string {
 
 // clientIP reports the address to record and to throttle against.
 //
-// Forwarded headers are deliberately ignored. They are trivially forged, and
-// trusting them without knowing which proxy sits in front would let anyone
-// reset their own rate limit by inventing an address.
+// A forwarded header is trusted only when the direct peer is a private or
+// loopback address — the signature of a reverse proxy on the same trusted
+// network, which is how nearly every self-hosted instance runs. There, the peer
+// is the proxy, not the client, and the header it set carries the real address.
+// A direct connection from a public address is used as-is, and its forwarded
+// headers ignored, since a client could forge them to spoof an address or slip
+// past the login rate limit. This needs no configuration: the private peer is
+// the tell.
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
+	}
+	if ip := net.ParseIP(host); ip != nil && (ip.IsPrivate() || ip.IsLoopback()) {
+		if forwarded := forwardedClientIP(r); forwarded != "" {
+			return forwarded
+		}
 	}
 	return host
+}
+
+// forwardedClientIP extracts the real client address from the headers a reverse
+// proxy sets. It prefers X-Real-Ip, then the rightmost entry of X-Forwarded-For
+// — the address the trusted proxy itself saw connect, which a client cannot
+// forge past a single proxy (the proxy appends it after any spoofed values).
+func forwardedClientIP(r *http.Request) string {
+	if real := strings.TrimSpace(r.Header.Get("X-Real-Ip")); net.ParseIP(real) != nil {
+		return real
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		last := strings.TrimSpace(parts[len(parts)-1])
+		if net.ParseIP(last) != nil {
+			return last
+		}
+	}
+	return ""
 }
