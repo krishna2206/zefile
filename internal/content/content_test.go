@@ -757,7 +757,16 @@ func TestForgedBundleTokenIsRefused(t *testing.T) {
 	f.write(t, "a.txt", []byte("x"))
 
 	valid := f.signer.SignBundle([]storage.Path{storage.MustParsePath("/a.txt")}, 1)
-	forged := valid[:len(valid)-1] + "0"
+	// Tamper the first character of the signature (after the '.'). Unlike the
+	// last character, whose low bits are base64 padding and may decode to the
+	// same bytes, the first character's bits are all significant, so the forged
+	// signature is guaranteed to differ.
+	enc, sig, _ := strings.Cut(valid, ".")
+	repl := byte('A')
+	if sig[0] == 'A' {
+		repl = 'B'
+	}
+	forged := enc + "." + string(repl) + sig[1:]
 	resp := f.get(t, f.server.URL+"/z/"+forged+"/x.zip", nil)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusForbidden {

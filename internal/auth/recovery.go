@@ -98,33 +98,15 @@ func (s *Service) ResetPasswordWithCode(ctx context.Context, username, code, new
 		return ErrInvalidRecovery
 	}
 
-	codes, err := s.reads.ListUnusedRecoveryCodesForUser(ctx, row.ID)
+	ok, err := s.consumeRecoveryCode(ctx, row.ID, code)
 	if err != nil {
-		return fmt.Errorf("auth: load recovery codes: %w", err)
+		return err
 	}
-	var matched int64
-	for _, rc := range codes {
-		if ok, err := VerifyPassword(code, rc.CodeHash); err == nil && ok {
-			matched = rc.ID
-			break
-		}
-	}
-	if matched == 0 {
+	if !ok {
+		// Spend the same effort as a real verify, so a wrong code does not
+		// answer measurably faster.
 		_, _ = VerifyPassword(code, decoyHash())
 		s.recordFailure(username, address)
-		return ErrInvalidRecovery
-	}
-
-	// Spend the code first, and require that this call is the one that spent it,
-	// so two concurrent resets with the same code cannot both succeed.
-	spent, err := s.writes.MarkRecoveryCodeUsed(ctx, sqlcgen.MarkRecoveryCodeUsedParams{
-		UsedAt: sql.NullInt64{Int64: s.now().Unix(), Valid: true},
-		ID:     matched,
-	})
-	if err != nil {
-		return fmt.Errorf("auth: spend recovery code: %w", err)
-	}
-	if spent == 0 {
 		return ErrInvalidRecovery
 	}
 
@@ -145,6 +127,36 @@ func (s *Service) ResetPasswordWithCode(ctx context.Context, username, code, new
 		s.byAddress.Reset(address)
 	}
 	return s.RevokeAllSessions(ctx, row.ID)
+}
+
+// consumeRecoveryCode spends a single-use code for an account, atomically: it
+// returns true only if this call is the one that marked a matching code used, so
+// two concurrent uses of the same code cannot both succeed. It reports false
+// (not an error) when no unused code matches. The caller has already
+// established the account, so there is no enumeration concern here.
+func (s *Service) consumeRecoveryCode(ctx context.Context, userID int64, code string) (bool, error) {
+	codes, err := s.reads.ListUnusedRecoveryCodesForUser(ctx, userID)
+	if err != nil {
+		return false, fmt.Errorf("auth: load recovery codes: %w", err)
+	}
+	var matched int64
+	for _, rc := range codes {
+		if ok, err := VerifyPassword(code, rc.CodeHash); err == nil && ok {
+			matched = rc.ID
+			break
+		}
+	}
+	if matched == 0 {
+		return false, nil
+	}
+	spent, err := s.writes.MarkRecoveryCodeUsed(ctx, sqlcgen.MarkRecoveryCodeUsedParams{
+		UsedAt: sql.NullInt64{Int64: s.now().Unix(), Valid: true},
+		ID:     matched,
+	})
+	if err != nil {
+		return false, fmt.Errorf("auth: spend recovery code: %w", err)
+	}
+	return spent > 0, nil
 }
 
 // newRecoveryCode returns one human-typeable code like "abcde-fghij".

@@ -44,6 +44,8 @@ const (
 	CodeUnauthenticated = "unauthenticated"
 	// #nosec G101 -- an error code shown to clients, not a credential
 	CodeInvalidCredentials = "invalid_credentials"
+	CodeTOTPRequired       = "totp_required"
+	CodeTOTPInvalid        = "totp_invalid"
 	CodePermissionDenied   = "permission_denied"
 	CodeNotFound           = "not_found"
 	CodeConflict           = "conflict"
@@ -180,6 +182,10 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, auth.ErrInvalidRecovery):
 		writeProblem(w, r, http.StatusUnauthorized, CodeInvalidCredentials,
 			"Reset failed", "The username or recovery code is not valid.")
+
+	case errors.Is(err, auth.ErrInvalidTOTP):
+		writeProblem(w, r, http.StatusUnauthorized, CodeTOTPInvalid,
+			"Invalid code", "That two-factor code is not correct.")
 
 	case errors.Is(err, auth.ErrRateLimited):
 		writeProblem(w, r, http.StatusTooManyRequests, CodeRateLimited,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { CircleNotch, DeviceMobile, Monitor } from '@phosphor-icons/react'
+import { toDataURL } from 'qrcode'
 
 import { api, ApiError, type SessionInfo, type User } from '@/api'
 import { formatRelativeTime } from '@/lib/files'
@@ -57,6 +58,7 @@ export function SettingsScreen({ me, onSignedOut }: { me: User; onSignedOut: () 
           </section>
 
           <PasswordSection />
+          <TwoFactorSection initiallyEnabled={!!me.totp_enabled} />
           <RecoveryCodesSection />
           <TokensSection />
           <SessionsSection onSignedOut={onSignedOut} />
@@ -67,6 +69,142 @@ export function SettingsScreen({ me, onSignedOut }: { me: User; onSignedOut: () 
 }
 
 type FieldErrors = Partial<Record<'current_password' | 'password' | 'confirm', string>>
+
+function TwoFactorSection({ initiallyEnabled }: { initiallyEnabled: boolean }) {
+  const [enabled, setEnabled] = useState(initiallyEnabled)
+  const [enroll, setEnroll] = useState<{ secret: string; qr: string } | null>(null)
+  const [disabling, setDisabling] = useState(false)
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function begin() {
+    setBusy(true)
+    try {
+      const { secret, uri } = await api.enrollTOTP()
+      const qr = await toDataURL(uri, { margin: 1, width: 200 })
+      setEnroll({ secret, qr })
+      setCode('')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not start setup.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmEnable() {
+    if (!enroll) return
+    setBusy(true)
+    try {
+      await api.enableTOTP(enroll.secret, code.trim())
+      setEnabled(true)
+      setEnroll(null)
+      setCode('')
+      toast.success('Two-factor authentication enabled')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not enable two-factor.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmDisable() {
+    setBusy(true)
+    try {
+      await api.disableTOTP(code.trim())
+      setEnabled(false)
+      setDisabling(false)
+      setCode('')
+      toast.success('Two-factor authentication disabled')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not disable two-factor.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div>
+          <h2 className="text-sm font-medium">Two-factor authentication</h2>
+          <p className="text-sm text-muted-foreground">
+            {enabled
+              ? 'On — an authenticator code is required at sign-in.'
+              : 'Require a code from an authenticator app on top of your password.'}
+          </p>
+        </div>
+        {!enabled && !enroll && (
+          <Button variant="outline" size="sm" className="ml-auto shrink-0" onClick={begin} disabled={busy}>
+            {busy ? 'Starting…' : 'Enable'}
+          </Button>
+        )}
+        {enabled && !disabling && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto shrink-0 text-muted-foreground hover:text-destructive"
+            onClick={() => {
+              setDisabling(true)
+              setCode('')
+            }}
+          >
+            Disable
+          </Button>
+        )}
+      </div>
+
+      {enroll && (
+        <div className="space-y-3 rounded-md border p-3">
+          <p className="text-xs text-muted-foreground">
+            Scan this in your authenticator app (or enter the key by hand), then type the code it shows.
+          </p>
+          <img src={enroll.qr} alt="" width={180} height={180} className="rounded bg-white p-2" />
+          <p className="break-all font-mono text-xs text-muted-foreground">{enroll.secret}</p>
+          <div className="flex items-center gap-2">
+            <Input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="6-digit code"
+              value={code}
+              onChange={(e) => setCode(e.currentTarget.value)}
+              className="max-w-40"
+            />
+            <Button size="sm" onClick={confirmEnable} disabled={busy}>
+              {busy ? 'Confirming…' : 'Confirm'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEnroll(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {disabling && (
+        <div className="flex items-center gap-2 rounded-md border p-3">
+          <Input
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="Current code"
+            value={code}
+            onChange={(e) => setCode(e.currentTarget.value)}
+            className="max-w-40"
+          />
+          <Button
+            size="sm"
+            className="bg-destructive text-white hover:bg-destructive/90"
+            onClick={confirmDisable}
+            disabled={busy}
+          >
+            {busy ? 'Disabling…' : 'Turn off'}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setDisabling(false)}>
+            Cancel
+          </Button>
+        </div>
+      )}
+    </section>
+  )
+}
 
 function RecoveryCodesSection() {
   const [remaining, setRemaining] = useState<number | null>(null)

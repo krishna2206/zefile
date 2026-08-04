@@ -22,6 +22,18 @@ Groups are managed by administrators. A user's effective access is the union of
 their own grants and those of every group they belong to. See
 [Permissions](/features/permissions) for how that union is resolved.
 
+## Two-factor authentication
+
+Each user can add a second factor from **Settings → Two-factor authentication**.
+Zefile uses **TOTP** (the six-digit codes from apps like Google Authenticator,
+Aegis or 1Password): scan the QR code once, confirm with a code, and from then on
+sign-in asks for a code after the password. Verification is offline — no SMS, no
+email.
+
+If you lose your authenticator, a [recovery code](#forgotten-passwords) works in
+place of the code at sign-in, so a lost device is a recovery rather than a
+lockout. Two-factor is per-user and opt-in.
+
 ## Forgotten passwords
 
 Zefile never sends email, so password reset works with **recovery codes**

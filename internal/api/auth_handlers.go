@@ -18,14 +18,18 @@ const maxBodyBytes = 64 << 10
 type loginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// TOTPCode is the second factor, sent on a second attempt once the first
+	// answered that two-factor authentication is required.
+	TOTPCode string `json:"totp_code"`
 }
 
 type userResponse struct {
-	ID        int64     `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email,omitempty"`
-	IsAdmin   bool      `json:"is_admin"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          int64     `json:"id"`
+	Username    string    `json:"username"`
+	Email       string    `json:"email,omitempty"`
+	IsAdmin     bool      `json:"is_admin"`
+	TOTPEnabled bool      `json:"totp_enabled"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type sessionResponse struct {
@@ -53,6 +57,21 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, r, err)
 		return
+	}
+
+	// With two-factor enabled, the password is only the first step. The first
+	// attempt (no code) is answered with totp_required so the client can ask for
+	// the code; the second attempt carries it.
+	if user.TOTPEnabled {
+		if body.TOTPCode == "" {
+			writeProblem(w, r, http.StatusUnauthorized, CodeTOTPRequired,
+				"Two-factor code required", "Enter the code from your authenticator app.")
+			return
+		}
+		if err := s.auth.VerifyLoginTOTP(r.Context(), user.ID, body.TOTPCode); err != nil {
+			writeError(w, r, err)
+			return
+		}
 	}
 
 	token, session, err := s.auth.CreateSession(r.Context(), user.ID, r.UserAgent(), clientIP(r))
@@ -153,11 +172,12 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 
 func toUserResponse(u auth.User) userResponse {
 	return userResponse{
-		ID:        u.ID,
-		Username:  u.Username,
-		Email:     u.Email,
-		IsAdmin:   u.IsAdmin,
-		CreatedAt: u.CreatedAt,
+		ID:          u.ID,
+		Username:    u.Username,
+		Email:       u.Email,
+		IsAdmin:     u.IsAdmin,
+		TOTPEnabled: u.TOTPEnabled,
+		CreatedAt:   u.CreatedAt,
 	}
 }
 

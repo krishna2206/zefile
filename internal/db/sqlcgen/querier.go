@@ -134,6 +134,9 @@ type Querier interface {
 	RevokeSessionForUser(ctx context.Context, arg RevokeSessionForUserParams) (int64, error)
 	RevokeShare(ctx context.Context, arg RevokeShareParams) (int64, error)
 	SetFileOwner(ctx context.Context, arg SetFileOwnerParams) error
+	// Sets or clears (NULL) the TOTP secret. A non-NULL secret means two-factor
+	// authentication is enabled for the account.
+	SetTOTPSecret(ctx context.Context, arg SetTOTPSecretParams) error
 	SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error
 	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) error
 	// Records use for the "last used" column. Best-effort, like session touch: a

@@ -55,6 +55,9 @@ var (
 	// ErrRateLimited means too many recent failures for this account or address.
 	ErrRateLimited = errors.New("auth: too many attempts")
 
+	// ErrInvalidTOTP means the second-factor code (or recovery code) is wrong.
+	ErrInvalidTOTP = errors.New("auth: invalid two-factor code")
+
 	// ErrInvalidSession means the token is unknown, expired or revoked.
 	ErrInvalidSession = errors.New("auth: invalid session")
 
@@ -83,12 +86,13 @@ const DefaultInviteTTL = 7 * 24 * time.Hour
 
 // User is an account, without its secrets.
 type User struct {
-	ID        int64
-	Username  string
-	Email     string
-	IsAdmin   bool
-	Disabled  bool
-	CreatedAt time.Time
+	ID          int64
+	Username    string
+	Email       string
+	IsAdmin     bool
+	Disabled    bool
+	TOTPEnabled bool
+	CreatedAt   time.Time
 }
 
 // GetUser returns one account by id.
@@ -756,12 +760,13 @@ var decoyHash = sync.OnceValue(func() string {
 
 func toUser(row sqlcgen.User) User {
 	return User{
-		ID:        row.ID,
-		Username:  row.Username,
-		Email:     row.Email.String,
-		IsAdmin:   row.IsAdmin == 1,
-		Disabled:  row.Disabled == 1,
-		CreatedAt: time.Unix(row.CreatedAt, 0).UTC(),
+		ID:          row.ID,
+		Username:    row.Username,
+		Email:       row.Email.String,
+		IsAdmin:     row.IsAdmin == 1,
+		Disabled:    row.Disabled == 1,
+		TOTPEnabled: row.TotpSecret.Valid && row.TotpSecret.String != "",
+		CreatedAt:   time.Unix(row.CreatedAt, 0).UTC(),
 	}
 }
 

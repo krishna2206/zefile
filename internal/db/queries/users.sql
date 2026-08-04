@@ -31,3 +31,8 @@ UPDATE users SET disabled = ?, updated_at = ? WHERE id = ?;
 -- subject type as well as an id, so they carry no foreign key and are cleared
 -- separately by the caller.
 DELETE FROM users WHERE id = ?;
+
+-- name: SetTOTPSecret :exec
+-- Sets or clears (NULL) the TOTP secret. A non-NULL secret means two-factor
+-- authentication is enabled for the account.
+UPDATE users SET totp_secret = ?, updated_at = ? WHERE id = ?;

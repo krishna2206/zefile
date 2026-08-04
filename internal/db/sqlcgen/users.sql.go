@@ -153,6 +153,23 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const setTOTPSecret = `-- name: SetTOTPSecret :exec
+UPDATE users SET totp_secret = ?, updated_at = ? WHERE id = ?
+`
+
+type SetTOTPSecretParams struct {
+	TotpSecret sql.NullString
+	UpdatedAt  int64
+	ID         int64
+}
+
+// Sets or clears (NULL) the TOTP secret. A non-NULL secret means two-factor
+// authentication is enabled for the account.
+func (q *Queries) SetTOTPSecret(ctx context.Context, arg SetTOTPSecretParams) error {
+	_, err := q.db.ExecContext(ctx, setTOTPSecret, arg.TotpSecret, arg.UpdatedAt, arg.ID)
+	return err
+}
+
 const setUserAdmin = `-- name: SetUserAdmin :exec
 UPDATE users SET is_admin = ?, updated_at = ? WHERE id = ?
 `

@@ -25,6 +25,8 @@ const (
 	ActionLogout           = "auth.logout"
 	ActionSetup            = "auth.setup"
 	ActionPasswordChanged  = "auth.password_changed"
+	ActionTOTPEnabled      = "auth.totp_enabled"
+	ActionTOTPDisabled     = "auth.totp_disabled"
 	ActionUserJoined       = "user.joined"
 	ActionUserUpdated      = "user.updated"
 	ActionUserDeleted      = "user.deleted"

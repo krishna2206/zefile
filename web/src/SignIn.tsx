@@ -38,6 +38,11 @@ export function SignIn({ mode, onDone }: Props) {
   const [formError, setFormError] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // Second-factor step: shown only after a first sign-in attempt answers that a
+  // code is required.
+  const [totpRequired, setTotpRequired] = useState(false)
+  const [totpCode, setTotpCode] = useState('')
+
   // Creating an account issues recovery codes to show once; the sign-in screen
   // can also switch to the forgotten-password flow.
   const [stage, setStage] = useState<'auth' | 'reset' | 'codes'>('auth')
@@ -135,10 +140,17 @@ export function SignIn({ mode, onDone }: Props) {
           return
         }
       } else {
-        await api.login(username.trim(), password)
+        await api.login(username.trim(), password, totpRequired ? totpCode.trim() : undefined)
       }
       onDone()
     } catch (err) {
+      // First correct password for a 2FA account: switch to the code step
+      // instead of showing an error.
+      if (err instanceof ApiError && err.code === 'totp_required') {
+        setTotpRequired(true)
+        setBusy(false)
+        return
+      }
       if (err instanceof ApiError && err.problem.errors) {
         // The server named the fields, so the messages go beside them.
         setErrors(err.problem.errors as FieldErrors)
@@ -252,6 +264,24 @@ export function SignIn({ mode, onDone }: Props) {
                     />
                   )}
                 </Field>
+
+                {totpRequired && (
+                  <Field
+                    label="Authenticator code"
+                    hint="The 6-digit code from your app, or a recovery code if you've lost your device."
+                  >
+                    {(id) => (
+                      <Input
+                        id={id}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        autoFocus
+                        value={totpCode}
+                        onChange={(e) => setTotpCode(e.currentTarget.value)}
+                      />
+                    )}
+                  </Field>
+                )}
 
                 {creating && (
                   <Field label="Confirm password" error={errors.confirm}>
