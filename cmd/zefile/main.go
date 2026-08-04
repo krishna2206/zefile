@@ -24,6 +24,7 @@ import (
 	"github.com/krishna2206/zefile/internal/config"
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/db"
+	"github.com/krishna2206/zefile/internal/geoip"
 	"github.com/krishna2206/zefile/internal/job"
 	"github.com/krishna2206/zefile/internal/settings"
 	"github.com/krishna2206/zefile/internal/share"
@@ -187,6 +188,21 @@ func run() error {
 	auditLog := audit.New(database)
 	checksums := checksum.New(database, fs)
 	settingsSvc := settings.New(database)
+
+	// Offline IP-to-place lookup for the sessions screen. The published image
+	// ships a database at the second path; a from-source run without one falls
+	// back to showing no location. No path is a setting — both are conventions.
+	locator := geoip.Open(
+		filepath.Join(cfg.ConfigDir, "geoip.mmdb"),
+		"/usr/local/share/zefile/geoip.mmdb",
+	)
+	defer func() { _ = locator.Close() }()
+	if locator.Enabled() {
+		slog.Info("geoip database loaded; sessions will show a location")
+	} else {
+		slog.Info("no geoip database found; sessions will show no location")
+	}
+
 	shareService := share.New(database, fs, share.GuardFunc(func(ctx context.Context, p storage.Path) (bool, error) {
 		return engine.Allows(ctx, acl.PermShare, p)
 	}))
@@ -210,6 +226,7 @@ func run() error {
 		Shares:        shareService,
 		Jobs:          jobs,
 		Checksums:     checksums,
+		GeoIP:         locator,
 		Audit:         auditLog,
 		Settings:      settingsSvc,
 		Auth:          authService,

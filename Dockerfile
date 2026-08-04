@@ -29,6 +29,25 @@ RUN VERSION="${VERSION:-v$(cat version.txt 2>/dev/null || echo 0.0.0)}" && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/zefile ./cmd/zefile
 
+# The offline IP-to-place database for the sessions screen, fetched at build
+# time — never at runtime — from DB-IP's free City Lite dataset (CC-BY 4.0). The
+# download is best-effort: if it fails, the image ships without it and the app
+# simply shows no location. It is not a build gate.
+FROM alpine:3.21 AS geoip
+RUN apk add --no-cache curl
+RUN set -eu; \
+    Y=$(date +%Y); M=$(date +%m); m=${M#0}; \
+    pm=$((m - 1)); py=$Y; \
+    if [ "$pm" -le 0 ]; then pm=12; py=$((Y - 1)); fi; \
+    prev=$(printf '%04d-%02d' "$py" "$pm"); \
+    mkdir -p /geoip; \
+    for ym in "${Y}-${M}" "$prev"; do \
+      if curl -fsSL "https://download.db-ip.com/free/dbip-city-lite-${ym}.mmdb.gz" -o /tmp/g.gz; then \
+        gunzip -c /tmp/g.gz > /geoip/geoip.mmdb && break; \
+      fi; \
+    done; \
+    ls -la /geoip
+
 # Alpine rather than scratch or distroless, for one reason: honouring PUID and
 # PGID needs a shell and su-exec at start-up. A static image would force whoever
 # deploys to chown the host directory to a user id they did not choose, which is
@@ -39,6 +58,7 @@ RUN apk add --no-cache su-exec tzdata ca-certificates && \
     adduser -D -u 1000 -G zefile zefile
 
 COPY --from=build /out/zefile /usr/local/bin/zefile
+COPY --from=geoip /geoip /usr/local/share/zefile
 COPY deploy/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

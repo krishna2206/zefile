@@ -140,6 +140,13 @@ branch, open a pull request whose **title** is a
 [Conventional Commit](https://www.conventionalcommits.org/) — it is squash-merged
 and becomes the release note.
 
+## Credits
+
+IP geolocation for the sessions screen uses the free
+[IP to City Lite database by DB-IP](https://db-ip.com/db/download/ip-to-city-lite)
+([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), read offline — no
+lookup ever leaves the server.
+
 ## Licence
 
 [Apache-2.0](LICENSE).

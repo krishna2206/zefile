@@ -88,7 +88,7 @@ export type SessionInfo = {
   id: number
   current: boolean
   user_agent?: string
-  ip?: string
+  location?: string
   created_at: string
   last_seen_at: string
 }

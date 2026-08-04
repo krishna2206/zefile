@@ -445,7 +445,7 @@ function SessionsSection({ onSignedOut }: { onSignedOut: () => void }) {
                     )}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {session.ip || 'unknown IP'} · active {formatRelativeTime(session.last_seen_at)}
+                    {session.location && `${session.location} · `}active {formatRelativeTime(session.last_seen_at)}
                   </p>
                 </div>
                 <Button

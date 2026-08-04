@@ -9,6 +9,7 @@ import (
 	"github.com/krishna2206/zefile/internal/auth"
 	"github.com/krishna2206/zefile/internal/checksum"
 	"github.com/krishna2206/zefile/internal/content"
+	"github.com/krishna2206/zefile/internal/geoip"
 	"github.com/krishna2206/zefile/internal/job"
 	"github.com/krishna2206/zefile/internal/settings"
 	"github.com/krishna2206/zefile/internal/share"
@@ -31,6 +32,7 @@ type Server struct {
 	shares        *share.Service
 	jobs          *job.Service
 	checksums     *checksum.Service
+	geoip         *geoip.Locator
 	auditLog      *audit.Service
 	settings      *settings.Service
 	contentBase   string
@@ -50,6 +52,7 @@ type Options struct {
 	Shares    *share.Service
 	Jobs      *job.Service
 	Checksums *checksum.Service
+	GeoIP     *geoip.Locator
 	Audit     *audit.Service
 	Settings  *settings.Service
 
@@ -80,6 +83,7 @@ func New(opts Options) *Server {
 		shares:        opts.Shares,
 		jobs:          opts.Jobs,
 		checksums:     opts.Checksums,
+		geoip:         opts.GeoIP,
 		auditLog:      opts.Audit,
 		settings:      opts.Settings,
 		contentBase:   opts.ContentBase,

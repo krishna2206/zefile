@@ -54,7 +54,7 @@ type sessionSummary struct {
 	ID         int64     `json:"id"`
 	Current    bool      `json:"current"`
 	UserAgent  string    `json:"user_agent,omitempty"`
-	IP         string    `json:"ip,omitempty"`
+	Location   string    `json:"location,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 	LastSeenAt time.Time `json:"last_seen_at"`
 }
@@ -82,7 +82,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 			ID:         sess.ID,
 			Current:    sess.ID == c.session.ID,
 			UserAgent:  sess.UserAgent,
-			IP:         sess.IP,
+			Location:   s.geoip.Lookup(sess.IP),
 			CreatedAt:  sess.CreatedAt,
 			LastSeenAt: sess.LastSeenAt,
 		})
