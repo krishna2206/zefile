@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- HMAC-SHA1 is the algorithm RFC 6238 defines for TOTP
 	"crypto/subtle"
 	"database/sql"
 	"encoding/base32"
@@ -134,7 +134,7 @@ func (s *Service) validateTOTP(secret, code string) bool {
 // truncation to a 31-bit integer, reduced to the low digits.
 func totpCode(key []byte, counter int64) string {
 	var msg [8]byte
-	binary.BigEndian.PutUint64(msg[:], uint64(counter))
+	binary.BigEndian.PutUint64(msg[:], uint64(counter)) // #nosec G115 -- counter is a positive time-derived step
 
 	mac := hmac.New(sha1.New, key)
 	mac.Write(msg[:])

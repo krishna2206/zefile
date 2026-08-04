@@ -44,7 +44,7 @@ func BackupTo(ctx context.Context, dbPath, dest string) error {
 	// The path is a string literal in the statement rather than a bound
 	// parameter, quoted and escaped, because VACUUM INTO takes a filename
 	// expression that not every driver accepts as a placeholder.
-	stmt := "VACUUM INTO '" + escapeSQLString(dest) + "'"
+	stmt := "VACUUM INTO '" + escapeSQLString(dest) + "'" // #nosec G201 G202 -- dest is single-quote-escaped; VACUUM INTO takes no bind parameter
 	if _, err := pool.ExecContext(ctx, stmt); err != nil {
 		return fmt.Errorf("db: vacuum into %q: %w", dest, err)
 	}
@@ -198,13 +198,13 @@ func escapeSQLString(s string) string {
 
 // copyFile copies src to dst, creating or truncating dst.
 func copyFile(src, dst string) error {
-	in, err := os.Open(src)
+	in, err := os.Open(src) // #nosec G304 -- src is an operator-supplied backup path, by design
 	if err != nil {
 		return err
 	}
 	defer func() { _ = in.Close() }()
 
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o640)
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 -- dst is an operator-supplied path, by design
 	if err != nil {
 		return err
 	}

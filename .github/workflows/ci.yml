@@ -62,7 +62,11 @@ jobs:
           # constants trip the hardcoded-credentials rule on any string
           # containing "token_hash". Narrowing to the directory keeps the rule
           # active everywhere it can actually find something.
-          args: -exclude-dir=internal/db/sqlcgen ./...
+          # G703 (taint-analysis path traversal) is excluded: it fires on the
+          # backup/restore paths a human operator passes on the command line, by
+          # design, and cannot know they are trusted. Real path safety lives in
+          # the storage layer (os.Root), which those commands do not touch.
+          args: -exclude-dir=internal/db/sqlcgen -exclude=G703 ./...
 
   generated:
     name: Generated code is current
