@@ -39,6 +39,8 @@ codebase except the lessons it documented.
 - Copy, move, rename, and a **trash** you can restore from. Copying a folder or a
   very large file runs as a background job with a progress bar.
 - Download through short-lived signed links that work with download managers.
+- **Checksums** on demand — a file's SHA-256, computed as a background job and
+  cached, so verifying even a huge file never blocks the server.
 
 **Sharing**
 
@@ -55,7 +57,11 @@ codebase except the lessons it documented.
   granted to a group reaches everyone in it, and a folder you were granted is
   reachable through the directories above it without exposing their contents.
 - Admins manage accounts (promote, disable, remove) and groups; everyone manages
-  their own password and active sessions.
+  their own password and sessions — shown by device and **location**, never a raw IP.
+- **Two-factor authentication** (TOTP) and single-use **recovery codes** to reset a
+  forgotten password — no email anywhere.
+- An **audit log** records every sensitive action; how long it, and the trash, are
+  kept is configurable.
 
 **Throughout**
 
@@ -65,6 +71,8 @@ codebase except the lessons it documented.
   out revokes the token immediately.
 - **API tokens** for scripts, CI and integrations. A token carries your own
   permissions, is shown once, and can be revoked at any time.
+- **Back up and restore** the database from one command, with an automatic
+  snapshot taken before every schema migration.
 - **No telemetry.** No usage metrics, no update checks, no outbound request you
   did not ask for.
 
