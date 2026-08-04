@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.7.0](https://github.com/krishna2206/zefile/compare/v0.6.0...v0.7.0) (2026-08-04)
+
+
+### Features
+
+* back up and restore the database from the CLI ([d4a9797](https://github.com/krishna2206/zefile/commit/d4a979768cd3240e50a305e68a3ef44a35961a7a))
+* reset a forgotten password with recovery codes ([8fb663d](https://github.com/krishna2206/zefile/commit/8fb663deb9c4206555d1c34a4d5d6bc558c5b00d))
+* retention, checksums, and a uniform settings UI ([42d3ae0](https://github.com/krishna2206/zefile/commit/42d3ae03127d7c6c40956884516f64390c9ebe6c))
+* show a place, not an IP, for each session ([f293f7c](https://github.com/krishna2206/zefile/commit/f293f7c2974b2551d3a50ac068448a30db76b718))
+* show the logo in the sign-in, sidebar and breadcrumb ([d61d62d](https://github.com/krishna2206/zefile/commit/d61d62dbce3ea303a8cb592143377e6d68bce91d))
+* snapshot before migrations and report divergences on restore ([e1afd62](https://github.com/krishna2206/zefile/commit/e1afd62a3538f72927e63b185d8852bab45263dc))
+* two-factor authentication (TOTP) ([eaa9f88](https://github.com/krishna2206/zefile/commit/eaa9f8861292dbfc7122d4174d3563f6bd0aa36b))
+
+
+### Bug Fixes
+
+* record the real client IP behind a reverse proxy ([0822320](https://github.com/krishna2206/zefile/commit/0822320576922eda75b156507d6d2124cd5b98aa))
+
 ## [0.6.0](https://github.com/krishna2206/zefile/compare/v0.5.0...v0.6.0) (2026-08-02)
 
 
