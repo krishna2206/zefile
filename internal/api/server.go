@@ -135,6 +135,7 @@ func (s *Server) Handler() http.Handler {
 	authed.HandleFunc("POST /api/v1/fs/dirs", s.handleMkdir)
 	authed.HandleFunc("POST /api/v1/fs/move", s.handleMove)
 	authed.HandleFunc("POST /api/v1/fs/copy", s.handleCopy)
+	authed.HandleFunc("POST /api/v1/fs/extract", s.handleExtract)
 	authed.HandleFunc("GET /api/v1/fs/link", s.handleLink)
 	authed.HandleFunc("GET /api/v1/fs/text", s.handleText)
 	authed.HandleFunc("POST /api/v1/fs/bundle", s.handleBundleLink)

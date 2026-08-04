@@ -60,6 +60,8 @@ const (
 	CodeInvalidSetupToken  = "invalid_setup_token"
 	CodeInvalidInvitation  = "invalid_invitation"
 	CodeAmbiguous          = "ambiguous_name"
+	CodeBadArchive         = "bad_archive"
+	CodeArchiveTooLarge    = "archive_too_large"
 	CodeInternal           = "internal_error"
 	CodeValidation         = "validation_failed"
 )
@@ -153,6 +155,14 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, storage.ErrTooLarge):
 		writeProblem(w, r, http.StatusRequestEntityTooLarge, CodeTooLarge,
 			"Too large", "This is beyond what can be done inside a request.")
+
+	case errors.Is(err, storage.ErrArchiveTooLarge):
+		writeProblem(w, r, http.StatusRequestEntityTooLarge, CodeArchiveTooLarge,
+			"Archive too large", "Extracting it would exceed the safety limits on size or entry count.")
+
+	case errors.Is(err, storage.ErrBadArchive):
+		writeProblem(w, r, http.StatusBadRequest, CodeBadArchive,
+			"Invalid archive", "The file is not a valid ZIP, or an entry inside it named an unsafe path.")
 
 	case errors.Is(err, storage.ErrReadOnly):
 		writeProblem(w, r, http.StatusServiceUnavailable, CodeReadOnly,

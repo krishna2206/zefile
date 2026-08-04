@@ -50,6 +50,17 @@ var (
 	ErrCrossDevice = errors.New("storage: cross-device operation")
 )
 
+// ErrBadArchive means an archive could not be read as a valid ZIP, or an entry
+// inside it named a path that could not be created safely — a traversal
+// component, an absolute path, or a name a file may not carry.
+var ErrBadArchive = errors.New("storage: invalid or unsafe archive")
+
+// ErrArchiveTooLarge means extracting the archive would exceed one of the
+// safety ceilings: too many entries, too many uncompressed bytes, or an entry
+// whose real size dwarfs its compressed size past the ratio allowed. It is how
+// a decompression bomb is refused.
+var ErrArchiveTooLarge = errors.New("storage: archive exceeds extraction limits")
+
 // ErrAmbiguous means two entries in one directory normalise to the same name —
 // the composed and decomposed spellings of the same word, for instance. Acting
 // on either would mean acting on a file the caller did not ask for.

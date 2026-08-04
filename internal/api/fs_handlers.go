@@ -221,6 +221,72 @@ func (s *Server) enqueueCopy(w http.ResponseWriter, r *http.Request, from, to st
 	writeJSON(w, r, http.StatusAccepted, copyJobResponse{Job: toJobResponse(j)})
 }
 
+type extractRequest struct {
+	Archive string `json:"archive"`
+	// Dest is where the new directory is created. Empty means beside the
+	// archive, which is what a "extract here" action wants.
+	Dest string `json:"dest"`
+}
+
+// handleExtract unpacks a ZIP archive into a new directory. Extraction always
+// runs as a background job — an archive may be large and its expansion larger —
+// so the response is the job to follow, never the finished tree. The worker
+// enforces every safety limit; this handler only checks the archive exists and
+// hands the work off with the caller's authority recorded on it.
+func (s *Server) handleExtract(w http.ResponseWriter, r *http.Request) {
+	c, ok := callerFrom(r.Context())
+	if !ok {
+		writeProblem(w, r, http.StatusUnauthorized, CodeUnauthenticated, "Not signed in", "")
+		return
+	}
+	var body extractRequest
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	archive, ok := parsePath(w, r, body.Archive)
+	if !ok {
+		return
+	}
+
+	dest := archive.Parent()
+	if body.Dest != "" {
+		dest, ok = parsePath(w, r, body.Dest)
+		if !ok {
+			return
+		}
+	}
+
+	// Fail obvious mistakes now rather than after a poll: a missing archive, or
+	// one that is a directory, should answer immediately.
+	info, err := s.fs.Stat(r.Context(), archive)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if info.IsDir {
+		writeProblem(w, r, http.StatusBadRequest, CodeIsDirectory,
+			"Not an archive", "A directory cannot be extracted.")
+		return
+	}
+
+	if s.jobs == nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, CodeInternal,
+			"No worker", "Extraction needs the background worker.")
+		return
+	}
+	j, err := s.jobs.Enqueue(r.Context(), job.TypeExtract, job.ExtractPayload{
+		Archive: archive.String(),
+		Dest:    dest.String(),
+		UserID:  c.user.ID,
+		IsAdmin: c.user.IsAdmin,
+	})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, r, http.StatusAccepted, copyJobResponse{Job: toJobResponse(j)})
+}
+
 // handleDelete moves an entry to the trash rather than erasing it.
 //
 // A directory and everything under it go together in a single rename, so the

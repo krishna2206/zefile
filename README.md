@@ -41,6 +41,10 @@ codebase except the lessons it documented.
 - Download through short-lived signed links that work with download managers.
 - **Checksums** on demand — a file's SHA-256, computed as a background job and
   cached, so verifying even a huge file never blocks the server.
+- **Extract a ZIP** into a new folder, as a background job. A booby-trapped
+  archive cannot escape: entry names go through the same path validation as
+  everything else, symlinks are ignored, and a decompression bomb is refused by
+  caps on entry count, total size and per-entry expansion.
 
 **Sharing**
 

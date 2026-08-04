@@ -213,6 +213,7 @@ func run() error {
 	jobs := job.New(database)
 	jobs.Register(job.TypeCopy, copyJobHandler(fs, engine))
 	jobs.Register(job.TypeChecksum, checksumJobHandler(checksums, engine))
+	jobs.Register(job.TypeExtract, extractJobHandler(fs, engine))
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
 	go jobs.Run(workerCtx)
@@ -288,6 +289,40 @@ func copyJobHandler(fs *storage.Local, engine *acl.Engine) job.Handler {
 			return err
 		}
 		return engine.SetOwner(ctx, to, p.UserID)
+	}
+}
+
+// extractJobHandler runs a background extraction: it recreates the caller's
+// authority from the payload, unpacks the archive into a new directory, and
+// records ownership of the result. It is safe to retry — ExtractZip refuses to
+// overwrite an existing destination, so a job that already finished before a
+// crash simply fails the second time rather than doubling anything.
+func extractJobHandler(fs *storage.Local, engine *acl.Engine) job.Handler {
+	return func(ctx context.Context, payload string, report func(float64)) error {
+		var p job.ExtractPayload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			return fmt.Errorf("extract job: decode payload: %w", err)
+		}
+
+		subject, err := engine.LoadSubject(ctx, p.UserID, p.IsAdmin)
+		if err != nil {
+			return fmt.Errorf("extract job: load subject: %w", err)
+		}
+		ctx = acl.NewContext(ctx, subject)
+
+		archive, err := storage.ParsePath(p.Archive)
+		if err != nil {
+			return err
+		}
+		dest, err := storage.ParsePath(p.Dest)
+		if err != nil {
+			return err
+		}
+		target, err := fs.ExtractZip(ctx, archive, dest, report)
+		if err != nil {
+			return err
+		}
+		return engine.SetOwner(ctx, target, p.UserID)
 	}
 }
 

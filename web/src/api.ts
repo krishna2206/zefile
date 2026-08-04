@@ -282,6 +282,14 @@ export const api = {
       body: JSON.stringify({ from, to }),
     }),
 
+  // extract unpacks a ZIP into a new folder beside it. It always runs as a
+  // background job, so the response is the job to poll.
+  extract: (archive: string) =>
+    request<{ job: Job }>('/api/v1/fs/extract', {
+      method: 'POST',
+      body: JSON.stringify({ archive }),
+    }),
+
   getJob: (id: number) => request<Job>(`/api/v1/jobs/${id}`),
 
   // A file's SHA-256. Returns the cached digest when current, otherwise a job to

@@ -34,6 +34,10 @@ const (
 	// TypeChecksum computes a file's SHA-256 in the background, so hashing a
 	// very large file does not block a request.
 	TypeChecksum Type = "checksum"
+
+	// TypeExtract unpacks an archive in the background, since a large archive
+	// takes longer than a request may honestly last.
+	TypeExtract Type = "extract"
 )
 
 // Status values mirror the CHECK constraint on the jobs table.
@@ -50,6 +54,15 @@ const (
 type CopyPayload struct {
 	From    string `json:"from"`
 	To      string `json:"to"`
+	UserID  int64  `json:"user_id"`
+	IsAdmin bool   `json:"is_admin"`
+}
+
+// ExtractPayload is the work an extraction job carries. Like a copy, the user
+// is recorded so the worker unpacks with the same authority the caller had.
+type ExtractPayload struct {
+	Archive string `json:"archive"`
+	Dest    string `json:"dest"`
 	UserID  int64  `json:"user_id"`
 	IsAdmin bool   `json:"is_admin"`
 }

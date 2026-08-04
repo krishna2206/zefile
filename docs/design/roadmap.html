@@ -170,7 +170,7 @@
 
     <div class="rule warn">
       <span class="label">État — août 2026</span>
-      <p>La fondation, le multi-utilisateur (comptes, invitations, permissions par chemin, <b>groupes</b>), les partages, la corbeille, la file de tâches, la recherche et les aperçus sont <b>livrés</b>, ainsi que le <b>journal d’audit</b>, les <b>jetons d’API</b>, le <b>téléchargement groupé en zip</b>, la <b>distribution</b> (images multi-arch sur GHCR, binaires de Releases), le <b>double facteur (TOTP)</b>, la <b>sauvegarde/restauration</b>, la <b>rétention configurable</b> et les <b>empreintes SHA-256</b>. L’instance tourne en production (<b>v0.7.0</b>). Les lots encore ouverts&nbsp;— téléchargement depuis une URL, extraction d’archives et client mobile&nbsp;— sont marqués comme tels ci-dessous.</p>
+      <p>La fondation, le multi-utilisateur (comptes, invitations, permissions par chemin, <b>groupes</b>), les partages, la corbeille, la file de tâches, la recherche et les aperçus sont <b>livrés</b>, ainsi que le <b>journal d’audit</b>, les <b>jetons d’API</b>, le <b>téléchargement groupé en zip</b>, la <b>distribution</b> (images multi-arch sur GHCR, binaires de Releases), le <b>double facteur (TOTP)</b>, la <b>sauvegarde/restauration</b>, la <b>rétention configurable</b>, les <b>empreintes SHA-256</b> et l’<b>extraction d’archives</b>. L’instance tourne en production (<b>v0.7.0</b>). Les lots encore ouverts&nbsp;— téléchargement depuis une URL et client mobile&nbsp;— sont marqués comme tels ci-dessous.</p>
     </div>
   </div>
 
@@ -387,10 +387,10 @@
         <div class="done"><b>Terminé quand</b> une URL redirigeant vers une adresse interne est refusée <em>après</em> la redirection, pas seulement avant.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">4.3</span>
-        <div class="title">Extraction d’archives</div>
-        <div class="body">Noms d’entrées normalisés par la couche de stockage, liens symboliques ignorés, plafonds sur le taux de compression, la taille décompressée et le nombre d’entrées.</div>
+        <div class="title">Extraction d’archives<span class="status">Fait</span></div>
+        <div class="body">Extraction ZIP en tâche de fond vers un nouveau dossier, jamais d’écrasement. Noms d’entrées normalisés par la couche de stockage (la traversée est refusée par la même validation qu’un chemin client, <code>os.Root</code> refuse tout lien qui sort de l’arbre), liens symboliques ignorés, plafonds sur le nombre d’entrées, la taille décompressée totale et le taux de compression par entrée — ce dernier vérifié sur les octets réellement écrits, pas sur l’en-tête.</div>
         <div class="done"><b>Terminé quand</b> une archive piégée à traversée et une bombe de décompression sont toutes deux refusées.</div>
       </div>
 

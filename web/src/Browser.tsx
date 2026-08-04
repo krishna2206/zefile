@@ -19,6 +19,7 @@ import {
   Copy as CopyIcon,
   DownloadSimple as Download,
   Eye,
+  FileZip,
   Fingerprint,
   FolderOpen,
   House,
@@ -166,6 +167,7 @@ type EntryActions = {
   download: (entry: Entry) => void
   downloadZip: (entry: Entry) => void
   checksum: (entry: Entry) => void
+  extract: (entry: Entry) => void
   share: (entry: Entry) => void
   manageAccess: (entry: Entry) => void
   canManageAccess: boolean
@@ -199,8 +201,8 @@ type Clipboard = { mode: 'copy' | 'cut'; entries: Entry[] }
 const ALL_PERMS: PermSet = { read: true, write: true, delete: true, share: true, manage: true }
 const NO_PERMS: PermSet = { read: false, write: false, delete: false, share: false, manage: false }
 
-/** TrackedJob follows a background copy the interface is polling. */
-type TrackedJob = { id: number; name: string; status: Job['status']; progress: number }
+/** TrackedJob follows a background copy or extraction the interface is polling. */
+type TrackedJob = { id: number; name: string; status: Job['status']; progress: number; kind: 'copy' | 'extract' }
 
 type Group = { key: string; label: string; entries: Entry[] }
 type ListItem = { type: 'header'; id: string; label: string; count: number } | { type: 'entry'; entry: Entry }
@@ -548,6 +550,22 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     }
   }, [])
 
+  // extract unpacks a ZIP into a new folder beside it. It always runs in the
+  // background, so it joins the same job panel a background copy uses.
+  const extract = useCallback(async (entry: Entry) => {
+    try {
+      const { job } = await api.extract(entry.path)
+      const name = entry.name.replace(/\.zip$/i, '')
+      setJobs((cur) => [
+        ...cur.filter((j) => j.id !== job.id),
+        { id: job.id, name, status: job.status, progress: job.progress, kind: 'extract' },
+      ])
+      toast('Extracting in the background…')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : `Could not extract “${entry.name}”`)
+    }
+  }, [])
+
   const selectEntry = useCallback(
     (entry: Entry, intent: ClickIntent) => {
       setSelection((current) => {
@@ -614,6 +632,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     download,
     downloadZip: (entry) => void downloadZip([entry]),
     checksum: (entry) => void checksum(entry),
+    extract: (entry) => void extract(entry),
     share: (entry) => setDialog({ kind: 'share', entry }),
     manageAccess: (entry) => setDialog({ kind: 'access', entry }),
     canManageAccess: user.is_admin,
@@ -662,7 +681,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
           if (res && 'job' in res) {
             setJobs((cur) => [
               ...cur.filter((j) => j.id !== res.job.id),
-              { id: res.job.id, name, status: res.job.status, progress: res.job.progress },
+              { id: res.job.id, name, status: res.job.status, progress: res.job.progress, kind: 'copy' },
             ])
             queued++
           } else {
@@ -734,11 +753,14 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
               cur.map((j) => (j.id === tracked.id ? { ...j, status: fresh.status, progress: fresh.progress } : j)),
             )
             if (fresh.status === 'done') {
-              toast.success(`Copied “${tracked.name}”`)
+              toast.success(
+                tracked.kind === 'extract' ? `Extracted “${tracked.name}”` : `Copied “${tracked.name}”`,
+              )
               void load(pathRef.current, { silent: true })
               void refreshSpace()
             } else if (fresh.status === 'failed') {
-              toast.error(`Could not copy “${tracked.name}”${fresh.error ? `: ${fresh.error}` : ''}`)
+              const verb = tracked.kind === 'extract' ? 'extract' : 'copy'
+              toast.error(`Could not ${verb} “${tracked.name}”${fresh.error ? `: ${fresh.error}` : ''}`)
             }
           })
           .catch(() => {
@@ -1413,6 +1435,12 @@ function EntryMenu({ entry, actions, children }: { entry: Entry; actions: EntryA
               <Fingerprint />
               Copy SHA-256
             </ContextMenuItem>
+            {entry.name.toLowerCase().endsWith('.zip') && p.write && (
+              <ContextMenuItem onSelect={() => actions.extract(entry)}>
+                <FileZip />
+                Extract here
+              </ContextMenuItem>
+            )}
           </>
         )}
         {entry.is_dir && p.read && (
@@ -1899,7 +1927,7 @@ function JobsPanel({ jobs, onClear }: { jobs: TrackedJob[]; onClear: () => void 
   return (
     <div className="w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-4 shadow-lg">
       <div className="flex items-center">
-        <p className="text-sm font-medium">{running > 0 ? `Copying — ${running} running` : 'Copies'}</p>
+        <p className="text-sm font-medium">{running > 0 ? `Working — ${running} running` : 'Tasks'}</p>
         {running === 0 && (
           <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>
             Clear
