@@ -23,6 +23,12 @@ jobs:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
+          # A personal access token rather than the automatic GITHUB_TOKEN, so
+          # the release PR is opened under a real identity. GitHub does not fire
+          # workflows on events produced by GITHUB_TOKEN, which left the release
+          # PR with no CI and thus permanently blocked by branch protection; a
+          # PAT-opened PR triggers the required checks and merges normally.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
