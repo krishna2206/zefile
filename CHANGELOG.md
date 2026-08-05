@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/krishna2206/zefile/compare/v0.7.0...v0.8.0) (2026-08-05)
+
+
+### Features
+
+* extract ZIP archives as a background job ([7db77d2](https://github.com/krishna2206/zefile/commit/7db77d2a75fb34df35c4cee73b6b386a055d2adb))
+
 ## [0.7.0](https://github.com/krishna2206/zefile/compare/v0.6.0...v0.7.0) (2026-08-04)
 
 
