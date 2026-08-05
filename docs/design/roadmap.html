@@ -170,7 +170,7 @@
 
     <div class="rule warn">
       <span class="label">État — août 2026</span>
-      <p>La fondation, le multi-utilisateur (comptes, invitations, permissions par chemin, <b>groupes</b>), les partages, la corbeille, la file de tâches, la recherche et les aperçus sont <b>livrés</b>, ainsi que le <b>journal d’audit</b>, les <b>jetons d’API</b>, le <b>téléchargement groupé en zip</b>, la <b>distribution</b> (images multi-arch sur GHCR, binaires de Releases), le <b>double facteur (TOTP)</b>, la <b>sauvegarde/restauration</b>, la <b>rétention configurable</b>, les <b>empreintes SHA-256</b> et l’<b>extraction d’archives</b>. L’instance tourne en production (<b>v0.7.0</b>). Les lots encore ouverts&nbsp;— téléchargement depuis une URL et client mobile&nbsp;— sont marqués comme tels ci-dessous.</p>
+      <p>La fondation, le multi-utilisateur (comptes, invitations, permissions par chemin, <b>groupes</b>), les partages, la corbeille, la file de tâches, la recherche et les aperçus sont <b>livrés</b>, ainsi que le <b>journal d’audit</b>, les <b>jetons d’API</b>, le <b>téléchargement groupé en zip</b>, la <b>distribution</b> (images multi-arch sur GHCR, binaires de Releases), le <b>double facteur (TOTP)</b>, la <b>sauvegarde/restauration</b>, la <b>rétention configurable</b>, les <b>empreintes SHA-256</b>, l’<b>extraction d’archives</b> et le <b>téléchargement depuis une URL</b>. L’instance tourne en production (<b>v0.8.0</b>). Le seul lot encore ouvert&nbsp;— le client mobile&nbsp;— est marqué comme tel ci-dessous.</p>
     </div>
   </div>
 
@@ -380,10 +380,10 @@
         <div class="done"><b>Terminé quand</b> redémarrer le binaire pendant une tâche longue ne la perd pas.</div>
       </div>
 
-      <div class="item">
+      <div class="item shipped">
         <span class="id">4.2</span>
-        <div class="title">Téléchargement depuis une URL</div>
-        <div class="body">Avec l’ensemble des protections du §9.2&nbsp;: schémas restreints, résolution DNS vérifiée avant connexion, <strong>revalidation à chaque redirection</strong>, taille et délai plafonnés.</div>
+        <div class="title">Téléchargement depuis une URL<span class="status">Fait</span></div>
+        <div class="body">Téléchargement en tâche de fond avec l’ensemble des protections du §9.2. Le cœur&nbsp;: un <em>hook</em> de connexion (<code>Dialer.Control</code>) valide l’<strong>IP réellement composée</strong> juste avant le <code>connect</code>, pour chaque connexion — donc la <strong>revalidation à chaque redirection</strong> et la protection anti-rebinding DNS tombent du même mécanisme. Schémas limités à <code>http</code>/<code>https</code>, plages non publiques refusées (loopback, privées, lien-local dont l’endpoint de métadonnées cloud, CGNAT), plafond de redirections, délai de stagnation plutôt qu’un délai total qui tuerait un transfert de dizaines de Go, taille bornée par l’espace libre.</div>
         <div class="done"><b>Terminé quand</b> une URL redirigeant vers une adresse interne est refusée <em>après</em> la redirection, pas seulement avant.</div>
       </div>
 

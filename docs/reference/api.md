@@ -59,6 +59,7 @@ Field-level validation errors add an `errors` map of field name to message.
 | `POST` | `/api/v1/fs/move` | Move or rename |
 | `POST` | `/api/v1/fs/copy` | Copy (large copies run as a background job) |
 | `POST` | `/api/v1/fs/extract` | Extract a ZIP into a new folder (background job) — `{ "archive": "/x.zip" }` |
+| `POST` | `/api/v1/fs/fetch` | Download a URL into a folder (background job) — `{ "url": "https://…", "dir": "/" }` |
 | `DELETE` | `/api/v1/fs?path=` | Move to trash |
 | `GET` | `/api/v1/fs/link?path=` | Mint a short-lived signed download URL |
 | `GET` | `/api/v1/fs/text?path=` | Read a text file (capped at 2 MiB) |

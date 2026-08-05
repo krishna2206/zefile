@@ -7,7 +7,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,6 +26,7 @@ import (
 	"github.com/krishna2206/zefile/internal/config"
 	"github.com/krishna2206/zefile/internal/content"
 	"github.com/krishna2206/zefile/internal/db"
+	"github.com/krishna2206/zefile/internal/fetch"
 	"github.com/krishna2206/zefile/internal/geoip"
 	"github.com/krishna2206/zefile/internal/job"
 	"github.com/krishna2206/zefile/internal/settings"
@@ -214,6 +217,7 @@ func run() error {
 	jobs.Register(job.TypeCopy, copyJobHandler(fs, engine))
 	jobs.Register(job.TypeChecksum, checksumJobHandler(checksums, engine))
 	jobs.Register(job.TypeExtract, extractJobHandler(fs, engine))
+	jobs.Register(job.TypeFetch, fetchJobHandler(fs, engine, fetch.New(fetch.DefaultPolicy())))
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
 	go jobs.Run(workerCtx)
@@ -324,6 +328,120 @@ func extractJobHandler(fs *storage.Local, engine *acl.Engine) job.Handler {
 		}
 		return engine.SetOwner(ctx, target, p.UserID)
 	}
+}
+
+// fetchJobHandler runs a background download: it recreates the caller's
+// authority, streams the URL through the SSRF-guarded fetcher into a staged
+// file, and commits it under the caller's ownership. The download is bounded by
+// free space — the stage sits under the storage root, so a stream that would
+// fill the disk fails as a partial file rather than after publication.
+//
+// It is safe to retry: a completed download whose destination now exists fails
+// the commit the second time and is marked failed rather than duplicated.
+func fetchJobHandler(fs *storage.Local, engine *acl.Engine, fetcher *fetch.Fetcher) job.Handler {
+	return func(ctx context.Context, payload string, report func(float64)) error {
+		var p job.FetchPayload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			return fmt.Errorf("fetch job: decode payload: %w", err)
+		}
+
+		subject, err := engine.LoadSubject(ctx, p.UserID, p.IsAdmin)
+		if err != nil {
+			return fmt.Errorf("fetch job: load subject: %w", err)
+		}
+		ctx = acl.NewContext(ctx, subject)
+
+		dir, err := storage.ParsePath(p.Dir)
+		if err != nil {
+			return err
+		}
+
+		res, err := fetcher.Get(ctx, p.URL)
+		if err != nil {
+			return err
+		}
+		defer res.Body.Close()
+
+		name := p.Name
+		if name == "" {
+			name = res.Filename
+		}
+		if name == "" {
+			name = "download"
+		}
+		// Child validates the name, so a Content-Disposition or URL segment
+		// carrying a separator or traversal is refused before it becomes a path.
+		to, err := dir.Child(name)
+		if err != nil {
+			return err
+		}
+
+		// Bound the download by the free space above the reserve, refusing early
+		// if the source already declares more than will fit. Without a limit a
+		// source could stream without end and fill the disk down to the reserve.
+		space, err := fs.Space(ctx)
+		if err != nil {
+			return err
+		}
+		// Free space above the reserve, as an int64 the reader can bound on. The
+		// subtraction stays in the uint64 domain and is only narrowed once known
+		// to fit, so a pathological free-space value cannot wrap into a negative
+		// budget that would defeat the cap.
+		var budget int64 = math.MaxInt64
+		if space.Available <= space.Reserve {
+			budget = 0
+		} else if avail := space.Available - space.Reserve; avail < math.MaxInt64 {
+			budget = int64(avail)
+		}
+		if res.Size > budget {
+			return fmt.Errorf("%w: the source declares %d bytes, more than the free space allows", storage.ErrNoSpace, res.Size)
+		}
+
+		id, err := fs.NewStage(ctx)
+		if err != nil {
+			return err
+		}
+		committed := false
+		defer func() {
+			if !committed {
+				_ = fs.DiscardStage(ctx, id)
+			}
+		}()
+
+		reader := &progressReader{r: io.LimitReader(res.Body, budget+1), total: res.Size, report: report}
+		written, err := fs.AppendToStage(ctx, id, 0, reader)
+		if err != nil {
+			return err
+		}
+		if written > budget {
+			return fmt.Errorf("%w: the download exceeds the free space allowed", storage.ErrNoSpace)
+		}
+
+		if err := fs.CommitStage(ctx, id, to); err != nil {
+			return err
+		}
+		committed = true
+		return engine.SetOwner(ctx, to, p.UserID)
+	}
+}
+
+// progressReader reports download progress as a fraction of the declared size.
+// When the size is unknown it reports nothing; the interface shows an
+// indeterminate state rather than a misleading percentage.
+type progressReader struct {
+	r      io.Reader
+	total  int64
+	read   int64
+	report func(float64)
+}
+
+func (p *progressReader) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	p.read += int64(n)
+	if p.report != nil && p.total > 0 {
+		p.report(float64(p.read) / float64(p.total))
+	}
+	return n, err
 }
 
 // startRetention runs the purges — old audit entries and expired trash — a few

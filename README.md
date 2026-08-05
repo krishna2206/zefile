@@ -45,6 +45,11 @@ codebase except the lessons it documented.
   archive cannot escape: entry names go through the same path validation as
   everything else, symlinks are ignored, and a decompression bomb is refused by
   caps on entry count, total size and per-entry expansion.
+- **Download from a URL** straight to the server, at its bandwidth rather than
+  yours — the point when the file is tens of gigabytes. The fetch is guarded
+  against server-side request forgery: the real IP being dialed is validated on
+  every connection and every redirect, so a URL that resolves or redirects to an
+  internal address is refused.
 
 **Sharing**
 

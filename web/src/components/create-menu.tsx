@@ -1,4 +1,4 @@
-import { CaretDown, FileArrowUp, FolderPlus, FolderSimplePlus, Plus } from '@phosphor-icons/react'
+import { CaretDown, FileArrowUp, FolderPlus, FolderSimplePlus, LinkSimple, Plus } from '@phosphor-icons/react'
 
 import { Button } from '@/components/ui/button'
 import { ContextMenuItem } from '@/components/ui/context-menu'
@@ -16,12 +16,14 @@ export type CreateActions = {
   newFolder: () => void
   importFiles: () => void
   importFolder: () => void
+  fetchUrl: () => void
 }
 
 const items = (a: CreateActions) => [
   { key: 'folder', Icon: FolderPlus, label: 'New folder', run: a.newFolder },
   { key: 'files', Icon: FileArrowUp, label: 'Import files', run: a.importFiles },
   { key: 'import-folder', Icon: FolderSimplePlus, label: 'Import folder', run: a.importFolder },
+  { key: 'fetch-url', Icon: LinkSimple, label: 'Download from URL', run: a.fetchUrl },
 ]
 
 /** NewButton is the sidebar's primary action: a dropdown that gathers creating a

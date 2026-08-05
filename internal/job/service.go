@@ -38,6 +38,10 @@ const (
 	// TypeExtract unpacks an archive in the background, since a large archive
 	// takes longer than a request may honestly last.
 	TypeExtract Type = "extract"
+
+	// TypeFetch downloads a URL into storage from the server's own network,
+	// which for a large file takes far longer than a request may last.
+	TypeFetch Type = "fetch"
 )
 
 // Status values mirror the CHECK constraint on the jobs table.
@@ -63,6 +67,17 @@ type CopyPayload struct {
 type ExtractPayload struct {
 	Archive string `json:"archive"`
 	Dest    string `json:"dest"`
+	UserID  int64  `json:"user_id"`
+	IsAdmin bool   `json:"is_admin"`
+}
+
+// FetchPayload is the work a download job carries. Dir is the folder the file
+// lands in; Name, if empty, is derived from the URL. The user is recorded so
+// the file is written with the caller's authority and owned by them.
+type FetchPayload struct {
+	URL     string `json:"url"`
+	Dir     string `json:"dir"`
+	Name    string `json:"name"`
 	UserID  int64  `json:"user_id"`
 	IsAdmin bool   `json:"is_admin"`
 }

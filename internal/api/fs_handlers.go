@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/krishna2206/zefile/internal/audit"
@@ -277,6 +278,63 @@ func (s *Server) handleExtract(w http.ResponseWriter, r *http.Request) {
 	j, err := s.jobs.Enqueue(r.Context(), job.TypeExtract, job.ExtractPayload{
 		Archive: archive.String(),
 		Dest:    dest.String(),
+		UserID:  c.user.ID,
+		IsAdmin: c.user.IsAdmin,
+	})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, r, http.StatusAccepted, copyJobResponse{Job: toJobResponse(j)})
+}
+
+type fetchRequest struct {
+	URL string `json:"url"`
+	// Dir is the folder the file lands in. Empty means the root.
+	Dir string `json:"dir"`
+	// Name overrides the filename; empty derives it from the URL.
+	Name string `json:"name"`
+}
+
+// handleFetch downloads a URL into storage from the server's own network. It
+// always runs as a background job — the file may be very large — so the
+// response is the job to follow. The scheme is checked here for an immediate
+// rejection; every network-level defence lives in the fetcher the worker runs.
+func (s *Server) handleFetch(w http.ResponseWriter, r *http.Request) {
+	c, ok := callerFrom(r.Context())
+	if !ok {
+		writeProblem(w, r, http.StatusUnauthorized, CodeUnauthenticated, "Not signed in", "")
+		return
+	}
+	var body fetchRequest
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+
+	u, err := url.Parse(strings.TrimSpace(body.URL))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		writeProblem(w, r, http.StatusBadRequest, CodeBadRequest,
+			"Invalid URL", "Provide an http or https URL.")
+		return
+	}
+
+	dir := storage.Root
+	if body.Dir != "" {
+		dir, ok = parsePath(w, r, body.Dir)
+		if !ok {
+			return
+		}
+	}
+
+	if s.jobs == nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, CodeInternal,
+			"No worker", "Downloads need the background worker.")
+		return
+	}
+	j, err := s.jobs.Enqueue(r.Context(), job.TypeFetch, job.FetchPayload{
+		URL:     u.String(),
+		Dir:     dir.String(),
+		Name:    strings.TrimSpace(body.Name),
 		UserID:  c.user.ID,
 		IsAdmin: c.user.IsAdmin,
 	})

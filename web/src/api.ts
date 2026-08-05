@@ -290,6 +290,14 @@ export const api = {
       body: JSON.stringify({ archive }),
     }),
 
+  // fetchUrl downloads a URL into `dir` from the server's own network. It always
+  // runs as a background job, so the response is the job to poll.
+  fetchUrl: (url: string, dir: string) =>
+    request<{ job: Job }>('/api/v1/fs/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ url, dir }),
+    }),
+
   getJob: (id: number) => request<Job>(`/api/v1/jobs/${id}`),
 
   // A file's SHA-256. Returns the cached digest when current, otherwise a job to

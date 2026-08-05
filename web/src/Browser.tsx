@@ -201,14 +201,21 @@ type Clipboard = { mode: 'copy' | 'cut'; entries: Entry[] }
 const ALL_PERMS: PermSet = { read: true, write: true, delete: true, share: true, manage: true }
 const NO_PERMS: PermSet = { read: false, write: false, delete: false, share: false, manage: false }
 
-/** TrackedJob follows a background copy or extraction the interface is polling. */
-type TrackedJob = { id: number; name: string; status: Job['status']; progress: number; kind: 'copy' | 'extract' }
+/** TrackedJob follows a background copy, extraction or download the interface is polling. */
+type TrackedJob = {
+  id: number
+  name: string
+  status: Job['status']
+  progress: number
+  kind: 'copy' | 'extract' | 'fetch'
+}
 
 type Group = { key: string; label: string; entries: Entry[] }
 type ListItem = { type: 'header'; id: string; label: string; count: number } | { type: 'entry'; entry: Entry }
 
 type DialogState =
   | { kind: 'new-folder' }
+  | { kind: 'fetch-url' }
   | { kind: 'rename'; entry: Entry }
   | { kind: 'delete'; entries: Entry[] }
   | { kind: 'share'; entry: Entry }
@@ -488,6 +495,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     newFolder: () => setDialog({ kind: 'new-folder' }),
     importFiles: () => fileInput.current?.click(),
     importFolder: () => dirInput.current?.click(),
+    fetchUrl: () => setDialog({ kind: 'fetch-url' }),
   }
 
   // In search mode the listing is the server's results (which span folders);
@@ -753,13 +761,14 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
               cur.map((j) => (j.id === tracked.id ? { ...j, status: fresh.status, progress: fresh.progress } : j)),
             )
             if (fresh.status === 'done') {
-              toast.success(
-                tracked.kind === 'extract' ? `Extracted “${tracked.name}”` : `Copied “${tracked.name}”`,
-              )
+              const done =
+                tracked.kind === 'extract' ? 'Extracted' : tracked.kind === 'fetch' ? 'Downloaded' : 'Copied'
+              toast.success(`${done} “${tracked.name}”`)
               void load(pathRef.current, { silent: true })
               void refreshSpace()
             } else if (fresh.status === 'failed') {
-              const verb = tracked.kind === 'extract' ? 'extract' : 'copy'
+              const verb =
+                tracked.kind === 'extract' ? 'extract' : tracked.kind === 'fetch' ? 'download' : 'copy'
               toast.error(`Could not ${verb} “${tracked.name}”${fresh.error ? `: ${fresh.error}` : ''}`)
             }
           })
@@ -775,6 +784,25 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     await api.mkdir(joinPath(path, name))
     void load(path)
     toast.success(`Folder “${name}” created`)
+  }
+
+  // fetchFromUrl asks the server to download a URL into the current folder. It
+  // runs in the background, joining the same job panel as a copy or extraction.
+  async function fetchFromUrl(url: string) {
+    const { job } = await api.fetchUrl(url, path)
+    // A readable name for the panel: the URL's last path segment, or its host.
+    let name = url
+    try {
+      const u = new URL(url)
+      name = u.pathname.split('/').filter(Boolean).pop() || u.host
+    } catch {
+      // keep the raw URL as the label
+    }
+    setJobs((cur) => [
+      ...cur.filter((j) => j.id !== job.id),
+      { id: job.id, name, status: job.status, progress: job.progress, kind: 'fetch' },
+    ])
+    toast('Downloading in the background…')
   }
 
   async function renameEntry(entry: Entry, name: string) {
@@ -1100,6 +1128,15 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
 
       {dialog?.kind === 'new-folder' && (
         <NameDialog title="New folder" label="Folder name" submitLabel="Create" onSubmit={createFolder} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === 'fetch-url' && (
+        <NameDialog
+          title="Download from URL"
+          label="File URL"
+          submitLabel="Download"
+          onSubmit={fetchFromUrl}
+          onClose={() => setDialog(null)}
+        />
       )}
       {dialog?.kind === 'rename' && (
         <NameDialog
