@@ -269,7 +269,7 @@ func run() error {
 // job that already finished before a crash simply fails the second time and is
 // marked failed rather than duplicating anything.
 func copyJobHandler(fs *storage.Local, engine *acl.Engine) job.Handler {
-	return func(ctx context.Context, payload string, report func(float64)) error {
+	return func(ctx context.Context, payload string, report func(done, total int64)) error {
 		var p job.CopyPayload
 		if err := json.Unmarshal([]byte(payload), &p); err != nil {
 			return fmt.Errorf("copy job: decode payload: %w", err)
@@ -302,7 +302,7 @@ func copyJobHandler(fs *storage.Local, engine *acl.Engine) job.Handler {
 // overwrite an existing destination, so a job that already finished before a
 // crash simply fails the second time rather than doubling anything.
 func extractJobHandler(fs *storage.Local, engine *acl.Engine) job.Handler {
-	return func(ctx context.Context, payload string, report func(float64)) error {
+	return func(ctx context.Context, payload string, report func(done, total int64)) error {
 		var p job.ExtractPayload
 		if err := json.Unmarshal([]byte(payload), &p); err != nil {
 			return fmt.Errorf("extract job: decode payload: %w", err)
@@ -338,8 +338,13 @@ func extractJobHandler(fs *storage.Local, engine *acl.Engine) job.Handler {
 //
 // It is safe to retry: a completed download whose destination now exists fails
 // the commit the second time and is marked failed rather than duplicated.
+// The download can be paused and resumed. Its staged file is named after the
+// job, so a resumed run finds the bytes already fetched and continues from that
+// offset with a ranged request; if the source does not honour the range, the
+// partial is discarded and the download restarts cleanly. Pause keeps the
+// stage, cancel discards it, and a crash mid-download resumes on the next start.
 func fetchJobHandler(fs *storage.Local, engine *acl.Engine, fetcher *fetch.Fetcher) job.Handler {
-	return func(ctx context.Context, payload string, report func(float64)) error {
+	return func(ctx context.Context, payload string, report func(done, total int64)) error {
 		var p job.FetchPayload
 		if err := json.Unmarshal([]byte(payload), &p); err != nil {
 			return fmt.Errorf("fetch job: decode payload: %w", err)
@@ -356,11 +361,34 @@ func fetchJobHandler(fs *storage.Local, engine *acl.Engine, fetcher *fetch.Fetch
 			return err
 		}
 
-		res, err := fetcher.Get(ctx, p.URL)
+		// A stage named after the job, so pause/resume and crash recovery all
+		// address the same partial file across runs.
+		jobID, ok := job.IDFromContext(ctx)
+		if !ok {
+			return errors.New("fetch job: missing job id")
+		}
+		stage := storage.StageID(fmt.Sprintf("fetch%d", jobID))
+		offset, err := fs.EnsureStage(ctx, stage)
+		if err != nil {
+			return err
+		}
+
+		res, err := fetcher.Get(ctx, p.URL, offset)
 		if err != nil {
 			return err
 		}
 		defer res.Body.Close()
+
+		// The source ignored our range and is sending the whole file: throw away
+		// the partial and start over from zero rather than corrupt it.
+		if offset > 0 && !res.Resumed {
+			if err := fs.DiscardStage(ctx, stage); err != nil {
+				return err
+			}
+			if offset, err = fs.EnsureStage(ctx, stage); err != nil {
+				return err
+			}
+		}
 
 		name := p.Name
 		if name == "" {
@@ -393,53 +421,48 @@ func fetchJobHandler(fs *storage.Local, engine *acl.Engine, fetcher *fetch.Fetch
 		} else if avail := space.Available - space.Reserve; avail < math.MaxInt64 {
 			budget = int64(avail)
 		}
-		if res.Size > budget {
+		if res.Size > offset+budget {
 			return fmt.Errorf("%w: the source declares %d bytes, more than the free space allows", storage.ErrNoSpace, res.Size)
 		}
 
-		id, err := fs.NewStage(ctx)
+		reader := &progressReader{r: io.LimitReader(res.Body, budget+1), base: offset, total: res.Size, report: report}
+		total, err := fs.AppendToStage(ctx, stage, offset, reader)
 		if err != nil {
-			return err
-		}
-		committed := false
-		defer func() {
-			if !committed {
-				_ = fs.DiscardStage(ctx, id)
+			// A user cancellation discards the partial; a pause keeps it so a
+			// resume can continue. Both arrive as a cancelled context, told apart
+			// by the cause the worker set.
+			if errors.Is(context.Cause(ctx), job.ErrCancelled) {
+				_ = fs.DiscardStage(ctx, stage)
 			}
-		}()
-
-		reader := &progressReader{r: io.LimitReader(res.Body, budget+1), total: res.Size, report: report}
-		written, err := fs.AppendToStage(ctx, id, 0, reader)
-		if err != nil {
 			return err
 		}
-		if written > budget {
+		if total-offset > budget {
 			return fmt.Errorf("%w: the download exceeds the free space allowed", storage.ErrNoSpace)
 		}
 
-		if err := fs.CommitStage(ctx, id, to); err != nil {
+		if err := fs.CommitStage(ctx, stage, to); err != nil {
 			return err
 		}
-		committed = true
 		return engine.SetOwner(ctx, to, p.UserID)
 	}
 }
 
-// progressReader reports download progress as a fraction of the declared size.
-// When the size is unknown it reports nothing; the interface shows an
-// indeterminate state rather than a misleading percentage.
+// progressReader reports download progress as absolute bytes done — the bytes
+// already on disk before this run plus what it has read — out of the total. A
+// zero total means unknown, which the interface shows as an indeterminate state.
 type progressReader struct {
 	r      io.Reader
-	total  int64
+	base   int64 // bytes already staged before this run (a resume offset)
 	read   int64
-	report func(float64)
+	total  int64
+	report func(done, total int64)
 }
 
 func (p *progressReader) Read(b []byte) (int, error) {
 	n, err := p.r.Read(b)
 	p.read += int64(n)
-	if p.report != nil && p.total > 0 {
-		p.report(float64(p.read) / float64(p.total))
+	if p.report != nil {
+		p.report(p.base+p.read, p.total)
 	}
 	return n, err
 }
@@ -493,7 +516,7 @@ func startRetention(ctx context.Context, auditLog *audit.Service, trashService *
 // handler it rebuilds the caller's authority from the payload, so hashing is
 // subject to the same read permission as any other access to the file.
 func checksumJobHandler(checksums *checksum.Service, engine *acl.Engine) job.Handler {
-	return func(ctx context.Context, payload string, _ func(float64)) error {
+	return func(ctx context.Context, payload string, _ func(done, total int64)) error {
 		var p checksum.Payload
 		if err := json.Unmarshal([]byte(payload), &p); err != nil {
 			return fmt.Errorf("checksum job: decode payload: %w", err)

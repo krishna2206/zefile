@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -14,7 +15,11 @@ type jobResponse struct {
 	Type     string  `json:"type"`
 	Status   string  `json:"status"`
 	Progress float64 `json:"progress"`
-	Error    string  `json:"error,omitempty"`
+	// BytesDone and BytesTotal let the interface show a transfer rate from the
+	// change between polls. BytesTotal is 0 when the size is unknown.
+	BytesDone  int64  `json:"bytes_done"`
+	BytesTotal int64  `json:"bytes_total"`
+	Error      string `json:"error,omitempty"`
 
 	CreatedAt  time.Time  `json:"created_at"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
@@ -22,12 +27,14 @@ type jobResponse struct {
 
 func toJobResponse(j job.Job) jobResponse {
 	out := jobResponse{
-		ID:        j.ID,
-		Type:      j.Type,
-		Status:    j.Status,
-		Progress:  j.Progress,
-		Error:     j.Error,
-		CreatedAt: j.CreatedAt.UTC(),
+		ID:         j.ID,
+		Type:       j.Type,
+		Status:     j.Status,
+		Progress:   j.Progress,
+		BytesDone:  j.BytesDone,
+		BytesTotal: j.BytesTotal,
+		Error:      j.Error,
+		CreatedAt:  j.CreatedAt.UTC(),
 	}
 	if !j.FinishedAt.IsZero() {
 		finished := j.FinishedAt.UTC()
@@ -72,4 +79,44 @@ func (s *Server) handleJobGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, r, http.StatusOK, toJobResponse(j))
+}
+
+// jobAction runs one of cancel/pause/resume on a job and returns its fresh
+// state. The three share everything but the verb.
+func (s *Server) jobAction(w http.ResponseWriter, r *http.Request, act func(context.Context, int64) error) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, CodeBadRequest, "Bad id", "The job id must be a number.")
+		return
+	}
+	if err := act(r.Context(), id); err != nil {
+		if errors.Is(err, job.ErrNotRunning) {
+			writeProblem(w, r, http.StatusConflict, CodeConflict, "Not running", "Only a running job can be paused.")
+			return
+		}
+		writeError(w, r, err)
+		return
+	}
+	j, err := s.jobs.Get(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, job.ErrNotFound) {
+			writeProblem(w, r, http.StatusNotFound, CodeNotFound, "No such job", "This job is unknown.")
+			return
+		}
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, r, http.StatusOK, toJobResponse(j))
+}
+
+func (s *Server) handleJobCancel(w http.ResponseWriter, r *http.Request) {
+	s.jobAction(w, r, s.jobs.Cancel)
+}
+
+func (s *Server) handleJobPause(w http.ResponseWriter, r *http.Request) {
+	s.jobAction(w, r, s.jobs.Pause)
+}
+
+func (s *Server) handleJobResume(w http.ResponseWriter, r *http.Request) {
+	s.jobAction(w, r, s.jobs.Resume)
 }

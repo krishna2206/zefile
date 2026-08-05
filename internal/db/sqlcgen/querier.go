@@ -11,8 +11,12 @@ import (
 
 type Querier interface {
 	AddGroupMember(ctx context.Context, arg AddGroupMemberParams) error
-	// Atomically take the oldest pending job and mark it running. The single writer
-	// connection serialises this, so two workers could not claim the same row.
+	// Cancel a job that is not currently running (pending or paused, both of which
+	// keep status 'pending'). A running job is cancelled by signalling its worker.
+	CancelPendingJob(ctx context.Context, arg CancelPendingJobParams) error
+	// Atomically take the oldest runnable job and mark it running. The single writer
+	// connection serialises this, so two workers could not claim the same row. A
+	// paused job keeps status 'pending' but is skipped until its flag is cleared.
 	ClaimNextJob(ctx context.Context, startedAt sql.NullInt64) (Job, error)
 	CountUnusedRecoveryCodesForUser(ctx context.Context, userID int64) (int64, error)
 	// Backs first-run detection: an instance with no account shows the setup link
@@ -112,6 +116,9 @@ type Querier interface {
 	ListUsers(ctx context.Context) ([]User, error)
 	LogShareAccess(ctx context.Context, arg LogShareAccessParams) error
 	MarkInvitationUsed(ctx context.Context, arg MarkInvitationUsedParams) error
+	// Return a running job to a paused state: it leaves the worker but keeps its
+	// progress and any staged bytes so it can be resumed from where it stopped.
+	MarkJobPaused(ctx context.Context, id int64) error
 	// Scoped to an unused code so the same code can never be spent twice, even in a
 	// race: execrows lets the caller confirm exactly one row changed.
 	MarkRecoveryCodeUsed(ctx context.Context, arg MarkRecoveryCodeUsedParams) (int64, error)
@@ -127,6 +134,8 @@ type Querier interface {
 	// A job left 'running' by a crash is reset so the worker picks it up again on
 	// the next start; its own idempotent construction makes the retry safe.
 	RequeueRunningJobs(ctx context.Context) error
+	// Clear the pause flag so the worker picks the job up again.
+	ResumeJob(ctx context.Context, id int64) error
 	// Scoped to the owner so one account cannot revoke another's token by guessing
 	// an id. execrows lets the handler answer 404 when nothing matched.
 	RevokeAPITokenForUser(ctx context.Context, arg RevokeAPITokenForUserParams) (int64, error)

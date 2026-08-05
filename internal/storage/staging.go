@@ -62,6 +62,35 @@ func (l *Local) NewStage(_ context.Context) (StageID, error) {
 	return id, nil
 }
 
+// EnsureStage opens a staged file under a caller-chosen identifier, creating it
+// empty if it does not yet exist, and returns how many bytes it already holds.
+//
+// It backs resumable server-side work — a paused download names its stage after
+// the job, so resuming finds the bytes already fetched and continues from the
+// returned offset. Unlike [NewStage] the identifier is deterministic, so the
+// same job always addresses the same partial file across runs.
+func (l *Local) EnsureStage(ctx context.Context, id StageID) (int64, error) {
+	if err := l.checkWritable(); err != nil {
+		return 0, err
+	}
+	if err := l.ensureStagingDir(); err != nil {
+		return 0, err
+	}
+	if size, err := l.StageSize(ctx, id); err == nil {
+		return size, nil
+	} else if !errors.Is(err, ErrNoStagedFile) {
+		return 0, err
+	}
+	f, err := l.root.OpenFile(l.stagePath(id), os.O_WRONLY|os.O_CREATE, 0o600)
+	if err != nil {
+		return 0, mapErr(err)
+	}
+	if err := f.Close(); err != nil {
+		return 0, mapErr(err)
+	}
+	return 0, nil
+}
+
 // StageSize reports how many bytes a staged file already holds, which is the
 // offset a client resumes from.
 func (l *Local) StageSize(_ context.Context, id StageID) (int64, error) {

@@ -156,6 +156,9 @@ func (s *Server) Handler() http.Handler {
 
 	authed.HandleFunc("GET /api/v1/jobs", s.handleJobList)
 	authed.HandleFunc("GET /api/v1/jobs/{id}", s.handleJobGet)
+	authed.HandleFunc("POST /api/v1/jobs/{id}/cancel", s.handleJobCancel)
+	authed.HandleFunc("POST /api/v1/jobs/{id}/pause", s.handleJobPause)
+	authed.HandleFunc("POST /api/v1/jobs/{id}/resume", s.handleJobResume)
 
 	authed.HandleFunc("POST /api/v1/invitations", s.handleInvitationCreate)
 	authed.HandleFunc("GET /api/v1/invitations", s.handleInvitationList)

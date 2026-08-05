@@ -69,7 +69,7 @@ func newClient(t *testing.T) *client {
 
 	// A running worker, so a background copy actually completes in tests.
 	jobs := job.New(database, job.WithPollInterval(20*time.Millisecond))
-	jobs.Register(job.TypeCopy, func(ctx context.Context, payload string, report func(float64)) error {
+	jobs.Register(job.TypeCopy, func(ctx context.Context, payload string, report func(done, total int64)) error {
 		var p job.CopyPayload
 		if err := json.Unmarshal([]byte(payload), &p); err != nil {
 			return err
@@ -93,7 +93,7 @@ func newClient(t *testing.T) *client {
 		return engine.SetOwner(ctx, to, p.UserID)
 	})
 	checksums := checksum.New(database, fs)
-	jobs.Register(job.TypeChecksum, func(ctx context.Context, payload string, _ func(float64)) error {
+	jobs.Register(job.TypeChecksum, func(ctx context.Context, payload string, _ func(done, total int64)) error {
 		var p checksum.Payload
 		if err := json.Unmarshal([]byte(payload), &p); err != nil {
 			return err

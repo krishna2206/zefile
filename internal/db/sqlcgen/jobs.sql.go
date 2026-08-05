@@ -10,15 +10,38 @@ import (
 	"database/sql"
 )
 
+const cancelPendingJob = `-- name: CancelPendingJob :exec
+UPDATE jobs
+SET status = 'cancelled', paused = 0, finished_at = ?
+WHERE id = ? AND status = 'pending'
+`
+
+type CancelPendingJobParams struct {
+	FinishedAt sql.NullInt64
+	ID         int64
+}
+
+// Cancel a job that is not currently running (pending or paused, both of which
+// keep status 'pending'). A running job is cancelled by signalling its worker.
+func (q *Queries) CancelPendingJob(ctx context.Context, arg CancelPendingJobParams) error {
+	_, err := q.db.ExecContext(ctx, cancelPendingJob, arg.FinishedAt, arg.ID)
+	return err
+}
+
 const claimNextJob = `-- name: ClaimNextJob :one
 UPDATE jobs
 SET status = 'running', started_at = ?
-WHERE id = (SELECT id FROM jobs WHERE status = 'pending' ORDER BY created_at, id LIMIT 1)
-RETURNING id, type, payload, status, progress, error, created_at, started_at, finished_at
+WHERE id = (
+    SELECT id FROM jobs
+    WHERE status = 'pending' AND paused = 0
+    ORDER BY created_at, id LIMIT 1
+)
+RETURNING id, type, payload, status, progress, error, created_at, started_at, finished_at, bytes_done, bytes_total, paused
 `
 
-// Atomically take the oldest pending job and mark it running. The single writer
-// connection serialises this, so two workers could not claim the same row.
+// Atomically take the oldest runnable job and mark it running. The single writer
+// connection serialises this, so two workers could not claim the same row. A
+// paused job keeps status 'pending' but is skipped until its flag is cleared.
 func (q *Queries) ClaimNextJob(ctx context.Context, startedAt sql.NullInt64) (Job, error) {
 	row := q.db.QueryRowContext(ctx, claimNextJob, startedAt)
 	var i Job
@@ -32,6 +55,9 @@ func (q *Queries) ClaimNextJob(ctx context.Context, startedAt sql.NullInt64) (Jo
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.BytesDone,
+		&i.BytesTotal,
+		&i.Paused,
 	)
 	return i, err
 }
@@ -39,7 +65,7 @@ func (q *Queries) ClaimNextJob(ctx context.Context, startedAt sql.NullInt64) (Jo
 const createJob = `-- name: CreateJob :one
 INSERT INTO jobs (type, payload, status, created_at)
 VALUES (?, ?, 'pending', ?)
-RETURNING id, type, payload, status, progress, error, created_at, started_at, finished_at
+RETURNING id, type, payload, status, progress, error, created_at, started_at, finished_at, bytes_done, bytes_total, paused
 `
 
 type CreateJobParams struct {
@@ -61,6 +87,9 @@ func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (Job, erro
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.BytesDone,
+		&i.BytesTotal,
+		&i.Paused,
 	)
 	return i, err
 }
@@ -89,7 +118,7 @@ func (q *Queries) FinishJob(ctx context.Context, arg FinishJobParams) error {
 }
 
 const getJob = `-- name: GetJob :one
-SELECT id, type, payload, status, progress, error, created_at, started_at, finished_at FROM jobs WHERE id = ?
+SELECT id, type, payload, status, progress, error, created_at, started_at, finished_at, bytes_done, bytes_total, paused FROM jobs WHERE id = ?
 `
 
 func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
@@ -105,12 +134,15 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.BytesDone,
+		&i.BytesTotal,
+		&i.Paused,
 	)
 	return i, err
 }
 
 const listRecentJobs = `-- name: ListRecentJobs :many
-SELECT id, type, payload, status, progress, error, created_at, started_at, finished_at FROM jobs ORDER BY created_at DESC, id DESC LIMIT ?
+SELECT id, type, payload, status, progress, error, created_at, started_at, finished_at, bytes_done, bytes_total, paused FROM jobs ORDER BY created_at DESC, id DESC LIMIT ?
 `
 
 func (q *Queries) ListRecentJobs(ctx context.Context, limit int64) ([]Job, error) {
@@ -132,6 +164,9 @@ func (q *Queries) ListRecentJobs(ctx context.Context, limit int64) ([]Job, error
 			&i.CreatedAt,
 			&i.StartedAt,
 			&i.FinishedAt,
+			&i.BytesDone,
+			&i.BytesTotal,
+			&i.Paused,
 		); err != nil {
 			return nil, err
 		}
@@ -146,6 +181,19 @@ func (q *Queries) ListRecentJobs(ctx context.Context, limit int64) ([]Job, error
 	return items, nil
 }
 
+const markJobPaused = `-- name: MarkJobPaused :exec
+UPDATE jobs
+SET status = 'pending', paused = 1, started_at = NULL
+WHERE id = ? AND status = 'running'
+`
+
+// Return a running job to a paused state: it leaves the worker but keeps its
+// progress and any staged bytes so it can be resumed from where it stopped.
+func (q *Queries) MarkJobPaused(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, markJobPaused, id)
+	return err
+}
+
 const requeueRunningJobs = `-- name: RequeueRunningJobs :exec
 UPDATE jobs SET status = 'pending', started_at = NULL WHERE status = 'running'
 `
@@ -157,16 +205,33 @@ func (q *Queries) RequeueRunningJobs(ctx context.Context) error {
 	return err
 }
 
+const resumeJob = `-- name: ResumeJob :exec
+UPDATE jobs SET paused = 0 WHERE id = ? AND paused = 1
+`
+
+// Clear the pause flag so the worker picks the job up again.
+func (q *Queries) ResumeJob(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, resumeJob, id)
+	return err
+}
+
 const updateJobProgress = `-- name: UpdateJobProgress :exec
-UPDATE jobs SET progress = ? WHERE id = ?
+UPDATE jobs SET progress = ?, bytes_done = ?, bytes_total = ? WHERE id = ?
 `
 
 type UpdateJobProgressParams struct {
-	Progress float64
-	ID       int64
+	Progress   float64
+	BytesDone  int64
+	BytesTotal int64
+	ID         int64
 }
 
 func (q *Queries) UpdateJobProgress(ctx context.Context, arg UpdateJobProgressParams) error {
-	_, err := q.db.ExecContext(ctx, updateJobProgress, arg.Progress, arg.ID)
+	_, err := q.db.ExecContext(ctx, updateJobProgress,
+		arg.Progress,
+		arg.BytesDone,
+		arg.BytesTotal,
+		arg.ID,
+	)
 	return err
 }

@@ -53,7 +53,7 @@ const (
 // tree. Decompression bombs are refused by the ceilings above, the ratio one
 // enforced against bytes actually written rather than the header's claim.
 // Symlinks and other non-regular entries are ignored rather than reproduced.
-func (l *Local) ExtractZip(ctx context.Context, archive, dest Path, progress func(fraction float64)) (Path, error) {
+func (l *Local) ExtractZip(ctx context.Context, archive, dest Path, progress func(done, total int64)) (Path, error) {
 	if err := l.access(ctx, OpRead, archive); err != nil {
 		return Path{}, err
 	}
@@ -152,7 +152,7 @@ func preflightZip(zr *zip.Reader) error {
 
 // unpack writes every entry of the archive under dstRoot, enforcing the byte
 // and ratio ceilings against what is actually written.
-func (l *Local) unpack(ctx context.Context, zr *zip.Reader, dstRoot string, progress func(fraction float64)) error {
+func (l *Local) unpack(ctx context.Context, zr *zip.Reader, dstRoot string, progress func(done, total int64)) error {
 	if err := l.root.Mkdir(dstRoot, 0o755); err != nil && !errors.Is(err, os.ErrExist) {
 		return mapErr(err)
 	}
@@ -187,8 +187,8 @@ func (l *Local) unpack(ctx context.Context, zr *zip.Reader, dstRoot string, prog
 		if written > MaxExtractedBytes {
 			return fmt.Errorf("%w: extracted size exceeds %d bytes", ErrArchiveTooLarge, int64(MaxExtractedBytes))
 		}
-		if progress != nil && total > 0 {
-			progress(float64(written) / float64(total))
+		if progress != nil {
+			progress(written, total)
 		}
 	}
 	return nil
@@ -285,13 +285,18 @@ func safeJoin(root, name string) (string, error) {
 }
 
 // zipTotalBytes sums the declared uncompressed sizes, for scaling progress. It
-// is only a hint: the real total is enforced as bytes are written.
-func zipTotalBytes(zr *zip.Reader) uint64 {
+// is only a hint: the real total is enforced as bytes are written. Preflight
+// has already refused an archive whose declared total exceeds MaxExtractedBytes,
+// so the sum fits an int64 with room to spare; it is capped there defensively.
+func zipTotalBytes(zr *zip.Reader) int64 {
 	var total uint64
 	for _, e := range zr.File {
 		total += e.UncompressedSize64
+		if total > uint64(MaxExtractedBytes) {
+			return MaxExtractedBytes
+		}
 	}
-	return total
+	return int64(total)
 }
 
 // newTempDir reserves an empty directory inside the uploads area for an

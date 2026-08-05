@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/krishna2206/zefile/internal/db"
@@ -44,14 +45,46 @@ const (
 	TypeFetch Type = "fetch"
 )
 
-// Status values mirror the CHECK constraint on the jobs table.
+// Status values mirror the CHECK constraint on the jobs table, plus the
+// synthetic "paused" the interface sees — paused is a flag in the database, not
+// a status value, but a caller polling a job wants a single word for its state.
 const (
 	StatusPending   = "pending"
 	StatusRunning   = "running"
 	StatusDone      = "done"
 	StatusFailed    = "failed"
 	StatusCancelled = "cancelled"
+	StatusPaused    = "paused"
 )
+
+// ErrCancelled and ErrPaused are the causes a running job's context is
+// cancelled with, so its handler can tell a user cancellation from a pause from
+// a shutdown and clean up accordingly — discard on cancel, keep on pause.
+var (
+	ErrCancelled = errors.New("job: cancelled")
+	ErrPaused    = errors.New("job: paused")
+
+	// ErrNotRunning means an operation valid only on a running job (pause) was
+	// asked of one that is not.
+	ErrNotRunning = errors.New("job: not running")
+)
+
+// idKey carries the running job's id into its handler's context, so a handler
+// that needs a stable per-job identity — a download naming its resumable
+// staging file — can recover it without threading it through the payload.
+type idKey struct{}
+
+// WithID returns ctx carrying the job id. The worker sets it before calling a
+// handler; handlers read it with IDFromContext.
+func WithID(ctx context.Context, id int64) context.Context {
+	return context.WithValue(ctx, idKey{}, id)
+}
+
+// IDFromContext returns the running job's id, if the worker set one.
+func IDFromContext(ctx context.Context) (int64, bool) {
+	id, ok := ctx.Value(idKey{}).(int64)
+	return id, ok
+}
 
 // CopyPayload is the work a copy job carries. The user is recorded so the worker
 // runs the copy with the same authority the caller had when they asked for it.
@@ -88,16 +121,20 @@ type Job struct {
 	Type       string
 	Status     string
 	Progress   float64
+	BytesDone  int64
+	BytesTotal int64
 	Error      string
 	CreatedAt  time.Time
 	StartedAt  time.Time
 	FinishedAt time.Time
 }
 
-// Handler runs one job. It reports progress as a fraction in [0,1]; the reports
-// are throttled before they reach the database, so a handler may call report as
-// often as it likes.
-type Handler func(ctx context.Context, payload string, report func(fraction float64)) error
+// Handler runs one job. It reports progress as bytes done out of a total (0
+// total meaning unknown); the reports are throttled before they reach the
+// database, so a handler may call report as often as it likes. A handler must
+// honour ctx cancellation: it is how a job is cancelled or paused, told apart
+// by context.Cause — [ErrCancelled] versus [ErrPaused].
+type Handler func(ctx context.Context, payload string, report func(done, total int64)) error
 
 // Service is the queue and its worker.
 type Service struct {
@@ -108,6 +145,11 @@ type Service struct {
 	poll     time.Duration
 	wake     chan struct{}
 	log      *slog.Logger
+
+	// running maps a job id to the cancel of its context while it executes, so
+	// Cancel and Pause can reach into a job in flight.
+	mu      sync.Mutex
+	running map[int64]context.CancelCauseFunc
 }
 
 // Option adjusts a Service.
@@ -129,6 +171,7 @@ func New(database *db.DB, opts ...Option) *Service {
 		poll:     2 * time.Second,
 		wake:     make(chan struct{}, 1),
 		log:      slog.Default(),
+		running:  make(map[int64]context.CancelCauseFunc),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -229,37 +272,119 @@ func (s *Service) step(ctx context.Context) bool {
 		return true
 	}
 
+	// A per-job cancellable context, registered so Cancel and Pause can reach
+	// it, and carrying the job id so a handler can name per-job resources.
+	jobCtx, cancel := context.WithCancelCause(ctx)
+	s.register(row.ID, cancel)
+	defer s.deregister(row.ID, cancel)
+	handlerCtx := WithID(jobCtx, row.ID)
+
 	report := s.throttledReporter(ctx, row.ID)
-	if err := handler(ctx, row.Payload, report); err != nil {
-		// A cancelled context is a shutdown, not a failure: leave the job so the
-		// next start requeues and retries it.
-		if ctx.Err() != nil {
-			return false
+	err = handler(handlerCtx, row.Payload, report)
+
+	// Cause tells a deliberate stop from a genuine failure. Pause and cancel are
+	// user actions, not errors; a parent-context cancellation is a shutdown.
+	switch cause := context.Cause(jobCtx); {
+	case err == nil:
+		s.finish(ctx, row.ID, StatusDone, 1, "")
+	case errors.Is(cause, ErrPaused):
+		if e := s.writes.MarkJobPaused(ctx, row.ID); e != nil {
+			s.log.Warn("job: could not mark paused", "id", row.ID, "error", e)
 		}
+	case errors.Is(cause, ErrCancelled):
+		s.finish(ctx, row.ID, StatusCancelled, 0, "")
+	case ctx.Err() != nil:
+		// Shutdown: leave the job running so the next start requeues it.
+		return false
+	default:
 		s.log.Warn("job: handler failed", "id", row.ID, "type", row.Type, "error", err)
 		s.finish(ctx, row.ID, StatusFailed, 0, err.Error())
-		return true
 	}
-	s.finish(ctx, row.ID, StatusDone, 1, "")
 	return true
 }
 
+// register records a running job's cancel; deregister removes it, but only if
+// it is still the same cancel, so a resumed job's later run is not cleared by
+// the teardown of an earlier one.
+func (s *Service) register(id int64, cancel context.CancelCauseFunc) {
+	s.mu.Lock()
+	s.running[id] = cancel
+	s.mu.Unlock()
+}
+
+func (s *Service) deregister(id int64, cancel context.CancelCauseFunc) {
+	s.mu.Lock()
+	if s.running[id] != nil {
+		delete(s.running, id)
+	}
+	s.mu.Unlock()
+	cancel(nil) // release the context's resources; a no-op if already cancelled
+}
+
+// Cancel stops a job. A running job is signalled to unwind and clean up; a
+// pending or paused one is marked cancelled directly. Cancelling a finished job
+// does nothing.
+func (s *Service) Cancel(ctx context.Context, id int64) error {
+	s.mu.Lock()
+	cancel, running := s.running[id]
+	s.mu.Unlock()
+	if running {
+		cancel(ErrCancelled)
+		return nil
+	}
+	return s.writes.CancelPendingJob(ctx, sqlcgen.CancelPendingJobParams{
+		FinishedAt: sql.NullInt64{Int64: s.now().Unix(), Valid: true},
+		ID:         id,
+	})
+}
+
+// Pause suspends a running job, keeping its progress so Resume can continue it.
+// Only a running job can be paused.
+func (s *Service) Pause(_ context.Context, id int64) error {
+	s.mu.Lock()
+	cancel, running := s.running[id]
+	s.mu.Unlock()
+	if !running {
+		return ErrNotRunning
+	}
+	cancel(ErrPaused)
+	return nil
+}
+
+// Resume clears a job's pause flag and nudges the worker to pick it up again.
+func (s *Service) Resume(ctx context.Context, id int64) error {
+	if err := s.writes.ResumeJob(ctx, id); err != nil {
+		return err
+	}
+	s.nudge()
+	return nil
+}
+
 // throttledReporter returns a progress callback that writes to the database at
-// most a few times a second, so a fast copy does not flood the writer.
-func (s *Service) throttledReporter(ctx context.Context, id int64) func(float64) {
+// most a few times a second, so a fast copy does not flood the writer. It
+// records the byte counts as well as the fraction, so the interface can show a
+// transfer rate from the change between polls.
+func (s *Service) throttledReporter(ctx context.Context, id int64) func(done, total int64) {
 	var last time.Time
-	return func(fraction float64) {
+	return func(done, total int64) {
 		now := s.now()
 		if now.Sub(last) < 400*time.Millisecond {
 			return
 		}
 		last = now
-		if fraction < 0 {
-			fraction = 0
-		} else if fraction > 1 {
-			fraction = 1
+		var fraction float64
+		if total > 0 {
+			fraction = float64(done) / float64(total)
+			if fraction > 1 {
+				fraction = 1
+			}
 		}
-		if err := s.writes.UpdateJobProgress(ctx, sqlcgen.UpdateJobProgressParams{Progress: fraction, ID: id}); err != nil {
+		if err := s.writes.UpdateJobProgress(ctx, sqlcgen.UpdateJobProgressParams{
+			Progress:   fraction,
+			BytesDone:  done,
+			BytesTotal: total,
+			ID:         id,
+		}); err != nil {
 			s.log.Warn("job: progress update failed", "id", id, "error", err)
 		}
 	}
@@ -290,13 +415,20 @@ func (s *Service) nudge() {
 }
 
 func toJob(r sqlcgen.Job) Job {
+	status := r.Status
+	// A paused job keeps status 'pending' in the database; present it as paused.
+	if r.Paused != 0 && r.Status == StatusPending {
+		status = StatusPaused
+	}
 	j := Job{
-		ID:        r.ID,
-		Type:      r.Type,
-		Status:    r.Status,
-		Progress:  r.Progress,
-		Error:     r.Error.String,
-		CreatedAt: time.Unix(r.CreatedAt, 0),
+		ID:         r.ID,
+		Type:       r.Type,
+		Status:     status,
+		Progress:   r.Progress,
+		BytesDone:  r.BytesDone,
+		BytesTotal: r.BytesTotal,
+		Error:      r.Error.String,
+		CreatedAt:  time.Unix(r.CreatedAt, 0),
 	}
 	if r.StartedAt.Valid {
 		j.StartedAt = time.Unix(r.StartedAt.Int64, 0)

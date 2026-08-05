@@ -91,7 +91,15 @@ Field-level validation errors add an `errors` map of field name to message.
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/api/v1/jobs` | List background jobs (copies, etc.) |
-| `GET` | `/api/v1/jobs/{id}` | One job's status and progress |
+| `GET` | `/api/v1/jobs/{id}` | One job's status, progress and byte counts |
+| `POST` | `/api/v1/jobs/{id}/cancel` | Cancel a job (discards a download's partial) |
+| `POST` | `/api/v1/jobs/{id}/pause` | Pause a running download |
+| `POST` | `/api/v1/jobs/{id}/resume` | Resume a paused download |
+
+A job carries `bytes_done` and `bytes_total`; a client shows a transfer rate by
+dividing the change in `bytes_done` by the time between polls. Pause and resume
+apply to downloads: a resumed download continues from where it stopped using an
+HTTP range request, or restarts cleanly if the source does not support ranges.
 
 ## API tokens
 

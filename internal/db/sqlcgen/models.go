@@ -93,6 +93,9 @@ type Job struct {
 	CreatedAt  int64
 	StartedAt  sql.NullInt64
 	FinishedAt sql.NullInt64
+	BytesDone  int64
+	BytesTotal int64
+	Paused     int64
 }
 
 type RecoveryCode struct {

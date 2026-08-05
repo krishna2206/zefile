@@ -31,6 +31,8 @@ import {
   LinkSimple,
   PencilSimple as Pencil,
   MagnifyingGlass as Search,
+  Pause,
+  Play,
   ShareNetwork,
   SlidersHorizontal,
   Trash as Trash2,
@@ -201,13 +203,33 @@ type Clipboard = { mode: 'copy' | 'cut'; entries: Entry[] }
 const ALL_PERMS: PermSet = { read: true, write: true, delete: true, share: true, manage: true }
 const NO_PERMS: PermSet = { read: false, write: false, delete: false, share: false, manage: false }
 
-/** TrackedJob follows a background copy, extraction or download the interface is polling. */
+/** TrackedJob follows a background copy, extraction or download the interface is
+ *  polling. bytesDone/Total and the sample fields let the panel show a live
+ *  transfer rate, computed from the change between two polls. */
 type TrackedJob = {
   id: number
   name: string
   status: Job['status']
   progress: number
   kind: 'copy' | 'extract' | 'fetch'
+  bytesDone: number
+  bytesTotal: number
+  sampledAt: number // ms timestamp of the sample bytesDone was read at
+  speed: number // bytes/sec, smoothed; 0 until a rate can be measured
+}
+
+function newTracked(job: Job, kind: TrackedJob['kind'], name: string): TrackedJob {
+  return {
+    id: job.id,
+    name,
+    status: job.status,
+    progress: job.progress,
+    kind,
+    bytesDone: job.bytes_done,
+    bytesTotal: job.bytes_total,
+    sampledAt: Date.now(),
+    speed: 0,
+  }
 }
 
 type Group = { key: string; label: string; entries: Entry[] }
@@ -564,10 +586,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     try {
       const { job } = await api.extract(entry.path)
       const name = entry.name.replace(/\.zip$/i, '')
-      setJobs((cur) => [
-        ...cur.filter((j) => j.id !== job.id),
-        { id: job.id, name, status: job.status, progress: job.progress, kind: 'extract' },
-      ])
+      setJobs((cur) => [...cur.filter((j) => j.id !== job.id), newTracked(job, 'extract', name)])
       toast('Extracting in the background…')
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : `Could not extract “${entry.name}”`)
@@ -689,7 +708,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
           if (res && 'job' in res) {
             setJobs((cur) => [
               ...cur.filter((j) => j.id !== res.job.id),
-              { id: res.job.id, name, status: res.job.status, progress: res.job.progress, kind: 'copy' },
+              newTracked(res.job, 'copy', name),
             ])
             queued++
           } else {
@@ -758,7 +777,25 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
           .getJob(tracked.id)
           .then((fresh) => {
             setJobs((cur) =>
-              cur.map((j) => (j.id === tracked.id ? { ...j, status: fresh.status, progress: fresh.progress } : j)),
+              cur.map((j) => {
+                if (j.id !== tracked.id) return j
+                // Transfer rate from the change since the last sample. Only
+                // update the rate when bytes actually advanced, so a stalled or
+                // just-paused job keeps its last figure rather than dropping to 0.
+                const now = Date.now()
+                const dt = (now - j.sampledAt) / 1000
+                const advanced = fresh.bytes_done - j.bytesDone
+                const speed = dt > 0 && advanced > 0 ? advanced / dt : j.speed
+                return {
+                  ...j,
+                  status: fresh.status,
+                  progress: fresh.progress,
+                  bytesDone: fresh.bytes_done,
+                  bytesTotal: fresh.bytes_total,
+                  sampledAt: now,
+                  speed,
+                }
+              }),
             )
             if (fresh.status === 'done') {
               const done =
@@ -798,12 +835,25 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
     } catch {
       // keep the raw URL as the label
     }
-    setJobs((cur) => [
-      ...cur.filter((j) => j.id !== job.id),
-      { id: job.id, name, status: job.status, progress: job.progress, kind: 'fetch' },
-    ])
+    setJobs((cur) => [...cur.filter((j) => j.id !== job.id), newTracked(job, 'fetch', name)])
     toast('Downloading in the background…')
   }
+
+  // patchJob applies a job action and folds the returned state back in. Pausing
+  // zeroes the shown rate; resuming restarts the rate sampling window.
+  async function patchJob(id: number, act: (id: number) => Promise<Job>, extra: Partial<TrackedJob> = {}) {
+    try {
+      const fresh = await act(id)
+      setJobs((cur) =>
+        cur.map((j) => (j.id === id ? { ...j, status: fresh.status, ...extra } : j)),
+      )
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not update the download.')
+    }
+  }
+  const jobPause = (id: number) => void patchJob(id, api.pauseJob, { speed: 0 })
+  const jobResume = (id: number) => void patchJob(id, api.resumeJob, { sampledAt: Date.now(), speed: 0 })
+  const jobCancel = (id: number) => void patchJob(id, api.cancelJob)
 
   async function renameEntry(entry: Entry, name: string) {
     await api.move(entry.path, joinPath(parentOf(entry.path), name))
@@ -1097,7 +1147,13 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
 
         <div className="fixed bottom-4 right-4 z-20 flex flex-col items-end gap-3">
           <Transfers transfers={transfers} onClear={() => setTransfers([])} />
-          <JobsPanel jobs={jobs} onClear={() => setJobs([])} />
+          <JobsPanel
+            jobs={jobs}
+            onClear={() => setJobs([])}
+            onPause={jobPause}
+            onResume={jobResume}
+            onCancel={jobCancel}
+          />
         </div>
       </div>
       )}
@@ -1954,44 +2010,100 @@ function DeleteDialog({
 }
 
 /**
- * JobsPanel follows background copies. It sits opposite the transfers panel so
- * the two never overlap, and clears once nothing is left running.
+ * JobsPanel follows background copies, extractions and downloads. It sits
+ * opposite the transfers panel so the two never overlap, and clears once nothing
+ * is left running. A download can be paused, resumed or cancelled from here; the
+ * others can be cancelled.
  */
-function JobsPanel({ jobs, onClear }: { jobs: TrackedJob[]; onClear: () => void }) {
+function JobsPanel({
+  jobs,
+  onClear,
+  onPause,
+  onResume,
+  onCancel,
+}: {
+  jobs: TrackedJob[]
+  onClear: () => void
+  onPause: (id: number) => void
+  onResume: (id: number) => void
+  onCancel: (id: number) => void
+}) {
   if (jobs.length === 0) return null
-  const running = jobs.filter((j) => j.status === 'pending' || j.status === 'running').length
+  const active = jobs.filter((j) => j.status === 'pending' || j.status === 'running' || j.status === 'paused').length
 
   return (
     <div className="w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-4 shadow-lg">
       <div className="flex items-center">
-        <p className="text-sm font-medium">{running > 0 ? `Working — ${running} running` : 'Tasks'}</p>
-        {running === 0 && (
+        <p className="text-sm font-medium">{active > 0 ? `Working — ${active} active` : 'Tasks'}</p>
+        {active === 0 && (
           <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>
             Clear
           </Button>
         )}
       </div>
 
-      <div className="mt-2 max-h-64 space-y-2 overflow-auto">
-        {jobs.map((job) => (
-          <div key={job.id} className="space-y-1">
-            <div className="flex items-center gap-4">
-              <span className="min-w-0 flex-1 truncate text-sm">{job.name}</span>
-              <span
-                className={`shrink-0 text-xs tabular-nums ${
-                  job.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'
-                }`}
-              >
-                {job.status === 'failed'
-                  ? 'Failed'
-                  : job.status === 'done'
-                    ? 'Done'
-                    : `${Math.round(job.progress * 100)}%`}
-              </span>
+      <div className="mt-2 max-h-72 space-y-2 overflow-auto">
+        {jobs.map((job) => {
+          const inFlight = job.status === 'running' || job.status === 'pending'
+          const paused = job.status === 'paused'
+          // A download alone can pause/resume; the rest only cancel.
+          const canPause = job.kind === 'fetch'
+          const right =
+            job.status === 'failed'
+              ? 'Failed'
+              : job.status === 'cancelled'
+                ? 'Cancelled'
+                : job.status === 'done'
+                  ? 'Done'
+                  : paused
+                    ? 'Paused'
+                    : job.bytesTotal > 0
+                      ? `${Math.round(job.progress * 100)}%`
+                      : formatSize(job.bytesDone)
+          return (
+            <div key={job.id} className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-sm">{job.name}</span>
+                <span
+                  className={`shrink-0 text-xs tabular-nums ${
+                    job.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'
+                  }`}
+                >
+                  {right}
+                </span>
+                {(inFlight || paused) && canPause && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 shrink-0"
+                    title={paused ? 'Resume' : 'Pause'}
+                    onClick={() => (paused ? onResume(job.id) : onPause(job.id))}
+                  >
+                    {paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+                  </Button>
+                )}
+                {(inFlight || paused) && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 shrink-0"
+                    title="Cancel"
+                    onClick={() => onCancel(job.id)}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                )}
+              </div>
+              {(inFlight || paused) && <Progress value={job.progress * 100} />}
+              {job.status === 'running' && job.speed > 0 && (
+                <p className="text-xs tabular-nums text-muted-foreground">
+                  {formatSize(job.speed)}/s
+                  {job.bytesTotal > 0 && ` · ${formatSize(job.bytesDone)} / ${formatSize(job.bytesTotal)}`}
+                </p>
+              )}
             </div>
-            {(job.status === 'running' || job.status === 'pending') && <Progress value={job.progress * 100} />}
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

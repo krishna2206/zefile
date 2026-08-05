@@ -38,8 +38,10 @@ export type Checksum = { path: string; algorithm: string; hash: string; size: nu
 export type Job = {
   id: number
   type: string
-  status: 'pending' | 'running' | 'done' | 'failed' | 'cancelled'
+  status: 'pending' | 'running' | 'done' | 'failed' | 'cancelled' | 'paused'
   progress: number
+  bytes_done: number
+  bytes_total: number
   error?: string
   created_at: string
   finished_at?: string
@@ -299,6 +301,13 @@ export const api = {
     }),
 
   getJob: (id: number) => request<Job>(`/api/v1/jobs/${id}`),
+
+  // cancel, pause and resume act on a running background job. Cancel discards a
+  // download's partial; pause keeps it so resume can continue from where it
+  // stopped. Each returns the job's fresh state.
+  cancelJob: (id: number) => request<Job>(`/api/v1/jobs/${id}/cancel`, { method: 'POST' }),
+  pauseJob: (id: number) => request<Job>(`/api/v1/jobs/${id}/pause`, { method: 'POST' }),
+  resumeJob: (id: number) => request<Job>(`/api/v1/jobs/${id}/resume`, { method: 'POST' }),
 
   // A file's SHA-256. Returns the cached digest when current, otherwise a job to
   // poll; call again once it is done to get the digest.

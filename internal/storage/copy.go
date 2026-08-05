@@ -92,13 +92,13 @@ func (l *Local) Copy(ctx context.Context, from, to Path) error {
 //
 // It is the background counterpart to [Copy]: a tree or a very large file may
 // take minutes, so this runs in the job worker rather than a request. progress,
-// if set, is called with the fraction of bytes copied so far.
+// if set, is called with the bytes copied so far and the total to copy.
 //
 // The whole tree is assembled under the reserved uploads directory and renamed
 // into place only once complete, so an interrupted copy never leaves a partial
 // tree where callers can see it, and an existing destination is never
 // overwritten.
-func (l *Local) CopyTree(ctx context.Context, from, to Path, progress func(fraction float64)) error {
+func (l *Local) CopyTree(ctx context.Context, from, to Path, progress func(done, total int64)) error {
 	if from.IsRoot() || to.IsRoot() {
 		return fmt.Errorf("%w: cannot copy the root", ErrInvalidPath)
 	}
@@ -134,14 +134,9 @@ func (l *Local) CopyTree(ctx context.Context, from, to Path, progress func(fract
 	var copied int64
 	report := func(n int64) {
 		copied += n
-		if progress == nil {
-			return
+		if progress != nil {
+			progress(copied, total)
 		}
-		if total <= 0 {
-			progress(1)
-			return
-		}
-		progress(float64(copied) / float64(total))
 	}
 
 	tmpRel, err := l.newTempPath()

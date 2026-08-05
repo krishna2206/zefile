@@ -23,6 +23,8 @@ import (
 	"net/netip"
 	"net/url"
 	"path"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -89,7 +91,13 @@ func DefaultPolicy() Policy {
 type Result struct {
 	Body     io.ReadCloser
 	Filename string // best-effort suggestion; empty if none could be derived
-	Size     int64  // Content-Length, or -1 if the source did not declare one
+	Size     int64  // the full file size, or -1 if the source did not declare one
+
+	// Resumed reports that a ranged request was honoured with a 206, so Body
+	// begins at the requested offset. When false after a ranged request, the
+	// source ignored the range and Body is the whole file from the start — the
+	// caller must reset any partial it had.
+	Resumed bool
 }
 
 // Fetcher performs SSRF-guarded downloads.
@@ -150,9 +158,14 @@ func New(p Policy) *Fetcher {
 	return &Fetcher{policy: p, client: client}
 }
 
-// Get opens rawURL for reading. The returned Body streams the response through
+// Get opens rawURL for reading, resuming from offset if it is greater than zero
+// by asking for that byte range. The returned Body streams the response through
 // a stall watchdog; the caller owns it and must Close it.
-func (f *Fetcher) Get(ctx context.Context, rawURL string) (*Result, error) {
+//
+// When offset > 0, inspect Result.Resumed: true means the source honoured the
+// range and Body starts at offset; false means it sent the whole file and the
+// caller must discard whatever it had staged.
+func (f *Fetcher) Get(ctx context.Context, rawURL string, offset int64) (*Result, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch: %w", err)
@@ -171,6 +184,9 @@ func (f *Fetcher) Get(ctx context.Context, rawURL string) (*Result, error) {
 		return nil, fmt.Errorf("fetch: %w", err)
 	}
 	req.Header.Set("User-Agent", "zefile")
+	if offset > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
+	}
 
 	resp, err := f.client.Do(req)
 	if err != nil {
@@ -183,12 +199,31 @@ func (f *Fetcher) Get(ctx context.Context, rawURL string) (*Result, error) {
 		return nil, &StatusError{Status: resp.Status}
 	}
 
+	resumed := resp.StatusCode == http.StatusPartialContent
 	body := newStallReader(resp.Body, f.policy.StallTimeout, cancel)
 	return &Result{
 		Body:     body,
 		Filename: filenameFrom(u, resp.Header.Get("Content-Disposition")),
-		Size:     resp.ContentLength,
+		Size:     totalSize(resp, resumed),
+		Resumed:  resumed,
 	}, nil
+}
+
+// totalSize reports the full file size regardless of ranging. For a 206 the
+// body's Content-Length is only the remainder, so the total comes from the
+// Content-Range header's final field; for a plain 200 it is the Content-Length.
+func totalSize(resp *http.Response, resumed bool) int64 {
+	if resumed {
+		if cr := resp.Header.Get("Content-Range"); cr != "" {
+			if i := strings.LastIndex(cr, "/"); i >= 0 && i+1 < len(cr) {
+				if total, err := strconv.ParseInt(cr[i+1:], 10, 64); err == nil {
+					return total
+				}
+			}
+		}
+		return -1 // ranged but no parseable total: size unknown
+	}
+	return resp.ContentLength
 }
 
 // unwrapRedirectError surfaces our own redirect-time errors, which the client
