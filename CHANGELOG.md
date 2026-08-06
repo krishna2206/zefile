@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.0](https://github.com/krishna2206/zefile/compare/v0.8.0...v0.9.0) (2026-08-06)
+
+
+### Features
+
+* download a URL into storage, guarded against SSRF ([c02c773](https://github.com/krishna2206/zefile/commit/c02c77318886233f0427603539d754b6c88ada2a))
+* paste button inside the download URL field ([822c07d](https://github.com/krishna2206/zefile/commit/822c07d5783dd3aa369b3fefbe2fab4c2fca06a5))
+* pause, resume, cancel and show the speed of a download ([c8052cd](https://github.com/krishna2206/zefile/commit/c8052cd7fe9a83e29ed5be86d5eb37499c499c8c))
+
 ## [0.8.0](https://github.com/krishna2206/zefile/compare/v0.7.0...v0.8.0) (2026-08-05)
 
 
