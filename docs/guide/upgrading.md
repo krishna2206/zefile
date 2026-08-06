@@ -16,7 +16,7 @@ docker compose up -d
 If you pinned a version tag, bump it first:
 
 ```yaml
-image: ghcr.io/krishna2206/zefile:v0.6.0
+image: ghcr.io/krishna2206/zefile:v0.8.0
 ```
 
 ## Database migrations

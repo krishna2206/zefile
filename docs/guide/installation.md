@@ -53,7 +53,7 @@ docker compose logs zefile
 
 ::: tip Pin a version
 `:latest` follows every release. For a reproducible deployment, pin a tag such
-as `ghcr.io/krishna2206/zefile:v0.6.0`.
+as `ghcr.io/krishna2206/zefile:v0.8.0`.
 :::
 
 ## First run

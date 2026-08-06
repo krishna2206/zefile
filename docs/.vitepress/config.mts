@@ -28,9 +28,9 @@ export default defineConfig({
 
     nav: [
       { text: 'Guide', link: '/guide/introduction' },
-      { text: 'Features', link: '/features/users-and-groups' },
+      { text: 'Features', link: '/features/files' },
       { text: 'Reference', link: '/reference/api' },
-      { text: 'v0.6.0', link: 'https://github.com/krishna2206/zefile/releases' },
+      { text: 'Releases', link: 'https://github.com/krishna2206/zefile/releases' },
     ],
 
     sidebar: {
@@ -48,6 +48,7 @@ export default defineConfig({
         {
           text: 'Features',
           items: [
+            { text: 'Files', link: '/features/files' },
             { text: 'Users & groups', link: '/features/users-and-groups' },
             { text: 'Permissions', link: '/features/permissions' },
             { text: 'Sharing', link: '/features/sharing' },
