@@ -1190,6 +1190,7 @@ export function Browser({ user, onSignedOut }: { user: User; onSignedOut: () => 
           title="Download from URL"
           label="File URL"
           submitLabel="Download"
+          paste
           onSubmit={fetchFromUrl}
           onClose={() => setDialog(null)}
         />
@@ -1910,6 +1911,7 @@ function NameDialog({
   label,
   submitLabel,
   initial = '',
+  paste = false,
   onSubmit,
   onClose,
 }: {
@@ -1917,6 +1919,9 @@ function NameDialog({
   label: string
   submitLabel: string
   initial?: string
+  // paste shows a button that fills the field from the clipboard — for the
+  // download dialog, where the value is a URL the user just copied.
+  paste?: boolean
   onSubmit: (name: string) => Promise<void>
   onClose: () => void
 }) {
@@ -1942,6 +1947,18 @@ function NameDialog({
     }
   }
 
+  async function pasteFromClipboard() {
+    try {
+      const text = (await navigator.clipboard.readText()).trim()
+      if (text) {
+        setValue(text)
+        setErr('')
+      }
+    } catch {
+      setErr('Could not read the clipboard. Paste with ⌘V instead.')
+    }
+  }
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
@@ -1951,14 +1968,29 @@ function NameDialog({
           </DialogHeader>
           <div className="space-y-1.5 py-4">
             <Label htmlFor="entry-name">{label}</Label>
-            <Input
-              id="entry-name"
-              autoFocus
-              value={value}
-              onFocus={(e) => e.currentTarget.select()}
-              onChange={(e) => setValue(e.currentTarget.value)}
-              aria-invalid={!!err}
-            />
+            <div className="relative">
+              <Input
+                id="entry-name"
+                autoFocus
+                value={value}
+                onFocus={(e) => e.currentTarget.select()}
+                onChange={(e) => setValue(e.currentTarget.value)}
+                aria-invalid={!!err}
+                className={paste ? 'pr-9' : undefined}
+              />
+              {paste && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 size-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  title="Paste from clipboard"
+                  onClick={() => void pasteFromClipboard()}
+                >
+                  <ClipboardText />
+                </Button>
+              )}
+            </div>
             {err && <p className="text-sm text-destructive">{err}</p>}
           </div>
           <DialogFooter>
