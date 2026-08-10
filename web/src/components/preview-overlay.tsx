@@ -138,7 +138,13 @@ export function PreviewOverlay({
             <iframe
               title={entry.name}
               src={url}
-              sandbox="allow-same-origin"
+              // allow-scripts is required for the browser's built-in PDF viewer
+              // (pdf.js) to run — without it the viewer chrome loads but the page
+              // renders blank. It is safe here: the iframe is cross-origin to the
+              // app (the content host), so it cannot reach the session, and the
+              // content host only ever serves a PDF inline — an executable type
+              // like HTML is always an attachment, never rendered in place.
+              sandbox="allow-scripts allow-same-origin"
               className="h-[85vh] w-[85vw] max-w-5xl rounded bg-white shadow-2xl"
             />
           ) : (
