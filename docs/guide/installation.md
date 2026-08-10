@@ -25,14 +25,11 @@ services:
       ZEFILE_DATA_DIR: /data
       ZEFILE_CONFIG_DIR: /config
 
-      # The user that owns your storage directory on the host. Getting this
-      # wrong shows up as a permission error on the first upload.
-      PUID: 1000
-      PGID: 1000
-
     volumes:
       # A directory on the host, not a Docker volume: that is what gives Zefile
-      # the whole disk instead of a partition of it.
+      # the whole disk instead of a partition of it. Zefile adopts whoever owns
+      # this directory — no user ids to set. (It won't run as root: chown a
+      # root-owned folder to any non-root user first.)
       - /mnt/storage:/data
       # The database lives apart from the browsable tree.
       - zefile-config:/config

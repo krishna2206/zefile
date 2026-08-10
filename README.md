@@ -131,13 +131,17 @@ setup link is single-use, expires in 24 hours, and is replaced every time
 Zefile starts — so one printed into a log you have since rotated away stops
 being useful.
 
-Three things decide whether a deployment works:
+Two things decide whether a deployment works:
 
 | | |
 | --- | --- |
-| `PUID` / `PGID` | Must match the owner of the host directory you mount. A mismatch surfaces as a permission error on the first upload. |
 | `ZEFILE_CONFIG_DIR` | Must not sit inside `ZEFILE_DATA_DIR`. Zefile refuses to start otherwise: a database users can list is one they can download, password hashes included. |
 | `ZEFILE_CONTENT_URL` | A second hostname. Without it, user content is served from the application origin and Zefile hardens itself — every file becomes an attachment and nothing renders in place. |
+
+There are **no `PUID`/`PGID` to set**. Zefile adopts whoever owns the data
+directory you mount, so a folder you own just works. The one exception: it will
+not run as root — if the mounted folder is owned by root, `chown` it to any
+non-root user once and Zefile follows.
 
 ## Building
 

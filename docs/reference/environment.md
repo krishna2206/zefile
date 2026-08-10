@@ -58,14 +58,20 @@ it is configured at runtime under **Settings → Retention** (admin). See the
 
 *Optional, default `:8080`.* The address the HTTP server binds.
 
-## Container (image only)
+## File ownership
 
-These are read by the container entrypoint, not the binary. They make the
-container adopt the user that owns your host directory.
+There is nothing to configure, and no `PUID`/`PGID`. The container entrypoint
+runs the server as **whoever owns the mounted data directory**, so a bind-mounted
+folder is written by its own owner and the first upload never fails on a
+permission error. Mount a directory you own and it works.
 
-### `PUID` / `PGID` {#puid-pgid}
+Two edge cases the entrypoint handles:
 
-*Optional, default `1000`/`1000`.* The user and group id the server runs as. Set
-them to match the owner of your host storage directory, or you will get a
-permission error on the first upload. If the data directory is empty on first
-start, Zefile adopts it automatically; an existing tree is left untouched.
+- **A fresh, empty mount** (Docker creates a missing bind-mount target owned by
+  root) is claimed for the image's built-in unprivileged user automatically.
+- **A root-owned directory that already holds files** is not reowned — Zefile
+  will not run as root. `chown` it to any non-root user once
+  (`chown -R 1000:1000 <host directory>`) and Zefile follows.
+
+To pin a specific user regardless, set `user:` on the service in your compose
+file; the entrypoint sees it is already unprivileged and adopts nothing.

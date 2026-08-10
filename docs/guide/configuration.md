@@ -32,9 +32,9 @@ refuses to start otherwise.
   `ZEFILE_APP_URL` uses `https`. A `Secure` cookie sent over plain HTTP is
   silently dropped by the browser, so always terminate TLS in front of Zefile
   in production.
-- **File ownership** — `PUID`/`PGID` make the container adopt the user that owns
-  your host directory, avoiding a permission error on the first upload. See the
-  [environment reference](/reference/environment#puid-pgid).
+- **File ownership** — nothing to configure. Zefile adopts whoever owns the data
+  directory you mount, so a folder you own just works. It will not run as root:
+  if the mounted folder is root-owned, `chown` it to any non-root user once.
 
 The full list, with defaults and validation rules, is in the
 [Environment variables reference](/reference/environment).

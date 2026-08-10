@@ -15,8 +15,6 @@ services:
       ZEFILE_CONTENT_URL: ${ZEFILE_CONTENT_URL}
       ZEFILE_DATA_DIR: /data
       ZEFILE_CONFIG_DIR: /config
-      PUID: ${PUID:-1000}
-      PGID: ${PGID:-1000}
     volumes:
       - ${ZEFILE_HOST_DATA}:/data
       - zefile-config:/config

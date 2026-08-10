@@ -48,10 +48,10 @@ RUN set -eu; \
     done; \
     ls -la /geoip
 
-# Alpine rather than scratch or distroless, for one reason: honouring PUID and
-# PGID needs a shell and su-exec at start-up. A static image would force whoever
-# deploys to chown the host directory to a user id they did not choose, which is
-# the first thing that goes wrong in self-hosting.
+# Alpine rather than scratch or distroless, for one reason: adopting the owner
+# of the mounted data directory at start-up needs a shell and su-exec. A static
+# image would force whoever deploys to chown the host directory to a user id they
+# did not choose, which is the first thing that goes wrong in self-hosting.
 FROM alpine:3.21
 RUN apk add --no-cache su-exec tzdata ca-certificates && \
     addgroup -g 1000 zefile && \
