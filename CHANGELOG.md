@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.10.0](https://github.com/krishna2206/zefile/compare/v0.9.0...v0.10.0) (2026-08-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* PUID and PGID are removed. Remove them from your compose — they are ignored. Ownership is now adopted from the mounted data directory; if it is owned by root, chown it to a non-root user.
+
+### Features
+
+* adopt the data directory's owner instead of PUID/PGID ([3ef70d1](https://github.com/krishna2206/zefile/commit/3ef70d1310763a1db398b99baaecf257ea876873))
+
+
+### Bug Fixes
+
+* let the PDF preview render by allowing scripts in its iframe ([75b2a14](https://github.com/krishna2206/zefile/commit/75b2a144bca582095c667c9f973727888138b99d))
+* show a favicon in the browser tab ([94b39a6](https://github.com/krishna2206/zefile/commit/94b39a61144d9fd82b6e8730f7e4fd501aeee78b))
+
 ## [0.9.0](https://github.com/krishna2206/zefile/compare/v0.8.0...v0.9.0) (2026-08-06)
 
 
